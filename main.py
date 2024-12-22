@@ -44,6 +44,12 @@ st.markdown("""
         background-color: #e8f5e9;
         margin: 1rem 0;
     }
+    .metric-card {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -105,8 +111,12 @@ def main():
             # Rename columns for better display
             df.columns = ['Product Name', 'Price (€)', 'Price per Unit', 'SKU', 'Category', 'Product URL']
 
+            # Display raw data counts
+            st.markdown("### 📊 Data Overview")
+            st.info(f"Total Products Scraped: {len(df)} items from Rimi online store")
+
             # Add filters
-            st.markdown("### Filter Products")
+            st.markdown("### 🔍 Filter Products")
             col1, col2 = st.columns(2)
             with col1:
                 selected_category = st.selectbox(
@@ -130,8 +140,41 @@ def main():
                 (filtered_df['Price (€)'] <= price_range[1])
             ]
 
+            # Display statistics
+            st.markdown("### 📈 Statistics")
+            col1, col2, col3, col4 = st.columns(4)
+
+            with col1:
+                st.markdown("""
+                    <div class="metric-card">
+                        <h4>Total Products</h4>
+                        <h2>{}</h2>
+                    </div>
+                """.format(len(filtered_df)), unsafe_allow_html=True)
+            with col2:
+                st.markdown("""
+                    <div class="metric-card">
+                        <h4>Average Price</h4>
+                        <h2>€{:.2f}</h2>
+                    </div>
+                """.format(filtered_df['Price (€)'].mean()), unsafe_allow_html=True)
+            with col3:
+                st.markdown("""
+                    <div class="metric-card">
+                        <h4>Categories</h4>
+                        <h2>{}</h2>
+                    </div>
+                """.format(filtered_df['Category'].nunique()), unsafe_allow_html=True)
+            with col4:
+                st.markdown("""
+                    <div class="metric-card">
+                        <h4>Price Range</h4>
+                        <h2>€{:.2f} - €{:.2f}</h2>
+                    </div>
+                """.format(filtered_df['Price (€)'].min(), filtered_df['Price (€)'].max()), unsafe_allow_html=True)
+
             # Display the filtered dataframe
-            st.markdown("### Product Data")
+            st.markdown("### 📋 Product Data")
             st.markdown("Click on column headers to sort the data")
             st.dataframe(
                 filtered_df,
@@ -139,18 +182,11 @@ def main():
                 height=600
             )
 
-            # Display statistics
-            st.markdown("### Statistics")
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric("Total Products", len(filtered_df))
-            with col2:
-                st.metric("Average Price", f"€{filtered_df['Price (€)'].mean():.2f}")
-            with col3:
-                st.metric("Categories", filtered_df['Category'].nunique())
-            with col4:
-                st.metric("Price Range", f"€{filtered_df['Price (€)'].min():.2f} - €{filtered_df['Price (€)'].max():.2f}")
+            # Add detailed view option
+            st.markdown("### 🔎 Detailed View")
+            if st.checkbox("Show Raw Data"):
+                st.markdown("#### Raw Product Data")
+                st.json(products)
 
         else:
             st.info("No data available. Click 'Refresh Data' to fetch products.")
