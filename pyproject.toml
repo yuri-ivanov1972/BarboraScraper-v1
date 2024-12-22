@@ -1,0 +1,13 @@
+[project]
+name = "repl-nix-rimiscraper"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.12.3",
+    "pandas>=2.2.3",
+    "psycopg2-binary>=2.9.10",
+    "requests>=2.32.3",
+    "streamlit>=1.41.1",
+    "trafilatura>=2.0.0",
+]
