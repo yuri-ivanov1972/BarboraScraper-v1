@@ -3,6 +3,8 @@ from bs4 import BeautifulSoup
 import logging
 from decimal import Decimal
 import re
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 class RimiScraper:
     def __init__(self):
@@ -13,12 +15,31 @@ class RimiScraper:
             'Accept-Language': 'en-US,en;q=0.9,lv;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
+            'Cache-Control': 'max-age=0',
+            'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
             'Upgrade-Insecure-Requests': '1',
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
         }
+        self.session = self._create_session()
+
+    def _create_session(self):
+        """Create a session with retry strategy"""
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        session.headers.update(self.headers)
+        return session
 
     def clean_price(self, price_str):
         """Clean and convert price string to Decimal"""
@@ -61,27 +82,37 @@ class RimiScraper:
     def scrape_products(self):
         """Scrape product information from Rimi online store"""
         try:
-            # Using the search endpoint with empty query to get all products
-            url = f"{self.base_url}/meklesana"
-            logging.info(f"Scraping URL: {url}")
+            # First, get the main page to establish session and cookies
+            initial_response = self.session.get(self.base_url)
+            initial_response.raise_for_status()
 
-            response = requests.get(url, headers=self.headers)
+            # Now access the search page with specific parameters
+            search_url = f"{self.base_url}/produkti/augli-un-darzeni"
+            logging.info(f"Scraping URL: {search_url}")
+
+            response = self.session.get(search_url)
             response.raise_for_status()
 
             logging.info(f"Response status: {response.status_code}")
             logging.info(f"Response headers: {response.headers}")
+            logging.info(f"Response cookies: {dict(response.cookies)}")
 
             soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Log the HTML content for debugging
+            logging.info("HTML Content Preview:")
+            logging.info(soup.prettify()[:1000])  # First 1000 chars for debugging
+
             products_list = []
 
-            # Find all product cards - using the correct product grid selector
-            products = soup.select('div.product-grid__item')
+            # Updated selectors for product grid
+            products = soup.select('article.product-grid-item')
             logging.info(f"Found {len(products)} products")
 
             for product in products:
                 try:
                     # Extract product link and name
-                    link_elem = product.select_one('a.card__url')
+                    link_elem = product.select_one('h3.product-grid-item__title a')
                     if not link_elem:
                         logging.warning("No link element found for product")
                         continue
@@ -90,12 +121,12 @@ class RimiScraper:
                     name = link_elem.text.strip() if link_elem else None
 
                     # Extract price
-                    price_elem = product.select_one('div.price-tag__price')
+                    price_elem = product.select_one('span.price')
                     price_text = price_elem.text.strip() if price_elem else '0.00'
                     price = self.clean_price(price_text)
 
                     # Extract price per unit
-                    price_unit_elem = product.select_one('div.price-tag__unit')
+                    price_unit_elem = product.select_one('span.price-per-unit')
                     price_per_unit = price_unit_elem.text.strip() if price_unit_elem else None
 
                     # Extract SKU and category from URL
