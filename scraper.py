@@ -13,7 +13,7 @@ class ScraperError(Exception):
 
 class RimiScraper:
     def __init__(self):
-        self.base_url = "https://www.rimi.lv/e-veikals/lv"
+        self.base_url = "https://www.rimi.lv/e-veikals"
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -94,58 +94,76 @@ class RimiScraper:
             initial_response = self.session.get(self.base_url)
             initial_response.raise_for_status()
 
-            # Now access the search page with specific parameters
-            search_url = f"{self.base_url}/meklesana"
+            # Access a specific category that always has products
+            search_url = f"{self.base_url}/produkti/dzivo-augu-nodala"
             logging.info(f"Scraping URL: {search_url}")
 
             response = self.session.get(search_url)
             if response.status_code == 404:
-                raise ScraperError("Search page not found. The website structure might have changed.")
+                raise ScraperError("Product category not found. The website structure might have changed.")
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
             products_list = []
 
-            # Updated selectors for product grid
-            products = soup.select('article.product-grid-item')
-            logging.info(f"Found {len(products)} products")
+            # Try multiple possible selectors for product grid
+            product_selectors = [
+                'div.product-grid__item',
+                'div.product-grid-item',
+                'article.product-grid-item',
+                'div.card.product-grid-item'
+            ]
+
+            for selector in product_selectors:
+                products = soup.select(selector)
+                if products:
+                    logging.info(f"Found {len(products)} products using selector: {selector}")
+                    break
 
             if not products:
+                # Log HTML structure for debugging
+                logging.error("HTML structure preview:")
+                logging.error(soup.prettify()[:1000])
                 raise ScraperError("No products found on the page. The website structure might have changed.")
 
             for product in products:
                 try:
-                    # Extract product link and name
-                    link_elem = product.select_one('h3.product-grid-item__title a')
-                    if not link_elem:
-                        logging.warning("No link element found for product")
-                        continue
+                    # Try multiple selectors for product elements
+                    name = None
+                    for name_selector in ['a.card__url', 'h3.product-grid-item__title a', 'a.product-grid-item__details-title-link']:
+                        name_elem = product.select_one(name_selector)
+                        if name_elem:
+                            name = name_elem.text.strip()
+                            product_url = self.base_url + name_elem['href'] if name_elem.get('href') else None
+                            break
 
-                    product_url = self.base_url + link_elem['href'] if link_elem else None
-                    name = link_elem.text.strip() if link_elem else None
+                    # Try multiple selectors for price
+                    price_text = None
+                    for price_selector in ['div.price-tag__price', 'span.price', 'div.price-tag__main-price']:
+                        price_elem = product.select_one(price_selector)
+                        if price_elem:
+                            price_text = price_elem.text.strip()
+                            break
 
-                    # Extract price
-                    price_elem = product.select_one('span.price')
-                    price_text = price_elem.text.strip() if price_elem else '0.00'
-                    price = self.clean_price(price_text)
+                    price = self.clean_price(price_text) if price_text else Decimal('0.00')
 
-                    # Extract price per unit
-                    price_unit_elem = product.select_one('span.price-per-unit')
-                    price_per_unit = price_unit_elem.text.strip() if price_unit_elem else None
+                    # Try multiple selectors for price per unit
+                    price_per_unit = None
+                    for unit_selector in ['div.price-tag__unit', 'span.price-per-unit', 'span.price-tag__unit-price']:
+                        unit_elem = product.select_one(unit_selector)
+                        if unit_elem:
+                            price_per_unit = unit_elem.text.strip()
+                            break
 
-                    # Extract SKU and category from URL
-                    sku = self.extract_sku(product_url)
-                    category = self.extract_category(product_url)
-
-                    if name and price:
+                    if name and price > Decimal('0'):
                         logging.info(f"Found product: {name} - {price}")
                         products_list.append({
                             'name': name,
                             'price': price,
                             'price_per_unit': price_per_unit,
                             'product_url': product_url,
-                            'sku': sku,
-                            'category': category
+                            'sku': self.extract_sku(product_url),
+                            'category': self.extract_category(product_url)
                         })
 
                 except Exception as e:
