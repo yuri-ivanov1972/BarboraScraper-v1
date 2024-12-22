@@ -95,12 +95,12 @@ class RimiScraper:
             initial_response.raise_for_status()
 
             # Now access the search page with specific parameters
-            search_url = f"{self.base_url}/produkti/augli-un-darzeni"
+            search_url = f"{self.base_url}/meklesana"
             logging.info(f"Scraping URL: {search_url}")
 
             response = self.session.get(search_url)
             if response.status_code == 404:
-                raise ScraperError("Product category page not found. The URL structure might have changed.")
+                raise ScraperError("Search page not found. The website structure might have changed.")
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
@@ -121,7 +121,7 @@ class RimiScraper:
                         logging.warning("No link element found for product")
                         continue
 
-                    product_url = 'https://www.rimi.lv' + link_elem['href'] if link_elem else None
+                    product_url = self.base_url + link_elem['href'] if link_elem else None
                     name = link_elem.text.strip() if link_elem else None
 
                     # Extract price
