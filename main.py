@@ -5,6 +5,7 @@ from database import Database
 import logging
 import traceback
 from datetime import datetime
+import psycopg2 # Added import for psycopg2 error handling
 
 # Configure logging
 logging.basicConfig(
@@ -66,10 +67,12 @@ def handle_error(error: Exception) -> str:
 
     if isinstance(error, ScraperError):
         return str(error)
+    elif isinstance(error, psycopg2.Error):
+        return "Database error occurred. Please try again later."
     elif isinstance(error, ConnectionError):
         return "Failed to connect to the database. Please try again later."
     else:
-        return "An unexpected error occurred. Please try again later."
+        return f"An unexpected error occurred: {str(error)}"
 
 def main():
     st.title("🛒 Rimi Product Scraper")
@@ -103,9 +106,13 @@ def main():
                 products = scraper.scrape_products()
 
                 if products:
-                    db.save_products(products)
-                    st.success(f"Successfully updated data! Found {len(products)} products.")
-                    last_update.markdown(f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+                    try:
+                        db.save_products(products)
+                        st.success(f"Successfully updated data! Found {len(products)} products.")
+                        last_update.markdown(f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+                    except Exception as e:
+                        error_msg = handle_error(e)
+                        st.error(f"Error saving products: {error_msg}")
                 else:
                     st.warning("No products found during scraping. Please try again later.")
             except ScraperError as e:
