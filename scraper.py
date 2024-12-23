@@ -94,13 +94,19 @@ class RimiScraper:
             initial_response = self.session.get(self.base_url)
             initial_response.raise_for_status()
 
-            # Access a specific category that always has products
-            search_url = f"{self.base_url}/produkti/dzivo-augu-nodala"
-            logging.info(f"Scraping URL: {search_url}")
+            # Now access the search page with specific parameters
+            search_url = f"{self.base_url}/search"
+            params = {
+                'query': '*',
+                'page': '1',
+                'pageSize': '48',
+                'sort': 'default'
+            }
+            logging.info(f"Scraping URL: {search_url} with params: {params}")
 
-            response = self.session.get(search_url)
+            response = self.session.get(search_url, params=params)
             if response.status_code == 404:
-                raise ScraperError("Product category not found. The website structure might have changed.")
+                raise ScraperError("Search page not found. The website structure might have changed.")
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
