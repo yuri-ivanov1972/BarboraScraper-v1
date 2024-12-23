@@ -16,11 +16,11 @@ class ScraperError(Exception):
 
 class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
-        self.base_url = "https://www.rimi.lv/e-veikals"
+        self.base_url = "https://www.rimi.lv/e-veikals/lv"
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9,lv;q=0.8',
+            'Accept-Language': 'lv,en-US;q=0.9,en;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Cache-Control': 'no-cache',
@@ -61,6 +61,9 @@ class RimiScraper:
             soup = BeautifulSoup(html_content, 'html.parser')
             products_list = []
 
+            # Log the HTML structure for debugging
+            self.status_callback("Analyzing page structure...")
+
             # Try different product grid selectors
             selectors = [
                 'div.product-grid__item',
@@ -79,17 +82,22 @@ class RimiScraper:
                     break
 
             if not products:
+                self.status_callback(f"No products found with standard selectors, trying alternative selectors...")
+                # Try alternative selectors
+                products = soup.select('div.card.card--product')
+
+            if not products:
                 self.status_callback(f"No products found in category {url}")
                 return []
 
-            for product in products:
+            for index, product in enumerate(products, 1):
                 try:
                     # Extract name and URL with multiple selectors
                     name_selectors = [
+                        'a.card__url',
+                        'h3.card__name a',
                         'a[class*="name"]',
-                        'a[class*="title"]',
-                        'h3 a',
-                        'div[class*="name"] a'
+                        'h3 a'
                     ]
 
                     name_elem = None
@@ -109,9 +117,9 @@ class RimiScraper:
 
                     # Extract price with multiple selectors
                     price_selectors = [
-                        'div[class*="price-tag"] span[class*="price"]',
-                        'span[class*="price"]',
-                        'div[class*="price"]'
+                        'div.price-tag span.price',
+                        'span.price-tag__price',
+                        'div[class*="price-tag"] span[class*="price"]'
                     ]
 
                     price_elem = None
@@ -130,33 +138,23 @@ class RimiScraper:
                         continue
 
                     # Extract additional information
-                    unit_price = product.select_one('div[class*="unit-price"], span[class*="unit-price"]')
+                    unit_price = product.select_one('div.price-tag__unit, span.price-per-unit')
                     unit_price_text = unit_price.get_text(strip=True) if unit_price else None
 
-                    # Extract SKU and category from URL
-                    sku = None
-                    if product_url:
-                        sku_match = re.search(r'/p/(\d+)', product_url)
-                        if sku_match:
-                            sku = sku_match.group(1)
-
-                    category = None
-                    if product_url:
-                        category_match = re.search(r'produkti/([^/]+(?:/[^/]+)?)', product_url)
-                        if category_match:
-                            category = category_match.group(1).replace('-', ' ').title()
-
-                    products_list.append({
+                    product_info = {
                         'name': name,
                         'price': price,
                         'price_per_unit': unit_price_text,
-                        'product_url': product_url,
-                        'sku': sku,
-                        'category': category
-                    })
+                        'product_url': product_url
+                    }
+
+                    products_list.append(product_info)
+
+                    # Log each successfully parsed product
+                    self.status_callback(f"Parsed product {index}: {name} - €{price}")
 
                 except Exception as e:
-                    logging.error(f"Error processing product: {str(e)}")
+                    logging.error(f"Error processing product {index}: {str(e)}")
                     continue
 
             return products_list
@@ -170,61 +168,42 @@ class RimiScraper:
         try:
             # Initialize session
             self.status_callback("Initializing scraper session...")
-            initial_response = self.session.get(self.base_url)
-            initial_response.raise_for_status()
 
-            # Categories to try
-            categories = [
-                '/produkti/darzeni-un-augli',
-                '/produkti/saldumi-un-uzkodas',
-                '/produkti/dzerienu-nodala',
-                '/produkti/maizes-nodala',
-                '/produkti/piena-produkti-olas',
-                '/produkti/gala-zivis-un-gatava-kulinarija'
-            ]
+            # Specific category URL for apples and pears
+            category_url = "https://www.rimi.lv/e-veikals/lv/produkti/augli-un-darzeni/augli-un-ogas/aboli-un-bumbieri/c/SH-2-1-2"
 
-            all_products = []
-            for category in categories:
-                try:
-                    url = f"{self.base_url}{category}"
-                    self.status_callback(f"Scraping category: {category}")
+            self.status_callback(f"Accessing category: Apples and Pears")
 
-                    # Add random delay between requests
-                    time.sleep(random.uniform(2, 4))
+            # Add random delay
+            time.sleep(random.uniform(1, 2))
 
-                    response = self.session.get(url)
-                    if response.status_code != 200:
-                        self.status_callback(f"Failed to access category {category}: {response.status_code}")
-                        continue
+            # Try with trafilatura first
+            self.status_callback("Attempting to fetch page content...")
+            downloaded = trafilatura.fetch_url(category_url)
 
-                    # Try with trafilatura first
-                    downloaded = trafilatura.fetch_url(url)
-                    if downloaded:
-                        html_content = trafilatura.extract(downloaded, include_html=True)
-                        if html_content:
-                            products = self.extract_product_info(html_content, url)
-                            if products:
-                                all_products.extend(products)
-                                self.status_callback(f"Found {len(products)} products in category {category}")
-                                continue
-
-                    # Fallback to regular response content
-                    self.status_callback(f"Trying alternative parsing for {category}")
-                    products = self.extract_product_info(response.text, url)
+            if downloaded:
+                self.status_callback("Successfully downloaded page, extracting content...")
+                html_content = trafilatura.extract(downloaded, include_html=True)
+                if html_content:
+                    products = self.extract_product_info(html_content, category_url)
                     if products:
-                        all_products.extend(products)
-                        self.status_callback(f"Found {len(products)} products in category {category}")
+                        self.status_callback(f"Successfully extracted {len(products)} products")
+                        return products
 
-                except Exception as e:
-                    logging.error(f"Error scraping category {category}: {str(e)}")
-                    self.status_callback(f"Error in category {category}: {str(e)}")
-                    continue
+            # Fallback to direct request
+            self.status_callback("Trying alternative fetching method...")
+            response = self.session.get(category_url)
 
-            if not all_products:
-                raise ScraperError("No products found in any category. Please check if the website structure has changed.")
+            if response.status_code != 200:
+                raise ScraperError(f"Failed to access category. Status code: {response.status_code}")
 
-            self.status_callback(f"Successfully scraped {len(all_products)} products in total")
-            return all_products
+            products = self.extract_product_info(response.text, category_url)
+
+            if not products:
+                raise ScraperError("No products found in the category. Please check if the website structure has changed.")
+
+            self.status_callback(f"Successfully scraped {len(products)} products in total")
+            return products
 
         except Exception as e:
             logging.error(f"Scraping error: {str(e)}")
