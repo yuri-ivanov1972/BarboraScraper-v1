@@ -28,13 +28,16 @@ class Database:
         """Create the required tables if they don't exist"""
         try:
             with self.conn.cursor() as cur:
+                # Drop and recreate the table to add the image_url column
                 cur.execute("""
-                    CREATE TABLE IF NOT EXISTS products (
+                    DROP TABLE IF EXISTS products;
+                    CREATE TABLE products (
                         id SERIAL PRIMARY KEY,
                         name VARCHAR(255) NOT NULL,
                         price DECIMAL(10, 2) NOT NULL,
                         price_per_unit VARCHAR(50),
                         product_url TEXT,
+                        image_url TEXT,
                         sku VARCHAR(50),
                         category TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -54,14 +57,15 @@ class Database:
                 # Insert new data
                 for product in products:
                     cur.execute("""
-                        INSERT INTO products (name, price, price_per_unit, product_url, sku, category)
-                        VALUES (%s, %s, %s, %s, %s, %s)
+                        INSERT INTO products (name, price, price_per_unit, product_url, image_url, sku, category)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (
                         product['name'],
                         product['price'],
                         product.get('price_per_unit'),
                         product.get('product_url'),
-                        product.get('sku'),  # Using get() with default None for optional fields
+                        product.get('image_url'),  # Add image_url field
+                        product.get('sku'),
                         product.get('category')
                     ))
         except Exception as e:

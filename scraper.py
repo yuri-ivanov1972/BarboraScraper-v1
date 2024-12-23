@@ -96,11 +96,19 @@ class RimiScraper:
                             if product_url:
                                 product_url = f"{self.base_url}{product_url}"
 
+                            # Extract image URL from card__image-wrapper
+                            img_elem = product.select_one('.card__image-wrapper img')
+                            image_url = None
+                            if img_elem:
+                                # Try to get the high-quality data-src first, fallback to src
+                                image_url = img_elem.get('data-src') or img_elem.get('src')
+
                             product_info = {
                                 'name': product_data.get('name', ''),
                                 'price': self.clean_price(product_data.get('price', 0)),
                                 'price_per_unit': price_per_unit,
                                 'product_url': product_url,
+                                'image_url': image_url,
                                 'sku': product_data.get('id'),
                                 'category': product_data.get('category')
                             }
