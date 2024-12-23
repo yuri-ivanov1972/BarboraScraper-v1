@@ -15,22 +15,23 @@ class ScraperError(Exception):
 class RimiScraper:
     def __init__(self):
         self.base_url = "https://www.rimi.lv/e-veikals"
+        self.api_url = "https://www.rimi.lv/e-veikals/api"
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept': 'application/json',
             'Accept-Language': 'en-US,en;q=0.9,lv;q=0.8',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
-            'Cache-Control': 'max-age=0',
+            'Cache-Control': 'no-cache',
             'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Ch-Ua-Platform': '"Windows"',
-            'Upgrade-Insecure-Requests': '1',
-            'Sec-Fetch-Dest': 'document',
-            'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'none',
-            'Sec-Fetch-User': '?1',
-            'Cookie': 'region=LV'
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'Pragma': 'no-cache',
+            'Cookie': 'region=LV',
+            'X-Requested-With': 'XMLHttpRequest'
         }
         self.session = self._create_session()
 
@@ -98,110 +99,79 @@ class RimiScraper:
             initial_response.raise_for_status()
             logging.info("Successfully accessed main page")
 
-            # Try accessing the fresh fruits category as it's likely to have products
-            category_url = f"{self.base_url}/produkti/augli-darzeni-un-ziedi/svaigie-augli"
-            logging.info(f"Accessing category URL: {category_url}")
+            # Now fetch products using the API
+            api_url = f"{self.api_url}/products/search"
+            params = {
+                'page': 1,
+                'pageSize': 48,
+                'category': '/produkti/augli-darzeni-un-ziedi/svaigie-augli',
+                'sortBy': 'name',
+                'orderBy': 'asc'
+            }
 
-            response = self.session.get(category_url)
-            if response.status_code == 404:
-                raise ScraperError("Category page not found. Trying alternative approach...")
-            response.raise_for_status()
+            logging.info(f"Accessing API endpoint: {api_url}")
+            response = self.session.get(api_url, params=params)
 
-            # Log response details for debugging
-            logging.info(f"Response status code: {response.status_code}")
-            logging.info(f"Response headers: {dict(response.headers)}")
+            if response.status_code != 200:
+                logging.error(f"API response: {response.status_code}")
+                logging.error(f"Response content: {response.text[:500]}")
+                raise ScraperError(f"Failed to fetch products from API. Status code: {response.status_code}")
 
-            soup = BeautifulSoup(response.text, 'html.parser')
+            try:
+                data = response.json()
+                logging.info(f"API response structure: {json.dumps(dict(data.keys()) if isinstance(data, dict) else {'type': type(data).__name__})}")
+            except json.JSONDecodeError as e:
+                logging.error(f"Failed to decode JSON response: {str(e)}")
+                logging.error(f"Raw response: {response.text[:500]}")
+                raise ScraperError("Invalid JSON response from API")
+
             products_list = []
-
-            # Try multiple possible selectors for product grid
-            product_selectors = [
-                'div.product-grid__item',
-                'div.product-grid-item',
-                'article.product-grid-item',
-                'div.card.product-grid-item',
-                'div[class*="product-grid"]',
-                'div[class*="product-item"]'
-            ]
-
-            products = []
-            for selector in product_selectors:
-                products = soup.select(selector)
-                if products:
-                    logging.info(f"Found {len(products)} products using selector: {selector}")
-                    break
+            products = data.get('items', []) if isinstance(data, dict) else []
 
             if not products:
-                # Log HTML structure for debugging
-                logging.error("HTML structure preview:")
-                logging.error(soup.prettify()[:1000])
-                raise ScraperError("No products found on the page. The website structure might have changed.")
+                logging.warning("No products found in API response")
+                # Try parsing the page content as HTML
+                soup = BeautifulSoup(response.text, 'html.parser')
+                products = soup.select('div.product-grid__item, div.product-grid-item, article.product-grid-item')
 
             for product in products:
                 try:
-                    # Try multiple selectors for product elements
-                    name = None
-                    for name_selector in [
-                        'a.card__url',
-                        'h3.product-grid-item__title a',
-                        'a.product-grid-item__details-title-link',
-                        'div[class*="name"] a',
-                        'div[class*="title"] a'
-                    ]:
-                        name_elem = product.select_one(name_selector)
-                        if name_elem:
-                            name = name_elem.text.strip()
-                            product_url = name_elem.get('href')
-                            if product_url:
-                                if not product_url.startswith('http'):
-                                    product_url = f"https://www.rimi.lv{product_url}"
-                            break
-
-                    # Try multiple selectors for price
-                    price_text = None
-                    for price_selector in [
-                        'div.price-tag__price',
-                        'span.price',
-                        'div.price-tag__main-price',
-                        'div[class*="price"]'
-                    ]:
-                        price_elem = product.select_one(price_selector)
-                        if price_elem:
-                            price_text = price_elem.text.strip()
-                            break
-
-                    price = self.clean_price(price_text) if price_text else Decimal('0.00')
-
-                    # Try multiple selectors for price per unit
-                    price_per_unit = None
-                    for unit_selector in [
-                        'div.price-tag__unit',
-                        'span.price-per-unit',
-                        'span.price-tag__unit-price',
-                        'div[class*="unit-price"]'
-                    ]:
-                        unit_elem = product.select_one(unit_selector)
-                        if unit_elem:
-                            price_per_unit = unit_elem.text.strip()
-                            break
-
-                    if name and price > Decimal('0'):
-                        logging.info(f"Found product: {name} - {price}")
+                    if isinstance(product, dict):
+                        # Handle API response
                         products_list.append({
-                            'name': name,
-                            'price': price,
-                            'price_per_unit': price_per_unit,
-                            'product_url': product_url,
-                            'sku': self.extract_sku(product_url),
-                            'category': self.extract_category(product_url)
+                            'name': product.get('name', ''),
+                            'price': Decimal(str(product.get('price', {}).get('amount', '0.00'))),
+                            'price_per_unit': product.get('pricePerUnit', {}).get('unit', ''),
+                            'product_url': f"{self.base_url}/p/{product.get('id')}",
+                            'sku': str(product.get('id')),
+                            'category': product.get('category', {}).get('name', '')
                         })
+                    else:
+                        # Handle HTML response
+                        name_elem = product.select_one('a.card__url, h3.product-grid-item__title a')
+                        price_elem = product.select_one('div.price-tag__price, span.price')
+                        unit_elem = product.select_one('div.price-tag__unit, span.price-per-unit')
+
+                        if name_elem and price_elem:
+                            product_url = name_elem.get('href', '')
+                            if product_url and not product_url.startswith('http'):
+                                product_url = f"https://www.rimi.lv{product_url}"
+
+                            products_list.append({
+                                'name': name_elem.text.strip(),
+                                'price': self.clean_price(price_elem.text.strip()),
+                                'price_per_unit': unit_elem.text.strip() if unit_elem else None,
+                                'product_url': product_url,
+                                'sku': self.extract_sku(product_url),
+                                'category': self.extract_category(product_url)
+                            })
 
                 except Exception as e:
                     logging.error(f"Error processing product: {str(e)}")
                     continue
 
             if not products_list:
-                raise ScraperError("Failed to extract any valid products from the page.")
+                raise ScraperError("Failed to extract any valid products.")
 
             logging.info(f"Successfully scraped {len(products_list)} products")
             return products_list
