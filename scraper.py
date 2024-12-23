@@ -41,6 +41,7 @@ class RimiScraper:
         }
         self.session = self._create_session()
         self.status_callback = status_callback or (lambda x: None)
+        self.page_size = 20  # Default page size used by Rimi
 
     def _create_session(self) -> requests.Session:
         """Create a session with retry strategy"""
@@ -84,7 +85,7 @@ class RimiScraper:
                 products = soup.select('.product-grid-item, .card--product')
 
             if not products:
-                self.status_callback(f"No products found in category {url}")
+                self.status_callback(f"No products found in page {url}")
                 return []
 
             self.status_callback(f"Found {len(products)} potential product elements")
@@ -146,8 +147,22 @@ class RimiScraper:
             logging.error(f"Error parsing HTML content: {str(e)}")
             return []
 
+    def has_next_page(self, html_content: str) -> bool:
+        """Check if there is a next page by looking for pagination elements"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            # Look for active page number
+            active_page = soup.select_one('.pagination__item--active')
+            if active_page:
+                next_page = active_page.find_next_sibling('li', class_='pagination__item')
+                return bool(next_page)
+            return False
+        except Exception as e:
+            logging.error(f"Error checking for next page: {str(e)}")
+            return False
+
     def scrape_products(self) -> List[Dict[str, Union[str, Decimal]]]:
-        """Scrape product information from multiple Rimi categories"""
+        """Scrape product information from multiple Rimi categories with pagination"""
         try:
             # Initialize session
             self.status_callback("Initializing scraper session...")
@@ -156,22 +171,42 @@ class RimiScraper:
             for category_url in self.category_urls:
                 try:
                     self.status_callback(f"Processing category: {category_url}")
+                    current_page = 1
+                    has_more_pages = True
 
-                    # Add random delay between categories
-                    time.sleep(random.uniform(1, 2))
+                    while has_more_pages:
+                        # Construct paginated URL
+                        paginated_url = f"{category_url}?currentPage={current_page}&pageSize={self.page_size}"
+                        self.status_callback(f"Fetching page {current_page}")
 
-                    # Make the request
-                    self.status_callback("Attempting to fetch page content...")
-                    response = self.session.get(category_url)
+                        # Add random delay between requests
+                        time.sleep(random.uniform(1, 2))
 
-                    if response.status_code != 200:
-                        self.status_callback(f"Failed to access category {category_url}. Status code: {response.status_code}")
-                        continue
+                        # Make the request
+                        response = self.session.get(paginated_url)
 
-                    category_products = self.extract_product_info(response.text, category_url)
-                    all_products.extend(category_products)
+                        if response.status_code != 200:
+                            self.status_callback(f"Failed to access {paginated_url}. Status code: {response.status_code}")
+                            break
 
-                    self.status_callback(f"Successfully scraped {len(category_products)} products from category {category_url}")
+                        # Extract products from current page
+                        page_products = self.extract_product_info(response.text, paginated_url)
+
+                        if page_products:
+                            all_products.extend(page_products)
+                            self.status_callback(f"Found {len(page_products)} products on page {current_page}")
+                        else:
+                            self.status_callback(f"No products found on page {current_page}")
+                            break
+
+                        # Check if there's a next page
+                        has_more_pages = self.has_next_page(response.text)
+                        if has_more_pages:
+                            current_page += 1
+                        else:
+                            self.status_callback(f"No more pages available for category {category_url}")
+
+                    self.status_callback(f"Finished processing category {category_url}")
 
                 except Exception as e:
                     logging.error(f"Error scraping category {category_url}: {str(e)}")
