@@ -182,13 +182,12 @@ class RimiScraper:
             downloaded = trafilatura.fetch_url(category_url)
 
             if downloaded:
-                self.status_callback("Successfully downloaded page, extracting content...")
-                html_content = trafilatura.extract(downloaded, include_html=True)
-                if html_content:
-                    products = self.extract_product_info(html_content, category_url)
-                    if products:
-                        self.status_callback(f"Successfully extracted {len(products)} products")
-                        return products
+                self.status_callback("Successfully downloaded page content")
+                # Use the raw downloaded content for BeautifulSoup parsing
+                products = self.extract_product_info(downloaded, category_url)
+                if products:
+                    self.status_callback(f"Successfully extracted {len(products)} products")
+                    return products
 
             # Fallback to direct request
             self.status_callback("Trying alternative fetching method...")
