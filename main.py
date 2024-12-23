@@ -50,6 +50,13 @@ st.markdown("""
         border-radius: 0.5rem;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
+    .status-area {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border-left: 4px solid #4CAF50;
+        margin: 1rem 0;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -79,11 +86,20 @@ def main():
     # Add last update time indicator
     last_update = st.empty()
 
+    # Add status area for scraping progress
+    status_area = st.empty()
+
     # Refresh data button with error handling
     if st.button("🔄 Refresh Data"):
         with st.spinner("Scraping product data..."):
             try:
-                scraper = RimiScraper()
+                scraper = RimiScraper(status_callback=lambda msg: status_area.markdown(f"""
+                    <div class="status-area">
+                        <h4>Scraping Status</h4>
+                        <p>{msg}</p>
+                    </div>
+                """, unsafe_allow_html=True))
+
                 products = scraper.scrape_products()
 
                 if products:
