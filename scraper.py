@@ -48,7 +48,13 @@ class RimiScraper:
         try:
             if not price_str:
                 return Decimal('0.00')
-            clean_price = price_str.replace('€', '').replace(',', '.').strip()
+
+            # Extract just the price part before any unit
+            price_match = re.search(r'(\d+[.,]?\d*)', price_str)
+            if not price_match:
+                return Decimal('0.00')
+
+            clean_price = price_match.group(1).replace(',', '.')
             return Decimal(clean_price)
         except (InvalidOperation, ValueError) as e:
             logging.error(f"Price conversion error for '{price_str}': {str(e)}")
@@ -63,9 +69,6 @@ class RimiScraper:
             # Log the HTML structure for debugging
             self.status_callback("Analyzing page structure...")
             logging.debug(f"Raw HTML content length: {len(html_content)}")
-
-            # Debug: Print the first 1000 characters of HTML
-            self.status_callback(f"First 1000 chars of HTML: {html_content[:1000]}")
 
             # Find all product containers with most basic selector first
             products = soup.select('.product-grid-item, .card--product')
@@ -94,7 +97,7 @@ class RimiScraper:
                     )
 
                     if not name_elem:
-                        self.status_callback(f"Skipping product {index}: No name element found")
+                        self.status_callback(f"Skipping product {index}: No name element found. HTML: {str(product)}")
                         continue
 
                     # If we found element with data-gtms-banner-title, use its attribute value
