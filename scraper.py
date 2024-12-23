@@ -6,6 +6,7 @@ import re
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import List, Dict, Optional, Union
+import json
 
 class ScraperError(Exception):
     """Custom exception for scraper-related errors"""
@@ -29,6 +30,7 @@ class RimiScraper:
             'Sec-Fetch-Mode': 'navigate',
             'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
+            'Cookie': 'region=LV'
         }
         self.session = self._create_session()
 
@@ -91,23 +93,23 @@ class RimiScraper:
         """Scrape product information from Rimi online store"""
         try:
             # First, get the main page to establish session and cookies
+            logging.info("Accessing main page to establish session...")
             initial_response = self.session.get(self.base_url)
             initial_response.raise_for_status()
+            logging.info("Successfully accessed main page")
 
-            # Now access the search page with specific parameters
-            search_url = f"{self.base_url}/search"
-            params = {
-                'query': '*',
-                'page': '1',
-                'pageSize': '48',
-                'sort': 'default'
-            }
-            logging.info(f"Scraping URL: {search_url} with params: {params}")
+            # Try accessing the fresh fruits category as it's likely to have products
+            category_url = f"{self.base_url}/produkti/augli-darzeni-un-ziedi/svaigie-augli"
+            logging.info(f"Accessing category URL: {category_url}")
 
-            response = self.session.get(search_url, params=params)
+            response = self.session.get(category_url)
             if response.status_code == 404:
-                raise ScraperError("Search page not found. The website structure might have changed.")
+                raise ScraperError("Category page not found. Trying alternative approach...")
             response.raise_for_status()
+
+            # Log response details for debugging
+            logging.info(f"Response status code: {response.status_code}")
+            logging.info(f"Response headers: {dict(response.headers)}")
 
             soup = BeautifulSoup(response.text, 'html.parser')
             products_list = []
@@ -117,9 +119,12 @@ class RimiScraper:
                 'div.product-grid__item',
                 'div.product-grid-item',
                 'article.product-grid-item',
-                'div.card.product-grid-item'
+                'div.card.product-grid-item',
+                'div[class*="product-grid"]',
+                'div[class*="product-item"]'
             ]
 
+            products = []
             for selector in product_selectors:
                 products = soup.select(selector)
                 if products:
@@ -136,16 +141,30 @@ class RimiScraper:
                 try:
                     # Try multiple selectors for product elements
                     name = None
-                    for name_selector in ['a.card__url', 'h3.product-grid-item__title a', 'a.product-grid-item__details-title-link']:
+                    for name_selector in [
+                        'a.card__url',
+                        'h3.product-grid-item__title a',
+                        'a.product-grid-item__details-title-link',
+                        'div[class*="name"] a',
+                        'div[class*="title"] a'
+                    ]:
                         name_elem = product.select_one(name_selector)
                         if name_elem:
                             name = name_elem.text.strip()
-                            product_url = self.base_url + name_elem['href'] if name_elem.get('href') else None
+                            product_url = name_elem.get('href')
+                            if product_url:
+                                if not product_url.startswith('http'):
+                                    product_url = f"https://www.rimi.lv{product_url}"
                             break
 
                     # Try multiple selectors for price
                     price_text = None
-                    for price_selector in ['div.price-tag__price', 'span.price', 'div.price-tag__main-price']:
+                    for price_selector in [
+                        'div.price-tag__price',
+                        'span.price',
+                        'div.price-tag__main-price',
+                        'div[class*="price"]'
+                    ]:
                         price_elem = product.select_one(price_selector)
                         if price_elem:
                             price_text = price_elem.text.strip()
@@ -155,7 +174,12 @@ class RimiScraper:
 
                     # Try multiple selectors for price per unit
                     price_per_unit = None
-                    for unit_selector in ['div.price-tag__unit', 'span.price-per-unit', 'span.price-tag__unit-price']:
+                    for unit_selector in [
+                        'div.price-tag__unit',
+                        'span.price-per-unit',
+                        'span.price-tag__unit-price',
+                        'div[class*="unit-price"]'
+                    ]:
                         unit_elem = product.select_one(unit_selector)
                         if unit_elem:
                             price_per_unit = unit_elem.text.strip()
