@@ -128,11 +128,11 @@ def main():
             df = pd.DataFrame(products)
 
             # Remove id and created_at columns for display
-            display_columns = ['name', 'price', 'price_per_unit', 'sku', 'category', 'product_url']
+            display_columns = ['name', 'price', 'price_per_unit', 'sku', 'category', 'product_url', 'image_url']
             df = df[display_columns]
 
             # Rename columns for better display
-            df.columns = ['Product Name', 'Price (€)', 'Price per Unit', 'SKU', 'Category', 'Product URL']
+            df.columns = ['Product Name', 'Price (€)', 'Price per Unit', 'SKU', 'Category', 'Product URL', 'Image URL']
 
             # Display raw data counts
             st.markdown("### 📊 Data Overview")
