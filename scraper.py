@@ -17,6 +17,18 @@ class ScraperError(Exception):
 class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
+        self.category_urls = [
+            "https://www.rimi.lv/e-veikals/lv/produkti/augli-un-darzeni/c/SH-2",
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-17",
+            "https://www.rimi.lv/e-veikals/lv/produkti/veganiem-un-vegetariesiem/c/SH-16",
+            "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/c/SH-6",
+            "https://www.rimi.lv/e-veikals/lv/produkti/piena-produkti-un-olas/c/SH-11",
+            "https://www.rimi.lv/e-veikals/lv/produkti/maize-un-konditoreja/c/SH-7",
+            "https://www.rimi.lv/e-veikals/lv/produkti/saldetie-edieni/c/SH-12",
+            "https://www.rimi.lv/e-veikals/lv/produkti/iepakota-partika/c/SH-4",
+            "https://www.rimi.lv/e-veikals/lv/produkti/saldumi-un-uzkodas/c/SH-13",
+            "https://www.rimi.lv/e-veikals/lv/produkti/dzerieni/c/SH-5"
+        ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -135,33 +147,42 @@ class RimiScraper:
             return []
 
     def scrape_products(self) -> List[Dict[str, Union[str, Decimal]]]:
-        """Scrape product information from Rimi online store"""
+        """Scrape product information from multiple Rimi categories"""
         try:
             # Initialize session
             self.status_callback("Initializing scraper session...")
+            all_products = []
 
-            # Specific category URL for apples and pears
-            category_url = "https://www.rimi.lv/e-veikals/lv/produkti/augli-un-darzeni/augli-un-ogas/aboli-un-bumbieri/c/SH-2-1-2"
+            for category_url in self.category_urls:
+                try:
+                    self.status_callback(f"Processing category: {category_url}")
 
-            self.status_callback(f"Accessing category: Apples and Pears")
+                    # Add random delay between categories
+                    time.sleep(random.uniform(1, 2))
 
-            # Add random delay
-            time.sleep(random.uniform(1, 2))
+                    # Make the request
+                    self.status_callback("Attempting to fetch page content...")
+                    response = self.session.get(category_url)
 
-            # Make the request
-            self.status_callback("Attempting to fetch page content...")
-            response = self.session.get(category_url)
+                    if response.status_code != 200:
+                        self.status_callback(f"Failed to access category {category_url}. Status code: {response.status_code}")
+                        continue
 
-            if response.status_code != 200:
-                raise ScraperError(f"Failed to access category. Status code: {response.status_code}")
+                    category_products = self.extract_product_info(response.text, category_url)
+                    all_products.extend(category_products)
 
-            products = self.extract_product_info(response.text, category_url)
+                    self.status_callback(f"Successfully scraped {len(category_products)} products from category {category_url}")
 
-            if not products:
-                raise ScraperError("No products found in the category. Please check if the website structure has changed.")
+                except Exception as e:
+                    logging.error(f"Error scraping category {category_url}: {str(e)}")
+                    self.status_callback(f"Error scraping category {category_url}: {str(e)}")
+                    continue
 
-            self.status_callback(f"Successfully scraped {len(products)} products in total")
-            return products
+            if not all_products:
+                raise ScraperError("No products found in any category. Please check if the website structure has changed.")
+
+            self.status_callback(f"Successfully scraped {len(all_products)} products in total")
+            return all_products
 
         except Exception as e:
             logging.error(f"Scraping error: {str(e)}")
