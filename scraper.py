@@ -1,6 +1,8 @@
 import trafilatura
 from bs4 import BeautifulSoup
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from decimal import Decimal, InvalidOperation
 import logging
 import re
@@ -30,20 +32,17 @@ class RimiScraper:
 
     def _create_session(self) -> requests.Session:
         """Create a session with retry strategy"""
-        try:
-            session = requests.Session()
-            retry_strategy = Retry(
-                total=3,
-                backoff_factor=1,
-                status_forcelist=[429, 500, 502, 503, 504],
-            )
-            adapter = HTTPAdapter(max_retries=retry_strategy)
-            session.mount("https://", adapter)
-            session.mount("http://", adapter)
-            session.headers.update(self.headers)
-            return session
-        except Exception as e:
-            raise ScraperError(f"Failed to create session: {str(e)}")
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504]
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        session.headers.update(self.headers)
+        return session
 
     def clean_price(self, price_str: str) -> Decimal:
         """Clean and convert price string to Decimal"""
