@@ -87,6 +87,7 @@ class RimiScraper:
 
                     # Try to find product name and link
                     name_elem = (
+                        product.select_one('[data-gtms-banner-title]') or
                         product.select_one('a.js-product-name-truncated') or 
                         product.select_one('a[class*="name"]') or
                         product.select_one('h3 a')
@@ -96,7 +97,12 @@ class RimiScraper:
                         self.status_callback(f"Skipping product {index}: No name element found")
                         continue
 
-                    name = name_elem.get_text(strip=True)
+                    # If we found element with data-gtms-banner-title, use its attribute value
+                    if 'data-gtms-banner-title' in name_elem.attrs:
+                        name = name_elem['data-gtms-banner-title']
+                    else:
+                        name = name_elem.get_text(strip=True)
+
                     product_url = name_elem.get('href', '')
                     if product_url and not product_url.startswith('http'):
                         product_url = f"https://www.rimi.lv{product_url}"
