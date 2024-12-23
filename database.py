@@ -50,7 +50,7 @@ class Database:
             with self.conn.cursor() as cur:
                 # Clear existing data
                 cur.execute("TRUNCATE TABLE products")
-                
+
                 # Insert new data
                 for product in products:
                     cur.execute("""
@@ -59,10 +59,10 @@ class Database:
                     """, (
                         product['name'],
                         product['price'],
-                        product['price_per_unit'],
-                        product['product_url'],
-                        product['sku'],
-                        product['category']
+                        product.get('price_per_unit'),
+                        product.get('product_url'),
+                        product.get('sku'),  # Using get() with default None for optional fields
+                        product.get('category')
                     ))
         except Exception as e:
             logging.error(f"Data insertion error: {str(e)}")
