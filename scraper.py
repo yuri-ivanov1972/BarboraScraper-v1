@@ -7,6 +7,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from typing import List, Dict, Optional, Union
 import json
+import time
+import random
 
 class ScraperError(Exception):
     """Custom exception for scraper-related errors"""
@@ -110,17 +112,18 @@ class RimiScraper:
 
                 if name_elem and price_elem:
                     product_url = name_elem.get('href', '')
-                    if product_url and not product_url.startswith('http'):
-                        product_url = f"https://www.rimi.lv{product_url}"
+                    if product_url and not isinstance(product_url, list):
+                        if not product_url.startswith('http'):
+                            product_url = f"https://www.rimi.lv{product_url}"
 
-                    products_list.append({
-                        'name': name_elem.text.strip(),
-                        'price': self.clean_price(price_elem.text.strip()),
-                        'price_per_unit': unit_elem.text.strip() if unit_elem else None,
-                        'product_url': product_url,
-                        'sku': self.extract_sku(product_url),
-                        'category': self.extract_category(product_url)
-                    })
+                        products_list.append({
+                            'name': name_elem.text.strip(),
+                            'price': self.clean_price(price_elem.text.strip()),
+                            'price_per_unit': unit_elem.text.strip() if unit_elem else None,
+                            'product_url': product_url,
+                            'sku': self.extract_sku(product_url),
+                            'category': self.extract_category(product_url)
+                        })
 
             except Exception as e:
                 logging.error(f"Error processing HTML product: {str(e)}")
@@ -153,16 +156,52 @@ class RimiScraper:
                     category_url = f"{self.base_url}{category}"
                     logging.info(f"Trying category: {category_url}")
 
+                    # Add a small delay between requests
+                    time.sleep(random.uniform(1, 3))
+
                     response = self.session.get(category_url)
                     if response.status_code == 200:
+                        # Log HTML content for debugging
+                        logging.info(f"Response headers: {dict(response.headers)}")
+                        logging.info(f"Response preview: {response.text[:500]}")
+
                         products = self.scrape_html_fallback(response)
                         if products:
                             products_list.extend(products)
                             success = True
                             break
+
                 except Exception as e:
                     logging.error(f"Failed to scrape category {category}: {str(e)}")
                     continue
+
+            if not success:
+                # Try alternative URL patterns
+                alt_categories = [
+                    '/produkti/augli-darzeni-ziedi/augli-darzeni',
+                    '/produkti/svaigi-produkti/augli-darzeni',
+                    '/produkti/partikas-preces'
+                ]
+
+                for category in alt_categories:
+                    try:
+                        category_url = f"{self.base_url}{category}"
+                        logging.info(f"Trying alternative category: {category_url}")
+
+                        # Add a small delay between requests
+                        time.sleep(random.uniform(1, 3))
+
+                        response = self.session.get(category_url)
+                        if response.status_code == 200:
+                            products = self.scrape_html_fallback(response)
+                            if products:
+                                products_list.extend(products)
+                                success = True
+                                break
+
+                    except Exception as e:
+                        logging.error(f"Failed to scrape alternative category {category}: {str(e)}")
+                        continue
 
             if not success:
                 raise ScraperError("Failed to scrape products from any category")
