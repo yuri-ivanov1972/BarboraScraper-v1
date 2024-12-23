@@ -1,6 +1,5 @@
-import trafilatura
-from bs4 import BeautifulSoup
 import requests
+from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from decimal import Decimal, InvalidOperation
@@ -63,82 +62,65 @@ class RimiScraper:
 
             # Log the HTML structure for debugging
             self.status_callback("Analyzing page structure...")
+            logging.debug(f"Raw HTML content length: {len(html_content)}")
 
-            # Try different product grid selectors
-            selectors = [
-                'div.product-grid__item',
-                'div.product-grid-item',
-                'article.product-grid-item',
-                'div[class*="product-"][class*="item"]',
-                'div[class*="product-card"]'
-            ]
+            # Debug: Print the first 1000 characters of HTML
+            self.status_callback(f"First 1000 chars of HTML: {html_content[:1000]}")
 
-            # Find all product containers
-            products = []
-            for selector in selectors:
-                products = soup.select(selector)
-                if products:
-                    self.status_callback(f"Found {len(products)} products using selector: {selector}")
-                    break
+            # Find all product containers with most basic selector first
+            products = soup.select('.product-grid-item, .card--product')
 
             if not products:
-                self.status_callback(f"No products found with standard selectors, trying alternative selectors...")
-                # Try alternative selectors
-                products = soup.select('div.card.card--product')
+                self.status_callback("No products found with basic selector, trying alternative...")
+                products = soup.select('[class*="product-"]')
 
             if not products:
                 self.status_callback(f"No products found in category {url}")
                 return []
 
+            self.status_callback(f"Found {len(products)} potential product elements")
+
             for index, product in enumerate(products, 1):
                 try:
-                    # Extract name and URL with multiple selectors
-                    name_selectors = [
-                        'a.card__url',
-                        'h3.card__name a',
-                        'a[class*="name"]',
-                        'h3 a'
-                    ]
+                    # Log the product HTML for debugging
+                    self.status_callback(f"Processing product {index} HTML: {str(product)[:200]}...")
 
-                    name_elem = None
-                    for selector in name_selectors:
-                        name_elem = product.select_one(selector)
-                        if name_elem:
-                            break
+                    # Try to find product name and link
+                    name_elem = (
+                        product.select_one('a.js-product-name-truncated') or 
+                        product.select_one('a[class*="name"]') or
+                        product.select_one('h3 a')
+                    )
 
                     if not name_elem:
+                        self.status_callback(f"Skipping product {index}: No name element found")
                         continue
 
                     name = name_elem.get_text(strip=True)
                     product_url = name_elem.get('href', '')
-
                     if product_url and not product_url.startswith('http'):
                         product_url = f"https://www.rimi.lv{product_url}"
 
-                    # Extract price with multiple selectors
-                    price_selectors = [
-                        'div.price-tag span.price',
-                        'span.price-tag__price',
-                        'div[class*="price-tag"] span[class*="price"]'
-                    ]
-
-                    price_elem = None
-                    for selector in price_selectors:
-                        price_elem = product.select_one(selector)
-                        if price_elem:
-                            break
+                    # Try to find price
+                    price_elem = (
+                        product.select_one('.price') or
+                        product.select_one('[class*="price-tag"]') or
+                        product.select_one('[class*="price"]')
+                    )
 
                     if not price_elem:
+                        self.status_callback(f"Skipping product {index}: No price element found")
                         continue
 
                     price_text = price_elem.get_text(strip=True)
                     price = self.clean_price(price_text)
 
                     if price <= 0:
+                        self.status_callback(f"Skipping product {index}: Invalid price")
                         continue
 
-                    # Extract additional information
-                    unit_price = product.select_one('div.price-tag__unit, span.price-per-unit')
+                    # Get price per unit if available
+                    unit_price = product.select_one('.price-per-unit, .unit-price')
                     unit_price_text = unit_price.get_text(strip=True) if unit_price else None
 
                     product_info = {
@@ -149,12 +131,11 @@ class RimiScraper:
                     }
 
                     products_list.append(product_info)
-
-                    # Log each successfully parsed product
-                    self.status_callback(f"Parsed product {index}: {name} - €{price}")
+                    self.status_callback(f"Successfully parsed product {index}: {name} - €{price}")
 
                 except Exception as e:
                     logging.error(f"Error processing product {index}: {str(e)}")
+                    self.status_callback(f"Error processing product {index}: {str(e)}")
                     continue
 
             return products_list
@@ -177,24 +158,15 @@ class RimiScraper:
             # Add random delay
             time.sleep(random.uniform(1, 2))
 
-            # Try with trafilatura first
+            # Make the request
             self.status_callback("Attempting to fetch page content...")
-            downloaded = trafilatura.fetch_url(category_url)
-
-            if downloaded:
-                self.status_callback("Successfully downloaded page content")
-                # Use the raw downloaded content for BeautifulSoup parsing
-                products = self.extract_product_info(downloaded, category_url)
-                if products:
-                    self.status_callback(f"Successfully extracted {len(products)} products")
-                    return products
-
-            # Fallback to direct request
-            self.status_callback("Trying alternative fetching method...")
             response = self.session.get(category_url)
 
             if response.status_code != 200:
                 raise ScraperError(f"Failed to access category. Status code: {response.status_code}")
+
+            # Log response headers for debugging
+            self.status_callback(f"Response headers: {dict(response.headers)}")
 
             products = self.extract_product_info(response.text, category_url)
 
