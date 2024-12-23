@@ -7,6 +7,7 @@ import logging
 import re
 import time
 import random
+import json
 from typing import List, Dict, Optional, Union, Callable
 
 class ScraperError(Exception):
@@ -48,14 +49,7 @@ class RimiScraper:
         try:
             if not price_str:
                 return Decimal('0.00')
-
-            # Extract just the price part before any unit
-            price_match = re.search(r'(\d+[.,]?\d*)', price_str)
-            if not price_match:
-                return Decimal('0.00')
-
-            clean_price = price_match.group(1).replace(',', '.')
-            return Decimal(clean_price)
+            return Decimal(str(price_str))
         except (InvalidOperation, ValueError) as e:
             logging.error(f"Price conversion error for '{price_str}': {str(e)}")
             return Decimal('0.00')
@@ -70,12 +64,12 @@ class RimiScraper:
             self.status_callback("Analyzing page structure...")
             logging.debug(f"Raw HTML content length: {len(html_content)}")
 
-            # Find all product containers with most basic selector first
-            products = soup.select('.product-grid-item, .card--product')
+            # Find all product containers with data-gtm-eec-product attribute
+            products = soup.find_all(attrs={'data-gtm-eec-product': True})
 
             if not products:
-                self.status_callback("No products found with basic selector, trying alternative...")
-                products = soup.select('[class*="product-"]')
+                self.status_callback("No products found with GTM attribute, trying alternative selectors...")
+                products = soup.select('.product-grid-item, .card--product')
 
             if not products:
                 self.status_callback(f"No products found in category {url}")
@@ -85,62 +79,35 @@ class RimiScraper:
 
             for index, product in enumerate(products, 1):
                 try:
-                    # Log the product HTML for debugging
-                    self.status_callback(f"Processing product {index} HTML: {str(product)[:200]}...")
+                    # Try to get product data from GTM attribute
+                    gtm_data = product.get('data-gtm-eec-product')
+                    if gtm_data:
+                        try:
+                            # Parse the JSON data
+                            product_data = json.loads(gtm_data)
 
-                    # Try to find product name and link
-                    name_elem = (
-                        product.select_one('[data-gtms-banner-title]') or
-                        product.select_one('a.js-product-name-truncated') or 
-                        product.select_one('a[class*="name"]') or
-                        product.select_one('h3 a')
-                    )
+                            # Extract unit price if available
+                            price_per_unit_elem = product.select_one('.price-per-unit, .unit-price')
+                            price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
 
-                    if not name_elem:
-                        self.status_callback(f"Skipping product {index}: No name element found. HTML: {str(product)}")
-                        continue
+                            product_info = {
+                                'name': product_data.get('name', ''),
+                                'price': self.clean_price(product_data.get('price', 0)),
+                                'price_per_unit': price_per_unit,
+                                'product_url': f"https://www.rimi.lv/e-veikals/lv/produkti/{product_data.get('id')}" if product_data.get('id') else None,
+                                'sku': product_data.get('id'),
+                                'category': product_data.get('category')
+                            }
 
-                    # If we found element with data-gtms-banner-title, use its attribute value
-                    if 'data-gtms-banner-title' in name_elem.attrs:
-                        name = name_elem['data-gtms-banner-title']
-                    else:
-                        name = name_elem.get_text(strip=True)
+                            if product_info['name'] and product_info['price'] > 0:
+                                products_list.append(product_info)
+                                self.status_callback(f"Successfully parsed product {index}: {product_info['name']} - €{product_info['price']}")
+                            else:
+                                self.status_callback(f"Skipping product {index}: Invalid name or price")
 
-                    product_url = name_elem.get('href', '')
-                    if product_url and not product_url.startswith('http'):
-                        product_url = f"https://www.rimi.lv{product_url}"
-
-                    # Try to find price
-                    price_elem = (
-                        product.select_one('.price') or
-                        product.select_one('[class*="price-tag"]') or
-                        product.select_one('[class*="price"]')
-                    )
-
-                    if not price_elem:
-                        self.status_callback(f"Skipping product {index}: No price element found")
-                        continue
-
-                    price_text = price_elem.get_text(strip=True)
-                    price = self.clean_price(price_text)
-
-                    if price <= 0:
-                        self.status_callback(f"Skipping product {index}: Invalid price")
-                        continue
-
-                    # Get price per unit if available
-                    unit_price = product.select_one('.price-per-unit, .unit-price')
-                    unit_price_text = unit_price.get_text(strip=True) if unit_price else None
-
-                    product_info = {
-                        'name': name,
-                        'price': price,
-                        'price_per_unit': unit_price_text,
-                        'product_url': product_url
-                    }
-
-                    products_list.append(product_info)
-                    self.status_callback(f"Successfully parsed product {index}: {name} - €{price}")
+                        except json.JSONDecodeError as e:
+                            self.status_callback(f"Error parsing GTM data for product {index}: {str(e)}")
+                            continue
 
                 except Exception as e:
                     logging.error(f"Error processing product {index}: {str(e)}")
@@ -173,9 +140,6 @@ class RimiScraper:
 
             if response.status_code != 200:
                 raise ScraperError(f"Failed to access category. Status code: {response.status_code}")
-
-            # Log response headers for debugging
-            self.status_callback(f"Response headers: {dict(response.headers)}")
 
             products = self.extract_product_info(response.text, category_url)
 
