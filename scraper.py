@@ -16,7 +16,7 @@ class ScraperError(Exception):
 
 class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
-        self.base_url = "https://www.rimi.lv/e-veikals/lv"
+        self.base_url = "https://www.rimi.lv"
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -90,11 +90,17 @@ class RimiScraper:
                             price_per_unit_elem = product.select_one('.price-per-unit, .unit-price')
                             price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
 
+                            # Find the product URL from the card__url element
+                            url_elem = product.select_one('a.card__url.js-gtm-eec-product-click')
+                            product_url = url_elem.get('href') if url_elem else None
+                            if product_url:
+                                product_url = f"{self.base_url}{product_url}"
+
                             product_info = {
                                 'name': product_data.get('name', ''),
                                 'price': self.clean_price(product_data.get('price', 0)),
                                 'price_per_unit': price_per_unit,
-                                'product_url': f"https://www.rimi.lv/e-veikals/lv/produkti/{product_data.get('id')}" if product_data.get('id') else None,
+                                'product_url': product_url,
                                 'sku': product_data.get('id'),
                                 'category': product_data.get('category')
                             }
