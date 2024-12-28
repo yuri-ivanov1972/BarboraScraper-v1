@@ -9,6 +9,7 @@ import time
 import random
 import json
 from typing import List, Dict, Optional, Union, Callable
+from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 
 class ScraperError(Exception):
     """Custom exception for scraper-related errors"""
@@ -41,6 +42,7 @@ class RimiScraper:
         }
         self.session = self._create_session()
         self.status_callback = status_callback or (lambda x: None)
+        self.page_size = 80  # Set page size to 80 items
 
     def _create_session(self) -> requests.Session:
         """Create a session with retry strategy"""
@@ -55,6 +57,37 @@ class RimiScraper:
         session.mount("http://", adapter)
         session.headers.update(self.headers)
         return session
+
+    def get_max_page_number(self, html_content: str) -> int:
+        """Extract maximum page number from pagination"""
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            pagination = soup.find('div', class_='pagination')
+            if pagination:
+                # Find all page links and get the highest page number
+                page_links = pagination.find_all('a', attrs={'data-page': True})
+                if page_links:
+                    max_page = max(int(link['data-page']) for link in page_links)
+                    return max_page
+            return 1  # Return 1 if no pagination found
+        except Exception as e:
+            logging.error(f"Error extracting max page number: {str(e)}")
+            return 1
+
+    def build_page_url(self, category_url: str, page: int) -> str:
+        """Build URL for specific page number"""
+        parsed = urlparse(category_url)
+        category_id = parsed.path.split('/')[-1]
+
+        # Base query parameters
+        params = {
+            'query': f':relevance:allCategories:{category_id}:assortmentStatus:inAssortment',
+            'pageSize': self.page_size,
+            'currentPage': page
+        }
+
+        # Construct the URL with parameters
+        return f"{category_url}?{urlencode(params)}"
 
     def clean_price(self, price_str: str) -> Decimal:
         """Clean and convert price string to Decimal"""
@@ -84,7 +117,7 @@ class RimiScraper:
                 products = soup.select('.product-grid-item, .card--product')
 
             if not products:
-                self.status_callback(f"No products found in category {url}")
+                self.status_callback(f"No products found in {url}")
                 return []
 
             self.status_callback(f"Found {len(products)} potential product elements")
@@ -157,21 +190,44 @@ class RimiScraper:
                 try:
                     self.status_callback(f"Processing category: {category_url}")
 
-                    # Add random delay between categories
-                    time.sleep(random.uniform(1, 2))
-
-                    # Make the request
-                    self.status_callback("Attempting to fetch page content...")
+                    # First request to get max page number
                     response = self.session.get(category_url)
-
                     if response.status_code != 200:
                         self.status_callback(f"Failed to access category {category_url}. Status code: {response.status_code}")
                         continue
 
+                    max_pages = self.get_max_page_number(response.text)
+                    self.status_callback(f"Found {max_pages} pages in category")
+
+                    # Process first page products from initial response
                     category_products = self.extract_product_info(response.text, category_url)
                     all_products.extend(category_products)
+                    self.status_callback(f"Processed page 1/{max_pages} with {len(category_products)} products")
 
-                    self.status_callback(f"Successfully scraped {len(category_products)} products from category {category_url}")
+                    # Process remaining pages if any
+                    for page in range(2, max_pages + 1):
+                        try:
+                            # Add random delay between pages
+                            time.sleep(random.uniform(1, 2))
+
+                            page_url = self.build_page_url(category_url, page)
+                            self.status_callback(f"Fetching page {page}/{max_pages}")
+
+                            response = self.session.get(page_url)
+                            if response.status_code != 200:
+                                self.status_callback(f"Failed to access page {page}. Status code: {response.status_code}")
+                                continue
+
+                            page_products = self.extract_product_info(response.text, page_url)
+                            all_products.extend(page_products)
+                            self.status_callback(f"Processed page {page}/{max_pages} with {len(page_products)} products")
+
+                        except Exception as e:
+                            logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
+                            self.status_callback(f"Error processing page {page}: {str(e)}")
+                            continue
+
+                    self.status_callback(f"Completed category {category_url}")
 
                 except Exception as e:
                     logging.error(f"Error scraping category {category_url}: {str(e)}")
