@@ -209,42 +209,60 @@ class RimiScraper:
                 return NutritionalInfo(needs_review=True, review_notes=f"Failed to fetch page: {response.status_code}")
 
             soup = BeautifulSoup(response.text, 'html.parser')
+            self.status_callback("Page fetched successfully, looking for product details script")
 
             # Look for the script containing product details
             script_tag = None
             for script in soup.find_all('script'):
                 if script.string and 'Storefront.product_details_page' in script.string:
                     script_tag = script
+                    self.status_callback("Found Storefront.product_details_page script")
                     break
 
             if not script_tag:
-                logging.error(f"Product details script not found in {product_url}")
+                self.status_callback("Product details script not found")
                 return NutritionalInfo(needs_review=True, review_notes="Product details script not found")
 
-            # Try to extract the product details div content from the script
+            # Debug log the script content
             script_content = script_tag.string
+            self.status_callback(f"Script content length: {len(script_content)}")
+            self.status_callback("Looking for product__details div in script")
+
+            # Try to extract the product details div content from the script
             details_match = re.search(r'<div class=\\?"product__details\\?"[^>]*>(.*?)</div>', script_content, re.DOTALL)
 
             if not details_match:
-                logging.error(f"Product details div not found in script for {product_url}")
+                self.status_callback("Product details div pattern not found in script")
+                # Try logging part of the script content for debugging
+                sample_content = script_content[:500] + "..." if len(script_content) > 500 else script_content
+                self.status_callback(f"Script content sample: {sample_content}")
                 return NutritionalInfo(needs_review=True, review_notes="Product details div not found in script")
 
+            self.status_callback("Found product details div, decoding content")
             details_html = details_match.group(1).encode('utf-8').decode('unicode_escape')
+            self.status_callback(f"Decoded HTML length: {len(details_html)}")
+
             details_soup = BeautifulSoup(details_html, 'html.parser')
+            self.status_callback("Successfully parsed details HTML")
 
             info = NutritionalInfo()
 
-            # Look for ingredients
+            # Look for ingredients with detailed logging
             ingredients_pattern = re.compile(r'(sastāvdaļas|ingredients)[:\s]+(.*)', re.IGNORECASE)
             ingredients_text = details_soup.get_text()
+            self.status_callback(f"Looking for ingredients in text (length: {len(ingredients_text)})")
+
             ingredients_match = ingredients_pattern.search(ingredients_text)
             if ingredients_match:
                 info.ingredients = ingredients_match.group(2).strip()[:1000]
-                logging.info(f"Found ingredients: {info.ingredients[:100]}...")
+                self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
+            else:
+                self.status_callback("No ingredients found")
 
             # Look for nutrition table
             nutrition_table = details_soup.find('table')
             if nutrition_table:
+                self.status_callback("Found nutrition table, processing rows")
                 for row in nutrition_table.find_all('tr'):
                     cells = row.find_all(['td', 'th'])
                     if len(cells) < 2:
@@ -252,25 +270,31 @@ class RimiScraper:
 
                     label = cells[0].get_text(strip=True).lower()
                     value = cells[1].get_text(strip=True)
-
-                    logging.info(f"Processing nutrition row - Label: {label}, Value: {value}")
+                    self.status_callback(f"Processing nutrition row - Label: {label}, Value: {value}")
 
                     if re.search(r'enerģētiskā vērtība|energy value', label, re.IGNORECASE):
                         info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
+                        self.status_callback(f"Extracted energy values: {info.energy_kj}kJ, {info.energy_kcal}kcal")
                     elif re.search(r'^tauki$|^fat$', label, re.IGNORECASE):
                         info.fat = self._extract_decimal(value)
+                        self.status_callback(f"Extracted fat: {info.fat}g")
                     elif re.search(r'piesātinātās taukskābes|saturated fatty acids', label, re.IGNORECASE):
                         info.saturated_fat = self._extract_decimal(value)
+                        self.status_callback(f"Extracted saturated fat: {info.saturated_fat}g")
                     elif re.search(r'^ogļhidrāti$|^carbohydrates$', label, re.IGNORECASE):
                         info.carbohydrates = self._extract_decimal(value)
+                        self.status_callback(f"Extracted carbohydrates: {info.carbohydrates}g")
                     elif re.search(r'tostarp cukuri|including sugars', label, re.IGNORECASE):
                         info.sugars = self._extract_decimal(value)
+                        self.status_callback(f"Extracted sugars: {info.sugars}g")
                     elif re.search(r'^olbaltumvielas$|^protein$', label, re.IGNORECASE):
                         info.protein = self._extract_decimal(value)
+                        self.status_callback(f"Extracted protein: {info.protein}g")
                     elif re.search(r'^sāls$|^salt$', label, re.IGNORECASE):
                         info.salt = self._extract_decimal(value)
+                        self.status_callback(f"Extracted salt: {info.salt}g")
             else:
-                # If no table found, try to extract from text
+                self.status_callback("No nutrition table found, trying text extraction")
                 text = details_soup.get_text()
 
                 # Try to find energy values

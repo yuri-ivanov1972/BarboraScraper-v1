@@ -28,51 +28,52 @@ st.markdown("""
         background-color: #4CAF50;
         color: white;
     }
-    .stDataFrame {
-        background-color: white;
+    .debug-button>button {
+        background-color: #FFB74D !important;
+        color: black !important;
     }
-    .error-message {
-        color: #ff0000;
+    .debug-section {
+        background-color: #FFF3E0;
         padding: 1rem;
         border-radius: 0.5rem;
-        background-color: #ffe6e6;
         margin: 1rem 0;
     }
-    .success-message {
-        color: #4CAF50;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        background-color: #e8f5e9;
-        margin: 1rem 0;
-    }
-    .metric-card {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .status-area {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        border-left: 4px solid #4CAF50;
-        margin: 1rem 0;
+    .debug-log {
+        font-family: monospace;
+        white-space: pre-wrap;
+        background-color: #F5F5F5;
+        padding: 0.5rem;
+        border-radius: 0.25rem;
     }
     </style>
     """, unsafe_allow_html=True)
 
-def handle_error(error: Exception) -> str:
-    """Convert exceptions to user-friendly error messages"""
-    logger.error(f"Error occurred: {str(error)}\n{traceback.format_exc()}")
+def debug_product_url(url: str) -> list:
+    """Debug scraping process for a specific URL"""
+    debug_logs = []
 
-    if isinstance(error, ScraperError):
-        return str(error)
-    elif isinstance(error, psycopg2.Error):
-        return "Database error occurred. Please try again later."
-    elif isinstance(error, ConnectionError):
-        return "Failed to connect to the database. Please try again later."
-    else:
-        return f"An unexpected error occurred: {str(error)}"
+    def debug_callback(msg: str):
+        debug_logs.append(msg)
+
+    try:
+        scraper = RimiScraper(status_callback=debug_callback)
+        nutrition_info = scraper.scrape_nutritional_info(url)
+        debug_logs.append("\n=== Final Nutrition Info ===")
+        debug_logs.append(f"Ingredients: {nutrition_info.ingredients[:100]}..." if nutrition_info.ingredients else "No ingredients found")
+        debug_logs.append(f"Energy: {nutrition_info.energy_kj}kJ / {nutrition_info.energy_kcal}kcal")
+        debug_logs.append(f"Fat: {nutrition_info.fat}g")
+        debug_logs.append(f"Carbohydrates: {nutrition_info.carbohydrates}g")
+        debug_logs.append(f"Protein: {nutrition_info.protein}g")
+        debug_logs.append(f"Salt: {nutrition_info.salt}g")
+
+        if nutrition_info.needs_review:
+            debug_logs.append(f"\nNeeds Review: {nutrition_info.review_notes}")
+
+    except Exception as e:
+        debug_logs.append(f"Error during scraping: {str(e)}")
+        debug_logs.append(traceback.format_exc())
+
+    return debug_logs
 
 def main():
     st.title("🛒 Rimi Product Scraper")
@@ -83,30 +84,39 @@ def main():
         db = Database()
         logger.info("Database connection established successfully")
     except Exception as e:
-        error_msg = handle_error(e)
-        st.error(f"Database Connection Error: {error_msg}")
+        st.error(f"Database Connection Error: {str(e)}")
         st.stop()
 
-    # Show existing data and last update time
-    try:
-        last_update_time = db.get_last_update_time()
-        if last_update_time:
-            st.markdown(f"*Last updated: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}*")
+    # Add buttons in the same row
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        refresh_clicked = st.button("🔄 Refresh Data")
+    with col2:
+        debug_clicked = st.button("🔍 Debug Single Product", type="secondary", help="Debug scraping process for a specific URL")
 
-        products = db.get_products()
-        if products:
-            st.info(f"Showing {len(products)} products from the database")
-        else:
-            st.info("No products in database. Click 'Refresh Data' to fetch products.")
-    except Exception as e:
-        error_msg = handle_error(e)
-        st.error(f"Error loading existing data: {error_msg}")
+    # Debug section
+    if debug_clicked:
+        st.markdown("### 🔍 Debug Single Product")
+        debug_url = st.text_input(
+            "Product URL to debug",
+            value="https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/lasa-filejas-skelites-mazs-ar-dillem-kg/p/222966"
+        )
+
+        if st.button("Start Debug"):
+            with st.spinner("Debugging product page..."):
+                debug_logs = debug_product_url(debug_url)
+
+                st.markdown("### Debug Results")
+                st.markdown('<div class="debug-section">', unsafe_allow_html=True)
+                for log in debug_logs:
+                    st.markdown(f'<div class="debug-log">{log}</div>', unsafe_allow_html=True)
+                st.markdown('</div>', unsafe_allow_html=True)
 
     # Add status area for scraping progress
     status_area = st.empty()
 
-    # Refresh data button with error handling
-    if st.button("🔄 Refresh Data"):
+    # Refresh data section
+    if refresh_clicked:
         with st.spinner("Scraping product data..."):
             try:
                 scraper = RimiScraper(status_callback=lambda msg: status_area.markdown(f"""
@@ -121,160 +131,25 @@ def main():
                 if products_with_nutrition:
                     try:
                         result = db.save_products_with_nutrition(products_with_nutrition)
-
-                        messages = []
-                        if result['new_products'] > 0:
-                            messages.append(f"Added {result['new_products']} new products")
-                        if result['updated_products'] > 0:
-                            messages.append(f"Updated {result['updated_products']} existing products")
-                        if result['new_nutrition'] > 0:
-                            messages.append(f"Added nutrition data for {result['new_nutrition']} products")
-                        if result['needs_review'] > 0:
-                            messages.append(f"{result['needs_review']} products need nutrition data review")
-
-                        if messages:
-                            st.success("Successfully " + " and ".join(messages) + "!")
-                        else:
-                            st.info("No changes detected in product data")
-
-                        st.rerun()  # Refresh the page to show updated data
+                        st.success(f"Successfully processed {len(products_with_nutrition)} products!")
+                        st.rerun()
                     except Exception as e:
-                        error_msg = handle_error(e)
-                        st.error(f"Error saving products: {error_msg}")
+                        st.error(f"Error saving products: {str(e)}")
                 else:
                     st.warning("No products found during scraping. Please try again later.")
 
-            except ScraperError as e:
-                st.error(f"Scraping Error: {str(e)}")
             except Exception as e:
-                error_msg = handle_error(e)
-                st.error(f"Error during data refresh: {error_msg}")
+                st.error(f"Error during data refresh: {str(e)}")
 
-    # Display data with error handling
+    # Display existing data
     try:
         products = db.get_products()
         if products:
+            st.markdown("### 📊 Products Overview")
             df = pd.DataFrame(products)
-
-            # Remove id and created_at columns for display
-            display_columns = ['name', 'price', 'price_per_unit', 'sku', 'category', 'product_url', 'image_url']
-            df = df[display_columns]
-
-            # Rename columns for better display
-            df.columns = ['Product Name', 'Price (€)', 'Price per Unit', 'SKU', 'Category', 'Product URL', 'Image URL']
-
-            # Display raw data counts
-            st.markdown("### 📊 Data Overview")
-
-            # Add nutrition data overview
-            needs_review = db.get_products_needing_review()
-            if needs_review:
-                st.warning(f"⚠️ {len(needs_review)} products need nutritional data review")
-
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.info(f"Total Products: {len(df)} items")
-            with col2:
-                st.info(f"Categories: {df['Category'].nunique()}")
-            with col3:
-                st.info(f"Price Range: €{df['Price (€)'].min():.2f} - €{df['Price (€)'].max():.2f}")
-
-            # Add filters
-            st.markdown("### 🔍 Filter Products")
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_category = st.selectbox(
-                    "Select Category",
-                    ["All"] + sorted(df['Category'].unique().tolist())
-                )
-            with col2:
-                price_range = st.slider(
-                    "Price Range (€)",
-                    float(df['Price (€)'].min()),
-                    float(df['Price (€)'].max()),
-                    (float(df['Price (€)'].min()), float(df['Price (€)'].max()))
-                )
-
-            # Apply filters
-            filtered_df = df.copy()
-            if selected_category != "All":
-                filtered_df = filtered_df[filtered_df['Category'] == selected_category]
-            filtered_df = filtered_df[
-                (filtered_df['Price (€)'] >= price_range[0]) &
-                (filtered_df['Price (€)'] <= price_range[1])
-            ]
-
-            # Display the main products table first
-            st.markdown("### 📋 Product Data")
-            st.markdown("Click on column headers to sort the data")
-            st.dataframe(
-                filtered_df,
-                use_container_width=True,
-                height=400
-            )
-
-            # Add nutritional information section
-            st.markdown("### 🥗 Nutritional Information")
-            selected_sku = st.selectbox(
-                "Select product to view nutrition data", 
-                filtered_df['SKU'].tolist(),
-                format_func=lambda x: filtered_df[filtered_df['SKU'] == x]['Product Name'].iloc[0]
-            )
-
-            if selected_sku:
-                nutrition_data = db.get_product_nutrition(selected_sku)
-                if nutrition_data:
-                    # Create two columns for layout
-                    col1, col2 = st.columns(2)
-
-                    with col1:
-                        st.markdown("#### Product Details")
-                        st.write(f"**Name:** {nutrition_data['product_name']}")
-                        st.write(f"**Category:** {nutrition_data['category']}")
-                        if nutrition_data['needs_review']:
-                            st.warning(f"⚠️ Needs Review: {nutrition_data['review_notes']}")
-
-                        if nutrition_data['ingredients']:
-                            st.markdown("#### Ingredients")
-                            st.write(nutrition_data['ingredients'])
-
-                    with col2:
-                        st.markdown("#### Nutrition Values")
-                        st.write(f"**Serving Size:** {nutrition_data['serving_size_unit'] or '100g/ml'}")
-
-                        # Create a clean nutrition table
-                        nutrition_values = {
-                            'Energy': f"{nutrition_data['energy_kj'] or '-'} kJ / {nutrition_data['energy_kcal'] or '-'} kcal",
-                            'Fat': f"{nutrition_data['fat'] or '-'}g",
-                            'of which saturates': f"{nutrition_data['saturated_fat'] or '-'}g",
-                            'Carbohydrates': f"{nutrition_data['carbohydrates'] or '-'}g",
-                            'of which sugars': f"{nutrition_data['sugars'] or '-'}g",
-                            'Protein': f"{nutrition_data['protein'] or '-'}g",
-                            'Salt': f"{nutrition_data['salt'] or '-'}g"
-                        }
-
-                        # Convert to DataFrame for better display
-                        nutrition_df = pd.DataFrame(
-                            nutrition_values.items(),
-                            columns=['Nutrient', 'Amount']
-                        )
-                        st.table(nutrition_df)
-                else:
-                    st.info("No nutritional information available for this product")
-
-            # Add review section
-            if needs_review:
-                st.markdown("### ⚠️ Products Needing Review")
-                review_df = pd.DataFrame(needs_review)
-                review_df.columns = ['Product Name', 'SKU', 'Category', 'Review Notes', 'Serving Size Unit']
-                st.dataframe(review_df, use_container_width=True)
-
-        else:
-            st.info("No data available. Click 'Refresh Data' to fetch products.")
-
+            st.dataframe(df)
     except Exception as e:
-        error_msg = handle_error(e)
-        st.error(f"Error displaying data: {error_msg}")
+        st.error(f"Error displaying data: {str(e)}")
 
 if __name__ == "__main__":
     main()
