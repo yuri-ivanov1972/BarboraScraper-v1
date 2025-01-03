@@ -160,7 +160,19 @@ def main():
 
             # Display raw data counts
             st.markdown("### 📊 Data Overview")
-            st.info(f"Total Products Scraped: {len(df)} items from Rimi online store")
+
+            # Add nutrition data overview
+            needs_review = db.get_products_needing_review()
+            if needs_review:
+                st.warning(f"⚠️ {len(needs_review)} products need nutritional data review")
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.info(f"Total Products: {len(df)} items")
+            with col2:
+                st.info(f"Categories: {df['Category'].nunique()}")
+            with col3:
+                st.info(f"Price Range: €{df['Price (€)'].min():.2f} - €{df['Price (€)'].max():.2f}")
 
             # Add filters
             st.markdown("### 🔍 Filter Products")
@@ -187,53 +199,69 @@ def main():
                 (filtered_df['Price (€)'] <= price_range[1])
             ]
 
-            # Display statistics
-            st.markdown("### 📈 Statistics")
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.markdown("""
-                    <div class="metric-card">
-                        <h4>Total Products</h4>
-                        <h2>{}</h2>
-                    </div>
-                """.format(len(filtered_df)), unsafe_allow_html=True)
-            with col2:
-                st.markdown("""
-                    <div class="metric-card">
-                        <h4>Average Price</h4>
-                        <h2>€{:.2f}</h2>
-                    </div>
-                """.format(filtered_df['Price (€)'].mean()), unsafe_allow_html=True)
-            with col3:
-                st.markdown("""
-                    <div class="metric-card">
-                        <h4>Categories</h4>
-                        <h2>{}</h2>
-                    </div>
-                """.format(pd.Series(filtered_df['Category']).nunique()), unsafe_allow_html=True)
-            with col4:
-                st.markdown("""
-                    <div class="metric-card">
-                        <h4>Price Range</h4>
-                        <h2>€{:.2f} - €{:.2f}</h2>
-                    </div>
-                """.format(filtered_df['Price (€)'].min(), filtered_df['Price (€)'].max()), unsafe_allow_html=True)
-
             # Display the filtered dataframe
             st.markdown("### 📋 Product Data")
             st.markdown("Click on column headers to sort the data")
+
+            # Add button to show nutrition data for selected product
+            selected_sku = st.selectbox("Select product to view nutrition data", 
+                                      filtered_df['SKU'].tolist(),
+                                      format_func=lambda x: filtered_df[filtered_df['SKU'] == x]['Product Name'].iloc[0])
+
+            if selected_sku:
+                nutrition_data = db.get_product_nutrition(selected_sku)
+                if nutrition_data:
+                    st.markdown("### 🥗 Nutritional Information")
+
+                    # Create two columns for layout
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        st.markdown("#### Product Details")
+                        st.write(f"**Name:** {nutrition_data['product_name']}")
+                        st.write(f"**Category:** {nutrition_data['category']}")
+                        if nutrition_data['needs_review']:
+                            st.warning(f"⚠️ Needs Review: {nutrition_data['review_notes']}")
+
+                        if nutrition_data['ingredients']:
+                            st.markdown("#### Ingredients")
+                            st.write(nutrition_data['ingredients'])
+
+                    with col2:
+                        st.markdown("#### Nutrition Values")
+                        st.write(f"**Serving Size:** {nutrition_data['serving_size_unit'] or '100g/ml'}")
+
+                        # Create a clean nutrition table
+                        nutrition_values = {
+                            'Energy': f"{nutrition_data['energy_kj'] or '-'} kJ / {nutrition_data['energy_kcal'] or '-'} kcal",
+                            'Fat': f"{nutrition_data['fat'] or '-'}g",
+                            'of which saturates': f"{nutrition_data['saturated_fat'] or '-'}g",
+                            'Carbohydrates': f"{nutrition_data['carbohydrates'] or '-'}g",
+                            'of which sugars': f"{nutrition_data['sugars'] or '-'}g",
+                            'Protein': f"{nutrition_data['protein'] or '-'}g",
+                            'Salt': f"{nutrition_data['salt'] or '-'}g"
+                        }
+
+                        # Convert to DataFrame for better display
+                        nutrition_df = pd.DataFrame(
+                            nutrition_values.items(),
+                            columns=['Nutrient', 'Amount']
+                        )
+                        st.table(nutrition_df)
+
+            # Display the main products table
             st.dataframe(
                 filtered_df,
                 use_container_width=True,
-                height=600
+                height=400
             )
 
-            # Add detailed view option
-            st.markdown("### 🔎 Detailed View")
-            if st.checkbox("Show Raw Data"):
-                st.markdown("#### Raw Product Data")
-                st.json(products)
+            # Add review section
+            if needs_review:
+                st.markdown("### ⚠️ Products Needing Review")
+                review_df = pd.DataFrame(needs_review)
+                review_df.columns = ['Product Name', 'SKU', 'Category', 'Review Notes', 'Serving Size Unit']
+                st.dataframe(review_df, use_container_width=True)
 
         else:
             st.info("No data available. Click 'Refresh Data' to fetch products.")

@@ -1,5 +1,4 @@
 import requests
-from bs4 import BeautifulSoup
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from decimal import Decimal, InvalidOperation
@@ -8,12 +7,29 @@ import re
 import time
 import random
 import json
-from typing import List, Dict, Optional, Union, Callable
+from typing import List, Dict, Optional, Union, Callable, Tuple
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode
+from dataclasses import dataclass
+from bs4 import BeautifulSoup
 
 class ScraperError(Exception):
     """Custom exception for scraper-related errors"""
     pass
+
+@dataclass
+class NutritionalInfo:
+    ingredients: Optional[str] = None
+    energy_kj: Optional[Decimal] = None
+    energy_kcal: Optional[Decimal] = None
+    fat: Optional[Decimal] = None
+    saturated_fat: Optional[Decimal] = None
+    carbohydrates: Optional[Decimal] = None
+    sugars: Optional[Decimal] = None
+    protein: Optional[Decimal] = None
+    salt: Optional[Decimal] = None
+    needs_review: bool = False
+    review_notes: Optional[str] = None
+    serving_size_unit: Optional[str] = None
 
 class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
@@ -55,7 +71,6 @@ class RimiScraper:
             soup = BeautifulSoup(html_content, 'html.parser')
             pagination = soup.find('div', class_='pagination')
             if pagination:
-                # Find all page links and get the highest page number
                 page_links = pagination.find_all('a', attrs={'data-page': True})
                 if page_links:
                     max_page = max(int(link['data-page']) for link in page_links)
@@ -70,14 +85,12 @@ class RimiScraper:
         parsed = urlparse(category_url)
         category_id = parsed.path.split('/')[-1]
 
-        # Base query parameters
         params = {
             'query': f':relevance:allCategories:{category_id}:assortmentStatus:inAssortment',
             'pageSize': self.page_size,
             'currentPage': page
         }
 
-        # Construct the URL with parameters
         return f"{category_url}?{urlencode(params)}"
 
     def clean_price(self, price_str: str) -> Decimal:
@@ -96,11 +109,9 @@ class RimiScraper:
             soup = BeautifulSoup(html_content, 'html.parser')
             products_list = []
 
-            # Log the HTML structure for debugging
             self.status_callback("Analyzing page structure...")
             logging.debug(f"Raw HTML content length: {len(html_content)}")
 
-            # Find all product containers with data-gtm-eec-product attribute
             products = soup.find_all(attrs={'data-gtm-eec-product': True})
 
             if not products:
@@ -115,28 +126,22 @@ class RimiScraper:
 
             for index, product in enumerate(products, 1):
                 try:
-                    # Try to get product data from GTM attribute
                     gtm_data = product.get('data-gtm-eec-product')
                     if gtm_data:
                         try:
-                            # Parse the JSON data
                             product_data = json.loads(gtm_data)
 
-                            # Extract unit price if available
                             price_per_unit_elem = product.select_one('.price-per-unit, .unit-price')
                             price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
 
-                            # Find the product URL from the card__url element
                             url_elem = product.select_one('a.card__url.js-gtm-eec-product-click')
                             product_url = url_elem.get('href') if url_elem else None
                             if product_url:
                                 product_url = f"{self.base_url}{product_url}"
 
-                            # Extract image URL from card__image-wrapper
                             img_elem = product.select_one('.card__image-wrapper img')
                             image_url = None
                             if img_elem:
-                                # Try to get the high-quality data-src first, fallback to src
                                 image_url = img_elem.get('data-src') or img_elem.get('src')
 
                             product_info = {
@@ -170,18 +175,108 @@ class RimiScraper:
             logging.error(f"Error parsing HTML content: {str(e)}")
             return []
 
+    def _extract_decimal(self, text: str) -> Optional[Decimal]:
+        """Extract decimal number from text, handling various formats"""
+        try:
+            cleaned = re.sub(r'[^0-9.-]', '', text.replace(',', '.'))
+            return Decimal(cleaned) if cleaned else None
+        except (InvalidOperation, ValueError):
+            return None
+
+    def _extract_energy_values(self, text: str) -> Tuple[Optional[Decimal], Optional[Decimal]]:
+        """Extract both kJ and kcal values from energy text"""
+        try:
+            pattern = r'(\d+(?:[,.]\d+)?)\s*kJ\s*(?:/|\s)\s*(\d+(?:[,.]\d+)?)\s*kcal'
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                kj = self._extract_decimal(match.group(1))
+                kcal = self._extract_decimal(match.group(2))
+                return kj, kcal
+            return None, None
+        except Exception as e:
+            logging.error(f"Error extracting energy values: {str(e)}")
+            return None, None
+
+    def scrape_nutritional_info(self, product_url: str) -> NutritionalInfo:
+        """Scrape nutritional information from product detail page"""
+        try:
+            if not product_url:
+                return NutritionalInfo(needs_review=True, review_notes="Missing product URL")
+
+            self.status_callback(f"Fetching nutritional info from {product_url}")
+            response = self.session.get(product_url)
+            if response.status_code != 200:
+                return NutritionalInfo(needs_review=True, review_notes=f"Failed to fetch page: {response.status_code}")
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            details_div = soup.find('div', class_='product__details')
+            if not details_div:
+                return NutritionalInfo(needs_review=True, review_notes="Product details section not found")
+
+            info = NutritionalInfo()
+
+            ingredients_section = details_div.find(lambda tag: tag.name == 'h4' and 'Sastāvdaļas' in tag.text)
+            if ingredients_section and ingredients_section.find_next('p'):
+                info.ingredients = ingredients_section.find_next('p').text.strip()[:1000]
+
+            nutrition_table = details_div.find(lambda tag: tag.name == 'table' and 
+                                             tag.find(text=re.compile(r'Uzturvērtība|Nutritional value')))
+
+            if not nutrition_table:
+                info.needs_review = True
+                info.review_notes = "Nutrition table not found"
+                return info
+
+            serving_header = nutrition_table.find(text=re.compile(r'Daudzums uz 100g/ml'))
+            if serving_header:
+                info.serving_size_unit = serving_header.strip()
+
+            rows = nutrition_table.find_all('tr')
+            for row in rows:
+                cells = row.find_all(['th', 'td'])
+                if len(cells) < 2:
+                    continue
+
+                label = cells[0].text.strip().lower()
+                value = cells[1].text.strip()
+
+                if re.search(r'enerģētiskā vērtība|energy value', label, re.IGNORECASE):
+                    info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
+                elif re.search(r'^tauki$|^fat$', label, re.IGNORECASE):
+                    info.fat = self._extract_decimal(value)
+                elif re.search(r'piesātinātās taukskābes|saturated fatty acids', label, re.IGNORECASE):
+                    info.saturated_fat = self._extract_decimal(value)
+                elif re.search(r'^ogļhidrāti$|^carbohydrates$', label, re.IGNORECASE):
+                    info.carbohydrates = self._extract_decimal(value)
+                elif re.search(r'tostarp cukuri|including sugars', label, re.IGNORECASE):
+                    info.sugars = self._extract_decimal(value)
+                elif re.search(r'^olbaltumvielas$|^protein$', label, re.IGNORECASE):
+                    info.protein = self._extract_decimal(value)
+                elif re.search(r'^sāls$|^salt$', label, re.IGNORECASE):
+                    info.salt = self._extract_decimal(value)
+
+            if not all([info.energy_kj, info.energy_kcal, info.fat, info.carbohydrates, info.protein]):
+                info.needs_review = True
+                info.review_notes = "Missing required nutritional values"
+
+            return info
+
+        except Exception as e:
+            logging.error(f"Error scraping nutritional info: {str(e)}")
+            return NutritionalInfo(needs_review=True, review_notes=f"Error: {str(e)}")
+
     def scrape_products(self) -> List[Dict[str, Union[str, Decimal]]]:
         """Scrape product information from multiple Rimi categories"""
         try:
-            # Initialize session
             self.status_callback("Initializing scraper session...")
             all_products = []
+            products_with_nutrition = []
 
             for category_url in self.category_urls:
                 try:
                     self.status_callback(f"Processing category: {category_url}")
 
-                    # First request to get max page number
                     response = self.session.get(category_url)
                     if response.status_code != 200:
                         self.status_callback(f"Failed to access category {category_url}. Status code: {response.status_code}")
@@ -190,17 +285,23 @@ class RimiScraper:
                     max_pages = self.get_max_page_number(response.text)
                     self.status_callback(f"Found {max_pages} pages in category")
 
-                    # Process first page products from initial response
-                    category_products = self.extract_product_info(response.text, category_url)
-                    all_products.extend(category_products)
-                    self.status_callback(f"Processed page 1/{max_pages} with {len(category_products)} products")
+                    products = self.extract_product_info(response.text, category_url)
 
-                    # Process remaining pages if any
+                    for product in products:
+                        if product.get('product_url'):
+                            nutrition = self.scrape_nutritional_info(product['product_url'])
+                            products_with_nutrition.append({
+                                'product': product,
+                                'nutrition': nutrition
+                            })
+                        time.sleep(random.uniform(0.5, 1))
+
+                    all_products.extend(products)
+                    self.status_callback(f"Processed page 1/{max_pages} with {len(products)} products")
+
                     for page in range(2, max_pages + 1):
                         try:
-                            # Add random delay between pages
                             time.sleep(random.uniform(1, 2))
-
                             page_url = self.build_page_url(category_url, page)
                             self.status_callback(f"Fetching page {page}/{max_pages}")
 
@@ -210,6 +311,16 @@ class RimiScraper:
                                 continue
 
                             page_products = self.extract_product_info(response.text, page_url)
+
+                            for product in page_products:
+                                if product.get('product_url'):
+                                    nutrition = self.scrape_nutritional_info(product['product_url'])
+                                    products_with_nutrition.append({
+                                        'product': product,
+                                        'nutrition': nutrition
+                                    })
+                                time.sleep(random.uniform(0.5, 1))
+
                             all_products.extend(page_products)
                             self.status_callback(f"Processed page {page}/{max_pages} with {len(page_products)} products")
 
@@ -226,10 +337,12 @@ class RimiScraper:
                     continue
 
             if not all_products:
-                raise ScraperError("No products found in any category. Please check if the website structure has changed.")
+                raise ScraperError("No products found in any category")
 
-            self.status_callback(f"Successfully scraped {len(all_products)} products in total")
-            return all_products
+            needs_review_count = sum(1 for p in products_with_nutrition if p['nutrition'].needs_review)
+            self.status_callback(f"Successfully scraped {len(all_products)} products, {needs_review_count} need review")
+
+            return products_with_nutrition
 
         except Exception as e:
             logging.error(f"Scraping error: {str(e)}")
