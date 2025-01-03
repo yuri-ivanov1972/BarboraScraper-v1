@@ -76,8 +76,7 @@ def debug_product_url(url: str) -> list:
 
     def debug_callback(msg: str):
         debug_logs.append(msg)
-        # Also print to console for additional debugging
-        print(f"Debug: {msg}")
+        print(f"Debug: {msg}")  # Print to console for additional debugging
 
     try:
         scraper = RimiScraper(status_callback=debug_callback)
@@ -109,6 +108,12 @@ def main():
     st.title("🛒 Rimi Product Scraper")
     st.markdown("### A tool for monitoring Rimi supermarket products and prices")
 
+    # Initialize session state for debug section
+    if 'show_debug' not in st.session_state:
+        st.session_state.show_debug = False
+    if 'debug_logs' not in st.session_state:
+        st.session_state.debug_logs = None
+
     # Initialize database
     try:
         db = Database()
@@ -117,24 +122,56 @@ def main():
         st.error(f"Database Connection Error: {str(e)}")
         st.stop()
 
-    # Add buttons in the same row
-    col1, col2 = st.columns([1, 4])
-    with col1:
-        refresh_clicked = st.button("🔄 Refresh Data")
-    with col2:
-        debug_clicked = st.button("🔍 Debug Single Product", type="secondary", help="Debug scraping process for a specific URL")
+    # Add tabs for different sections
+    tab1, tab2 = st.tabs(["Main", "Debug"])
 
-    # Debug section with clear instructions
-    if debug_clicked:
+    with tab1:
+        # Add refresh button
+        if st.button("🔄 Refresh Data"):
+            with st.spinner("Scraping product data..."):
+                try:
+                    scraper = RimiScraper(status_callback=lambda msg: st.markdown(f"""
+                        <div class="status-area">
+                            <h4>Scraping Status</h4>
+                            <p>{msg}</p>
+                        </div>
+                    """, unsafe_allow_html=True))
+
+                    products_with_nutrition = scraper.scrape_products()
+
+                    if products_with_nutrition:
+                        try:
+                            result = db.save_products_with_nutrition(products_with_nutrition)
+                            st.success(f"Successfully processed {len(products_with_nutrition)} products!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error saving products: {str(e)}")
+                    else:
+                        st.warning("No products found during scraping. Please try again later.")
+
+                except Exception as e:
+                    st.error(f"Error during data refresh: {str(e)}")
+
+        # Display existing data
+        try:
+            products = db.get_products()
+            if products:
+                st.markdown("### 📊 Products Overview")
+                df = pd.DataFrame(products)
+                st.dataframe(df)
+        except Exception as e:
+            st.error(f"Error displaying data: {str(e)}")
+
+    with tab2:
         st.markdown('<div class="debug-header"><h2>🔍 Debug Single Product</h2></div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="debug-instructions">
             <h4>How to use the debugger:</h4>
             <ol>
-                <li>The URL field below is pre-filled with a sample product URL</li>
+                <li>Enter a product URL or use the pre-filled example URL</li>
                 <li>Click "Start Debug" to begin the scraping process</li>
-                <li>Debug logs will appear in the section below showing each step</li>
-                <li>Pay attention to the "=== Script Content Analysis ===" section</li>
+                <li>Debug logs will appear below showing each step of the process</li>
+                <li>Look for the "=== Script Content Analysis ===" section in the logs</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
@@ -145,59 +182,18 @@ def main():
         )
 
         if st.button("Start Debug", key="start_debug"):
+            st.session_state.debug_logs = debug_product_url(debug_url)
+
+        # Always show debug logs if they exist
+        if st.session_state.debug_logs:
             st.markdown('<div class="debug-header"><h3>🔍 Debug Results</h3></div>', unsafe_allow_html=True)
-
-            with st.spinner("Debugging product page..."):
-                debug_logs = debug_product_url(debug_url)
-
-                # Display logs with proper formatting
-                for log in debug_logs:
-                    css_class = "debug-log"
-                    if "error" in log.lower() or "❌" in log:
-                        css_class += " error"
-                    elif "success" in log.lower() or "found" in log.lower():
-                        css_class += " success"
-
-                    st.markdown(f'<div class="{css_class}">{log}</div>', unsafe_allow_html=True)
-
-    # Add status area for scraping progress
-    status_area = st.empty()
-
-    # Refresh data section
-    if refresh_clicked:
-        with st.spinner("Scraping product data..."):
-            try:
-                scraper = RimiScraper(status_callback=lambda msg: status_area.markdown(f"""
-                    <div class="status-area">
-                        <h4>Scraping Status</h4>
-                        <p>{msg}</p>
-                    </div>
-                """, unsafe_allow_html=True))
-
-                products_with_nutrition = scraper.scrape_products()
-
-                if products_with_nutrition:
-                    try:
-                        result = db.save_products_with_nutrition(products_with_nutrition)
-                        st.success(f"Successfully processed {len(products_with_nutrition)} products!")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Error saving products: {str(e)}")
-                else:
-                    st.warning("No products found during scraping. Please try again later.")
-
-            except Exception as e:
-                st.error(f"Error during data refresh: {str(e)}")
-
-    # Display existing data
-    try:
-        products = db.get_products()
-        if products:
-            st.markdown("### 📊 Products Overview")
-            df = pd.DataFrame(products)
-            st.dataframe(df)
-    except Exception as e:
-        st.error(f"Error displaying data: {str(e)}")
+            for log in st.session_state.debug_logs:
+                css_class = "debug-log"
+                if "error" in log.lower() or "❌" in log:
+                    css_class += " error"
+                elif "success" in log.lower() or "found" in log.lower():
+                    css_class += " success"
+                st.markdown(f'<div class="{css_class}">{log}</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
