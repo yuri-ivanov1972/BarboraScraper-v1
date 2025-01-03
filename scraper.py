@@ -255,17 +255,15 @@ class RimiScraper:
                                 # Initialize nutritional info
                                 info = NutritionalInfo()
 
-                                # Extract ingredients
-                                ingredients_section = details_soup.find(
-                                    'div',
-                                    class_='product__list-wrapper',
-                                    string=lambda t: t and ('Sastāvdaļas' in t if t else False)
-                                )
-                                if ingredients_section:
-                                    ingredients_text = ingredients_section.find('div', class_='text')
-                                    if ingredients_text:
-                                        info.ingredients = ingredients_text.get_text(strip=True)
-                                        self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
+                                # Extract ingredients - updated logic
+                                for section in details_soup.find_all('div', class_='product__list-wrapper'):
+                                    heading = section.find('p', class_='heading')
+                                    if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
+                                        text_div = section.find('div', class_='text')
+                                        if text_div and text_div.p:
+                                            info.ingredients = text_div.p.get_text(strip=True)
+                                            self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
+                                        break
 
                                 # Find nutrition table
                                 nutrition_table = details_soup.find('table')
