@@ -210,36 +210,103 @@ class RimiScraper:
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            details_div = soup.find('div', class_='product__details')
+            # Try multiple possible selectors for product details
+            details_div = None
+            possible_selectors = [
+                'div.product__details',
+                'div.product-details',
+                'div.product-info',
+                'div.product-description',
+                'div.product__info'
+            ]
+
+            for selector in possible_selectors:
+                details_div = soup.select_one(selector)
+                if details_div:
+                    break
+
             if not details_div:
+                # If still not found, try finding by content
+                details_div = soup.find(lambda tag: tag.name == 'div' and any(
+                    text in tag.get_text().lower() 
+                    for text in ['sastāvdaļas', 'ingredients', 'uzturvērtība', 'nutrition']
+                ))
+
+            if not details_div:
+                logging.error(f"Product details not found for URL: {product_url}")
                 return NutritionalInfo(needs_review=True, review_notes="Product details section not found")
 
             info = NutritionalInfo()
 
-            ingredients_section = details_div.find(lambda tag: tag.name == 'h4' and 'Sastāvdaļas' in tag.text)
-            if ingredients_section and ingredients_section.find_next('p'):
-                info.ingredients = ingredients_section.find_next('p').text.strip()[:1000]
+            # Try to find ingredients section with multiple possible headings
+            ingredients_section = None
+            for heading in ['Sastāvdaļas', 'Ingredients', 'sastāvdaļas', 'ingredients']:
+                ingredients_section = details_div.find(lambda tag: tag.name in ['h4', 'h3', 'strong', 'b'] 
+                                                     and heading.lower() in tag.get_text().lower())
+                if ingredients_section:
+                    break
 
-            nutrition_table = details_div.find(lambda tag: tag.name == 'table' and 
-                                             tag.find(text=re.compile(r'Uzturvērtība|Nutritional value')))
+            if ingredients_section:
+                # Look for ingredients text in multiple possible locations
+                ingredients_text = None
+                # Try next sibling paragraph
+                next_p = ingredients_section.find_next('p')
+                if next_p:
+                    ingredients_text = next_p.get_text(strip=True)
+                if not ingredients_text:
+                    # Try next sibling div
+                    next_div = ingredients_section.find_next('div')
+                    if next_div:
+                        ingredients_text = next_div.get_text(strip=True)
+                if not ingredients_text:
+                    # Try parent's text excluding the heading
+                    parent = ingredients_section.parent
+                    if parent:
+                        ingredients_text = parent.get_text(strip=True).replace(ingredients_section.get_text(strip=True), '')
+
+                if ingredients_text:
+                    info.ingredients = ingredients_text[:1000]
+
+            # Find nutrition table with multiple possible identifiers
+            nutrition_table = None
+            nutrition_identifiers = [
+                'Uzturvērtība', 'Nutritional value', 'Nutrition information',
+                'uzturvērtība', 'nutritional value', 'nutrition information'
+            ]
+
+            for table in soup.find_all('table'):
+                if any(ident.lower() in table.get_text().lower() for ident in nutrition_identifiers):
+                    nutrition_table = table
+                    break
 
             if not nutrition_table:
                 info.needs_review = True
                 info.review_notes = "Nutrition table not found"
                 return info
 
-            serving_header = nutrition_table.find(text=re.compile(r'Daudzums uz 100g/ml'))
-            if serving_header:
-                info.serving_size_unit = serving_header.strip()
+            # Extract serving size information
+            serving_patterns = [
+                r'Daudzums uz 100g/ml',
+                r'Amount per 100g/ml',
+                r'100\s*g/ml',
+                r'Nutrition per 100g/ml'
+            ]
 
+            for pattern in serving_patterns:
+                serving_match = soup.find(text=re.compile(pattern, re.IGNORECASE))
+                if serving_match:
+                    info.serving_size_unit = serving_match.strip()
+                    break
+
+            # Process nutrition table
             rows = nutrition_table.find_all('tr')
             for row in rows:
                 cells = row.find_all(['th', 'td'])
                 if len(cells) < 2:
                     continue
 
-                label = cells[0].text.strip().lower()
-                value = cells[1].text.strip()
+                label = cells[0].get_text(strip=True).lower()
+                value = cells[1].get_text(strip=True)
 
                 if re.search(r'enerģētiskā vērtība|energy value', label, re.IGNORECASE):
                     info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
@@ -256,7 +323,7 @@ class RimiScraper:
                 elif re.search(r'^sāls$|^salt$', label, re.IGNORECASE):
                     info.salt = self._extract_decimal(value)
 
-            if not all([info.energy_kj, info.energy_kcal, info.fat, info.carbohydrates, info.protein]):
+            if not any([info.energy_kj, info.energy_kcal, info.fat, info.carbohydrates, info.protein]):
                 info.needs_review = True
                 info.review_notes = "Missing required nutritional values"
 
