@@ -120,14 +120,25 @@ def main():
 
                 if products:
                     try:
-                        db.save_products(products)
-                        st.success(f"Successfully added {len(products)} new products!")
-                        st.rerun()  # Using st.rerun() instead of experimental_rerun
+                        new_products, updated_products = db.save_products(products)
+                        status_message = []
+                        if new_products > 0:
+                            status_message.append(f"Added {new_products} new products")
+                        if updated_products > 0:
+                            status_message.append(f"Updated {updated_products} existing products")
+
+                        if status_message:
+                            st.success("Successfully " + " and ".join(status_message) + "!")
+                        else:
+                            st.info("No changes detected in product data")
+
+                        st.rerun()  # Refresh the page to show updated data
                     except Exception as e:
                         error_msg = handle_error(e)
                         st.error(f"Error saving products: {error_msg}")
                 else:
                     st.warning("No products found during scraping. Please try again later.")
+
             except ScraperError as e:
                 st.error(f"Scraping Error: {str(e)}")
             except Exception as e:
