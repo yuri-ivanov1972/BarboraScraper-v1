@@ -210,122 +210,101 @@ class RimiScraper:
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # Try multiple possible selectors for product details
-            details_div = None
-            possible_selectors = [
-                'div.product__details',
-                'div.product-details',
-                'div.product-info',
-                'div.product-description',
-                'div.product__info'
-            ]
+            # Debug logging
+            logging.debug(f"Page content length: {len(response.text)}")
+            logging.debug("Found HTML elements:")
+            for elem in soup.find_all(['div', 'table']):
+                class_names = elem.get('class', [])
+                if class_names:
+                    logging.debug(f"Element: {elem.name}, Classes: {', '.join(class_names)}")
 
-            for selector in possible_selectors:
-                details_div = soup.select_one(selector)
-                if details_div:
-                    break
+            # First try finding any div containing nutrition-related text
+            nutrition_content = soup.find(lambda tag: tag.name == 'div' and any(
+                keyword in tag.get_text().lower()
+                for keyword in ['uzturvērtība', 'nutritional', 'nutrition', 'sastāvdaļas', 'ingredients']
+            ))
 
-            if not details_div:
-                # If still not found, try finding by content
-                details_div = soup.find(lambda tag: tag.name == 'div' and any(
-                    text in tag.get_text().lower() 
-                    for text in ['sastāvdaļas', 'ingredients', 'uzturvērtība', 'nutrition']
-                ))
-
-            if not details_div:
-                logging.error(f"Product details not found for URL: {product_url}")
-                return NutritionalInfo(needs_review=True, review_notes="Product details section not found")
+            if not nutrition_content:
+                logging.error(f"No nutrition content found in {product_url}")
+                return NutritionalInfo(needs_review=True, review_notes="No nutrition content found on page")
 
             info = NutritionalInfo()
 
-            # Try to find ingredients section with multiple possible headings
-            ingredients_section = None
-            for heading in ['Sastāvdaļas', 'Ingredients', 'sastāvdaļas', 'ingredients']:
-                ingredients_section = details_div.find(lambda tag: tag.name in ['h4', 'h3', 'strong', 'b'] 
-                                                     and heading.lower() in tag.get_text().lower())
-                if ingredients_section:
-                    break
+            # Look for ingredients first
+            ingredients_pattern = re.compile(r'(sastāvdaļas|ingredients)[:\s]+(.*)', re.IGNORECASE)
+            ingredients_match = ingredients_pattern.search(nutrition_content.get_text())
+            if ingredients_match:
+                info.ingredients = ingredients_match.group(2).strip()[:1000]
 
-            if ingredients_section:
-                # Look for ingredients text in multiple possible locations
-                ingredients_text = None
-                # Try next sibling paragraph
-                next_p = ingredients_section.find_next('p')
-                if next_p:
-                    ingredients_text = next_p.get_text(strip=True)
-                if not ingredients_text:
-                    # Try next sibling div
-                    next_div = ingredients_section.find_next('div')
-                    if next_div:
-                        ingredients_text = next_div.get_text(strip=True)
-                if not ingredients_text:
-                    # Try parent's text excluding the heading
-                    parent = ingredients_section.parent
-                    if parent:
-                        ingredients_text = parent.get_text(strip=True).replace(ingredients_section.get_text(strip=True), '')
-
-                if ingredients_text:
-                    info.ingredients = ingredients_text[:1000]
-
-            # Find nutrition table with multiple possible identifiers
+            # Look for nutrition table or structured content
             nutrition_table = None
-            nutrition_identifiers = [
-                'Uzturvērtība', 'Nutritional value', 'Nutrition information',
-                'uzturvērtība', 'nutritional value', 'nutrition information'
-            ]
 
-            for table in soup.find_all('table'):
-                if any(ident.lower() in table.get_text().lower() for ident in nutrition_identifiers):
+            # Try finding table with nutrition data
+            all_tables = soup.find_all('table')
+            for table in all_tables:
+                table_text = table.get_text().lower()
+                if any(keyword in table_text for keyword in ['kcal', 'energy', 'fat', 'protein']):
                     nutrition_table = table
                     break
 
-            if not nutrition_table:
-                info.needs_review = True
-                info.review_notes = "Nutrition table not found"
-                return info
+            if nutrition_table:
+                # Process nutrition table rows
+                for row in nutrition_table.find_all('tr'):
+                    cells = row.find_all(['td', 'th'])
+                    if len(cells) < 2:
+                        continue
 
-            # Extract serving size information
-            serving_patterns = [
-                r'Daudzums uz 100g/ml',
-                r'Amount per 100g/ml',
-                r'100\s*g/ml',
-                r'Nutrition per 100g/ml'
-            ]
+                    label = cells[0].get_text(strip=True).lower()
+                    value = cells[1].get_text(strip=True)
 
-            for pattern in serving_patterns:
-                serving_match = soup.find(text=re.compile(pattern, re.IGNORECASE))
-                if serving_match:
-                    info.serving_size_unit = serving_match.strip()
-                    break
+                    # Debug log for nutrition values
+                    logging.debug(f"Found nutrition row - Label: {label}, Value: {value}")
 
-            # Process nutrition table
-            rows = nutrition_table.find_all('tr')
-            for row in rows:
-                cells = row.find_all(['th', 'td'])
-                if len(cells) < 2:
-                    continue
+                    if any(energy_term in label for energy_term in ['enerģētiskā vērtība', 'energy', 'calories']):
+                        info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
+                    elif any(term in label for term in ['tauki', 'fat']):
+                        info.fat = self._extract_decimal(value)
+                    elif any(term in label for term in ['piesātinātās taukskābes', 'saturated']):
+                        info.saturated_fat = self._extract_decimal(value)
+                    elif any(term in label for term in ['ogļhidrāti', 'carbohydrate']):
+                        info.carbohydrates = self._extract_decimal(value)
+                    elif any(term in label for term in ['cukuri', 'sugar']):
+                        info.sugars = self._extract_decimal(value)
+                    elif any(term in label for term in ['olbaltumvielas', 'protein']):
+                        info.protein = self._extract_decimal(value)
+                    elif any(term in label for term in ['sāls', 'salt']):
+                        info.salt = self._extract_decimal(value)
 
-                label = cells[0].get_text(strip=True).lower()
-                value = cells[1].get_text(strip=True)
+            # If no structured table found, try to extract from text
+            else:
+                logging.warning(f"No nutrition table found in {product_url}, trying text extraction")
+                text = nutrition_content.get_text()
 
-                if re.search(r'enerģētiskā vērtība|energy value', label, re.IGNORECASE):
-                    info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
-                elif re.search(r'^tauki$|^fat$', label, re.IGNORECASE):
-                    info.fat = self._extract_decimal(value)
-                elif re.search(r'piesātinātās taukskābes|saturated fatty acids', label, re.IGNORECASE):
-                    info.saturated_fat = self._extract_decimal(value)
-                elif re.search(r'^ogļhidrāti$|^carbohydrates$', label, re.IGNORECASE):
-                    info.carbohydrates = self._extract_decimal(value)
-                elif re.search(r'tostarp cukuri|including sugars', label, re.IGNORECASE):
-                    info.sugars = self._extract_decimal(value)
-                elif re.search(r'^olbaltumvielas$|^protein$', label, re.IGNORECASE):
-                    info.protein = self._extract_decimal(value)
-                elif re.search(r'^sāls$|^salt$', label, re.IGNORECASE):
-                    info.salt = self._extract_decimal(value)
+                # Try to find energy values in text
+                energy_match = re.search(r'(\d+(?:[,.]\d+)?)\s*kJ\s*(?:/|\s)\s*(\d+(?:[,.]\d+)?)\s*kcal', text)
+                if energy_match:
+                    info.energy_kj = self._extract_decimal(energy_match.group(1))
+                    info.energy_kcal = self._extract_decimal(energy_match.group(2))
 
+                # Try to find other nutritional values
+                patterns = {
+                    'fat': r'(?:tauki|fat)[:\s]+(\d+(?:[,.]\d+)?)',
+                    'carbohydrates': r'(?:ogļhidrāti|carbohydrates)[:\s]+(\d+(?:[,.]\d+)?)',
+                    'protein': r'(?:olbaltumvielas|protein)[:\s]+(\d+(?:[,.]\d+)?)',
+                    'salt': r'(?:sāls|salt)[:\s]+(\d+(?:[,.]\d+)?)'
+                }
+
+                for nutrient, pattern in patterns.items():
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        value = self._extract_decimal(match.group(1))
+                        setattr(info, nutrient, value)
+
+            # Check if we found any nutritional information
             if not any([info.energy_kj, info.energy_kcal, info.fat, info.carbohydrates, info.protein]):
                 info.needs_review = True
-                info.review_notes = "Missing required nutritional values"
+                info.review_notes = "Could not extract structured nutritional information"
+                logging.warning(f"No nutritional values found for {product_url}")
 
             return info
 
