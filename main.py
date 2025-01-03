@@ -44,6 +44,14 @@ st.markdown("""
         background-color: #F5F5F5;
         padding: 0.5rem;
         border-radius: 0.25rem;
+        margin: 0.25rem 0;
+    }
+    .debug-instructions {
+        background-color: #E3F2FD;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+        border-left: 4px solid #1976D2;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -94,15 +102,27 @@ def main():
     with col2:
         debug_clicked = st.button("🔍 Debug Single Product", type="secondary", help="Debug scraping process for a specific URL")
 
-    # Debug section
+    # Debug section with clear instructions
     if debug_clicked:
         st.markdown("### 🔍 Debug Single Product")
+        st.markdown("""
+        <div class="debug-instructions">
+            <h4>How to use the debugger:</h4>
+            <ol>
+                <li>The URL field below is pre-filled with a sample product URL</li>
+                <li>Click "Start Debug" to begin the scraping process</li>
+                <li>The debug logs will appear below, showing each step of the scraping process</li>
+                <li>Look for the "=== Script Content Analysis ===" section to see the raw data being processed</li>
+            </ol>
+        </div>
+        """, unsafe_allow_html=True)
+
         debug_url = st.text_input(
             "Product URL to debug",
             value="https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/lasa-filejas-skelites-mazs-ar-dillem-kg/p/222966"
         )
 
-        if st.button("Start Debug"):
+        if st.button("Start Debug", key="start_debug"):
             with st.spinner("Debugging product page..."):
                 debug_logs = debug_product_url(debug_url)
 
