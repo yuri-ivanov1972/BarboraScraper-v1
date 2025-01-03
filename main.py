@@ -5,7 +5,7 @@ from database import Database
 import logging
 import traceback
 from datetime import datetime
-import psycopg2 # Added import for psycopg2 error handling
+import psycopg2
 
 # Configure logging
 logging.basicConfig(
@@ -116,19 +116,24 @@ def main():
                     </div>
                 """, unsafe_allow_html=True))
 
-                products = scraper.scrape_products()
+                products_with_nutrition = scraper.scrape_products()
 
-                if products:
+                if products_with_nutrition:
                     try:
-                        new_products, updated_products = db.save_products(products)
-                        status_message = []
-                        if new_products > 0:
-                            status_message.append(f"Added {new_products} new products")
-                        if updated_products > 0:
-                            status_message.append(f"Updated {updated_products} existing products")
+                        result = db.save_products_with_nutrition(products_with_nutrition)
 
-                        if status_message:
-                            st.success("Successfully " + " and ".join(status_message) + "!")
+                        messages = []
+                        if result['new_products'] > 0:
+                            messages.append(f"Added {result['new_products']} new products")
+                        if result['updated_products'] > 0:
+                            messages.append(f"Updated {result['updated_products']} existing products")
+                        if result['new_nutrition'] > 0:
+                            messages.append(f"Added nutrition data for {result['new_nutrition']} products")
+                        if result['needs_review'] > 0:
+                            messages.append(f"{result['needs_review']} products need nutrition data review")
+
+                        if messages:
+                            st.success("Successfully " + " and ".join(messages) + "!")
                         else:
                             st.info("No changes detected in product data")
 
@@ -199,20 +204,26 @@ def main():
                 (filtered_df['Price (€)'] <= price_range[1])
             ]
 
-            # Display the filtered dataframe
+            # Display the main products table first
             st.markdown("### 📋 Product Data")
             st.markdown("Click on column headers to sort the data")
+            st.dataframe(
+                filtered_df,
+                use_container_width=True,
+                height=400
+            )
 
-            # Add button to show nutrition data for selected product
-            selected_sku = st.selectbox("Select product to view nutrition data", 
-                                      filtered_df['SKU'].tolist(),
-                                      format_func=lambda x: filtered_df[filtered_df['SKU'] == x]['Product Name'].iloc[0])
+            # Add nutritional information section
+            st.markdown("### 🥗 Nutritional Information")
+            selected_sku = st.selectbox(
+                "Select product to view nutrition data", 
+                filtered_df['SKU'].tolist(),
+                format_func=lambda x: filtered_df[filtered_df['SKU'] == x]['Product Name'].iloc[0]
+            )
 
             if selected_sku:
                 nutrition_data = db.get_product_nutrition(selected_sku)
                 if nutrition_data:
-                    st.markdown("### 🥗 Nutritional Information")
-
                     # Create two columns for layout
                     col1, col2 = st.columns(2)
 
@@ -248,13 +259,8 @@ def main():
                             columns=['Nutrient', 'Amount']
                         )
                         st.table(nutrition_df)
-
-            # Display the main products table
-            st.dataframe(
-                filtered_df,
-                use_container_width=True,
-                height=400
-            )
+                else:
+                    st.info("No nutritional information available for this product")
 
             # Add review section
             if needs_review:
