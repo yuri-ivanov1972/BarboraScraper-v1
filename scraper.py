@@ -222,18 +222,38 @@ class RimiScraper:
                     self.status_callback("=== Script Content Analysis ===")
                     self.status_callback(f"Total length: {len(script_content)}")
 
-                    # Try to find the HTML content section
-                    html_pattern = r'html:\s*"(.*?)",\s*texts:'
-                    html_match = re.search(html_pattern, script_content, re.DOTALL)
+                    # Log content structure in chunks for debugging
+                    chunk_size = 1000
+                    for i in range(0, len(script_content), chunk_size):
+                        chunk = script_content[i:i + chunk_size]
+                        if 'details' in chunk:
+                            self.status_callback(f"\nFound 'details' in chunk {i//chunk_size + 1}")
+                            self.status_callback(f"Chunk content: {chunk}")
 
-                    if html_match:
-                        self.status_callback("Found HTML content section")
-                        raw_html = html_match.group(1)
+                    # Try to find the details section using non-greedy pattern
+                    details_pattern = r'details["\']\s*:\s*["\']([^"\']+?)["\']\s*,'
+                    details_match = re.search(details_pattern, script_content, re.DOTALL)
+
+                    if details_match:
+                        self.status_callback("Found details content")
+                        raw_html = details_match.group(1)
                         self.status_callback(f"Raw HTML length: {len(raw_html)}")
+                        self.status_callback("=== Raw HTML Sample ===")
+                        self.status_callback(raw_html[:200])
 
                         try:
-                            # First unescape the JSON string
-                            unescaped = raw_html.encode().decode('unicode-escape')
+                            # Handle multiple levels of escaping
+                            unescaped = raw_html
+                            # First, handle standard escapes
+                            unescaped = unescaped.replace('\\\\', '\\')
+                            unescaped = unescaped.replace('\\"', '"')
+                            # Then handle unicode escapes
+                            while '\\u' in unescaped:
+                                unescaped = unescaped.encode().decode('unicode-escape')
+
+                            self.status_callback(f"Unescaped content length: {len(unescaped)}")
+                            self.status_callback("=== Unescaped Content Sample ===")
+                            self.status_callback(unescaped[:200])
 
                             # Parse the HTML content
                             details_soup = BeautifulSoup(unescaped, 'html.parser')
@@ -242,7 +262,11 @@ class RimiScraper:
                             info = NutritionalInfo()
 
                             # Extract ingredients
-                            ingredients_section = details_soup.find('div', class_='product__list-wrapper', string=lambda t: t and 'Sastāvdaļas' in t)
+                            ingredients_section = details_soup.find(
+                                'div',
+                                class_='product__list-wrapper',
+                                string=lambda t: t and ('Sastāvdaļas' in t if t else False)
+                            )
                             if ingredients_section:
                                 ingredients_text = ingredients_section.find('div', class_='text')
                                 if ingredients_text:
@@ -286,8 +310,8 @@ class RimiScraper:
                             self.status_callback(f"Error processing HTML content: {str(e)}")
                             return NutritionalInfo(needs_review=True, review_notes=f"Processing error: {str(e)}")
                     else:
-                        self.status_callback("Could not find HTML content section")
-                        return NutritionalInfo(needs_review=True, review_notes="HTML content section not found")
+                        self.status_callback("Could not find details content")
+                        return NutritionalInfo(needs_review=True, review_notes="Details content not found")
 
             self.status_callback("No matching script found")
             return NutritionalInfo(needs_review=True, review_notes="Product details script not found")
