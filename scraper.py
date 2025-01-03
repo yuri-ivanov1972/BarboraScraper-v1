@@ -226,25 +226,29 @@ class RimiScraper:
                     # Try to find the product details section
                     self.status_callback("Looking for product details section...")
 
-                    # First attempt: Look for tabbed content
-                    tab_match = re.search(r'details["\']:\s*["\']([^"\']+)["\']', script_content)
-                    if tab_match:
-                        self.status_callback(f"Found details tab content: {tab_match.group(1)[:200]}...")
+                    # First attempt: Look for the entire nested structure
+                    details_div_pattern = r'<div\s+class=\\?"product__details\\?"[^>]*>.*?<div\s+class=\\?"container\\?".*?<div\s+class=\\?"product-details\\?".*?</div>.*?</div>.*?</div>'
+                    details_match = re.search(details_div_pattern, script_content, re.DOTALL | re.IGNORECASE)
 
-                    # Second attempt: Look for product__details div
-                    details_div_pattern = r'<div class=\\?"product__details\\?"[^>]*>(.*?)</div>'
-                    details_match = re.search(details_div_pattern, script_content, re.DOTALL)
+                    if not details_match:
+                        # Second attempt: Try finding just the product__details div
+                        details_div_pattern = r'<div\s+class=\\?"product__details\\?"[^>]*>(.*?)</div>'
+                        details_match = re.search(details_div_pattern, script_content, re.DOTALL)
 
                     if details_match:
                         self.status_callback("Found product__details div")
-                        raw_content = details_match.group(1)
+                        raw_content = details_match.group(0)  # Get the entire match including the outer div
                         self.status_callback(f"Raw content length: {len(raw_content)}")
                         self.status_callback("=== Raw Content Sample ===")
                         self.status_callback(raw_content[:200] + "...")
 
                         # Decode the content
                         try:
+                            # Handle double-escaped content
                             details_html = raw_content.encode('utf-8').decode('unicode_escape')
+                            if '\\u' in details_html:  # If still contains escaped unicode
+                                details_html = details_html.encode('utf-8').decode('unicode_escape')
+
                             self.status_callback("Successfully decoded unicode content")
                             self.status_callback("=== Decoded Content Sample ===")
                             self.status_callback(details_html[:200] + "...")
@@ -263,7 +267,7 @@ class RimiScraper:
                             info = NutritionalInfo()
 
                             # Extract ingredients first
-                            ingredients_pattern = re.compile(r'(sastāvdaļas|ingredients)[:\s]+(.*)', re.IGNORECASE)
+                            ingredients_pattern = re.compile(r'(sastāvdaļas|ingredients)[:\s]+(.*?)((?:\n|<\/|$))', re.IGNORECASE)
                             text_content = details_soup.get_text()
                             ingredients_match = ingredients_pattern.search(text_content)
 
