@@ -226,28 +226,35 @@ class RimiScraper:
                     # Try to find the product details section
                     self.status_callback("Looking for product details section...")
 
-                    # First attempt: Look for the entire nested structure
-                    details_div_pattern = r'<div\s+class=\\?"product__details\\?"[^>]*>.*?<div\s+class=\\?"container\\?".*?<div\s+class=\\?"product-details\\?".*?</div>.*?</div>.*?</div>'
+                    # Log a sample of the script content for debugging
+                    self.status_callback("=== Script Content Sample ===")
+                    self.status_callback(script_content[:500])
+
+                    # First attempt: Try finding with unicode escaped quotes
+                    details_div_pattern = r'<div\s+class=\\\\?["\u0022]product__details\\\\?["\u0022][^>]*>.*?</div>'
                     details_match = re.search(details_div_pattern, script_content, re.DOTALL | re.IGNORECASE)
 
                     if not details_match:
-                        # Second attempt: Try finding just the product__details div
-                        details_div_pattern = r'<div\s+class=\\?"product__details\\?"[^>]*>(.*?)</div>'
-                        details_match = re.search(details_div_pattern, script_content, re.DOTALL)
+                        # Second attempt: Try with regular quotes
+                        details_div_pattern = r'<div\s+class=["\']product__details["\'][^>]*>.*?</div>'
+                        details_match = re.search(details_div_pattern, script_content, re.DOTALL | re.IGNORECASE)
 
                     if details_match:
                         self.status_callback("Found product__details div")
-                        raw_content = details_match.group(0)  # Get the entire match including the outer div
+                        raw_content = details_match.group(0)
                         self.status_callback(f"Raw content length: {len(raw_content)}")
                         self.status_callback("=== Raw Content Sample ===")
                         self.status_callback(raw_content[:200] + "...")
 
                         # Decode the content
                         try:
-                            # Handle double-escaped content
-                            details_html = raw_content.encode('utf-8').decode('unicode_escape')
-                            if '\\u' in details_html:  # If still contains escaped unicode
-                                details_html = details_html.encode('utf-8').decode('unicode_escape')
+                            # Handle unicode escapes first
+                            details_html = raw_content
+                            while '\\u' in details_html:
+                                details_html = details_html.encode().decode('unicode-escape')
+
+                            # Then handle other escapes
+                            details_html = details_html.replace('\\n', '\n').replace('\\"', '"')
 
                             self.status_callback("Successfully decoded unicode content")
                             self.status_callback("=== Decoded Content Sample ===")
