@@ -45,6 +45,13 @@ st.markdown("""
         padding: 0.5rem;
         border-radius: 0.25rem;
         margin: 0.25rem 0;
+        border-left: 4px solid #FFB74D;
+    }
+    .debug-log.error {
+        border-left-color: #f44336;
+    }
+    .debug-log.success {
+        border-left-color: #4CAF50;
     }
     .debug-instructions {
         background-color: #E3F2FD;
@@ -52,6 +59,13 @@ st.markdown("""
         border-radius: 0.5rem;
         margin: 1rem 0;
         border-left: 4px solid #1976D2;
+    }
+    .debug-header {
+        background-color: #1976D2;
+        color: white;
+        padding: 0.5rem 1rem;
+        border-radius: 0.25rem;
+        margin: 1rem 0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -62,23 +76,31 @@ def debug_product_url(url: str) -> list:
 
     def debug_callback(msg: str):
         debug_logs.append(msg)
+        # Also print to console for additional debugging
+        print(f"Debug: {msg}")
 
     try:
         scraper = RimiScraper(status_callback=debug_callback)
+        debug_logs.append(f"Starting debug for URL: {url}")
+
+        debug_logs.append("\n=== Starting Nutritional Info Scraping ===")
         nutrition_info = scraper.scrape_nutritional_info(url)
+
         debug_logs.append("\n=== Final Nutrition Info ===")
         debug_logs.append(f"Ingredients: {nutrition_info.ingredients[:100]}..." if nutrition_info.ingredients else "No ingredients found")
         debug_logs.append(f"Energy: {nutrition_info.energy_kj}kJ / {nutrition_info.energy_kcal}kcal")
         debug_logs.append(f"Fat: {nutrition_info.fat}g")
+        debug_logs.append(f"Saturated Fat: {nutrition_info.saturated_fat}g")
         debug_logs.append(f"Carbohydrates: {nutrition_info.carbohydrates}g")
+        debug_logs.append(f"Sugars: {nutrition_info.sugars}g")
         debug_logs.append(f"Protein: {nutrition_info.protein}g")
         debug_logs.append(f"Salt: {nutrition_info.salt}g")
 
         if nutrition_info.needs_review:
-            debug_logs.append(f"\nNeeds Review: {nutrition_info.review_notes}")
+            debug_logs.append(f"\n⚠️ Needs Review: {nutrition_info.review_notes}")
 
     except Exception as e:
-        debug_logs.append(f"Error during scraping: {str(e)}")
+        debug_logs.append(f"❌ Error during scraping: {str(e)}")
         debug_logs.append(traceback.format_exc())
 
     return debug_logs
@@ -104,15 +126,15 @@ def main():
 
     # Debug section with clear instructions
     if debug_clicked:
-        st.markdown("### 🔍 Debug Single Product")
+        st.markdown('<div class="debug-header"><h2>🔍 Debug Single Product</h2></div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="debug-instructions">
             <h4>How to use the debugger:</h4>
             <ol>
                 <li>The URL field below is pre-filled with a sample product URL</li>
                 <li>Click "Start Debug" to begin the scraping process</li>
-                <li>The debug logs will appear below, showing each step of the scraping process</li>
-                <li>Look for the "=== Script Content Analysis ===" section to see the raw data being processed</li>
+                <li>Debug logs will appear in the section below showing each step</li>
+                <li>Pay attention to the "=== Script Content Analysis ===" section</li>
             </ol>
         </div>
         """, unsafe_allow_html=True)
@@ -123,14 +145,20 @@ def main():
         )
 
         if st.button("Start Debug", key="start_debug"):
+            st.markdown('<div class="debug-header"><h3>🔍 Debug Results</h3></div>', unsafe_allow_html=True)
+
             with st.spinner("Debugging product page..."):
                 debug_logs = debug_product_url(debug_url)
 
-                st.markdown("### Debug Results")
-                st.markdown('<div class="debug-section">', unsafe_allow_html=True)
+                # Display logs with proper formatting
                 for log in debug_logs:
-                    st.markdown(f'<div class="debug-log">{log}</div>', unsafe_allow_html=True)
-                st.markdown('</div>', unsafe_allow_html=True)
+                    css_class = "debug-log"
+                    if "error" in log.lower() or "❌" in log:
+                        css_class += " error"
+                    elif "success" in log.lower() or "found" in log.lower():
+                        css_class += " success"
+
+                    st.markdown(f'<div class="{css_class}">{log}</div>', unsafe_allow_html=True)
 
     # Add status area for scraping progress
     status_area = st.empty()
