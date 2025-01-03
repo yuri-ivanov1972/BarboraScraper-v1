@@ -265,8 +265,15 @@ class RimiScraper:
                                             self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
                                         break
 
-                                # Find nutrition table
-                                nutrition_table = details_soup.find('table')
+                                # Find nutrition table - updated to look for specific header
+                                nutrition_tables = details_soup.find_all('table')
+                                nutrition_table = None
+                                for table in nutrition_tables:
+                                    headers = table.find_all(['th'])
+                                    if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
+                                        nutrition_table = table
+                                        break
+
                                 if nutrition_table:
                                     self.status_callback("Found nutrition table")
 
