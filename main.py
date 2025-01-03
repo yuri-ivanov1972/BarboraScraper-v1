@@ -81,6 +81,7 @@ def main():
     # Initialize database
     try:
         db = Database()
+        logger.info("Database connection established successfully")
     except Exception as e:
         error_msg = handle_error(e)
         st.error(f"Database Connection Error: {error_msg}")
@@ -121,7 +122,7 @@ def main():
                     try:
                         db.save_products(products)
                         st.success(f"Successfully added {len(products)} new products!")
-                        st.experimental_rerun()
+                        st.rerun()  # Using st.rerun() instead of experimental_rerun
                     except Exception as e:
                         error_msg = handle_error(e)
                         st.error(f"Error saving products: {error_msg}")
