@@ -217,113 +217,108 @@ class RimiScraper:
                 if script.string and 'Storefront.product_details_page' in script.string:
                     script_tag = script
                     self.status_callback("Found Storefront.product_details_page script")
+
+                    # In debug mode, log the entire script content
+                    script_content = script_tag.string
+                    self.status_callback("=== Script Content Analysis ===")
+                    self.status_callback(f"Total length: {len(script_content)}")
+
+                    # Try to find the product details section
+                    self.status_callback("Looking for product details section...")
+
+                    # First attempt: Look for tabbed content
+                    tab_match = re.search(r'details["\']:\s*["\']([^"\']+)["\']', script_content)
+                    if tab_match:
+                        self.status_callback(f"Found details tab content: {tab_match.group(1)[:200]}...")
+
+                    # Second attempt: Look for product__details div
+                    details_div_pattern = r'<div class=\\?"product__details\\?"[^>]*>(.*?)</div>'
+                    details_match = re.search(details_div_pattern, script_content, re.DOTALL)
+
+                    if details_match:
+                        self.status_callback("Found product__details div")
+                        raw_content = details_match.group(1)
+                        self.status_callback(f"Raw content length: {len(raw_content)}")
+                        self.status_callback("=== Raw Content Sample ===")
+                        self.status_callback(raw_content[:200] + "...")
+
+                        # Decode the content
+                        try:
+                            details_html = raw_content.encode('utf-8').decode('unicode_escape')
+                            self.status_callback("Successfully decoded unicode content")
+                            self.status_callback("=== Decoded Content Sample ===")
+                            self.status_callback(details_html[:200] + "...")
+
+                            # Parse the decoded HTML
+                            details_soup = BeautifulSoup(details_html, 'html.parser')
+
+                            # Look for nutrition table in the decoded content
+                            nutrition_table = details_soup.find('table')
+                            if nutrition_table:
+                                self.status_callback("Found nutrition table:")
+                                self.status_callback(str(nutrition_table)[:200] + "...")
+                            else:
+                                self.status_callback("No nutrition table found in decoded content")
+
+                            info = NutritionalInfo()
+
+                            # Extract ingredients first
+                            ingredients_pattern = re.compile(r'(sastāvdaļas|ingredients)[:\s]+(.*)', re.IGNORECASE)
+                            text_content = details_soup.get_text()
+                            ingredients_match = ingredients_pattern.search(text_content)
+
+                            if ingredients_match:
+                                info.ingredients = ingredients_match.group(2).strip()[:1000]
+                                self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
+                            else:
+                                self.status_callback("No ingredients found")
+
+                            if nutrition_table:
+                                for row in nutrition_table.find_all('tr'):
+                                    cells = row.find_all(['td', 'th'])
+                                    if len(cells) < 2:
+                                        continue
+
+                                    label = cells[0].get_text(strip=True).lower()
+                                    value = cells[1].get_text(strip=True)
+                                    self.status_callback(f"Processing row - Label: {label}, Value: {value}")
+
+                                    if re.search(r'enerģētiskā vērtība|energy value', label, re.IGNORECASE):
+                                        info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
+                                        self.status_callback(f"Energy: {info.energy_kj}kJ / {info.energy_kcal}kcal")
+                                    elif re.search(r'^tauki$|^fat$', label, re.IGNORECASE):
+                                        info.fat = self._extract_decimal(value)
+                                        self.status_callback(f"Fat: {info.fat}g")
+                                    elif re.search(r'piesātinātās taukskābes|saturated fatty acids', label, re.IGNORECASE):
+                                        info.saturated_fat = self._extract_decimal(value)
+                                        self.status_callback(f"Saturated fat: {info.saturated_fat}g")
+                                    elif re.search(r'^ogļhidrāti$|^carbohydrates$', label, re.IGNORECASE):
+                                        info.carbohydrates = self._extract_decimal(value)
+                                        self.status_callback(f"Carbohydrates: {info.carbohydrates}g")
+                                    elif re.search(r'tostarp cukuri|including sugars', label, re.IGNORECASE):
+                                        info.sugars = self._extract_decimal(value)
+                                        self.status_callback(f"Sugars: {info.sugars}g")
+                                    elif re.search(r'^olbaltumvielas$|^protein$', label, re.IGNORECASE):
+                                        info.protein = self._extract_decimal(value)
+                                        self.status_callback(f"Protein: {info.protein}g")
+                                    elif re.search(r'^sāls$|^salt$', label, re.IGNORECASE):
+                                        info.salt = self._extract_decimal(value)
+                                        self.status_callback(f"Salt: {info.salt}g")
+
+                            return info
+
+                        except Exception as e:
+                            self.status_callback(f"Error decoding content: {str(e)}")
+                            return NutritionalInfo(needs_review=True, review_notes=f"Decoding error: {str(e)}")
+                    else:
+                        self.status_callback("Could not find product__details div")
+                        return NutritionalInfo(needs_review=True, review_notes="Product details div not found")
+
                     break
 
             if not script_tag:
-                self.status_callback("Product details script not found")
+                self.status_callback("Could not find Storefront.product_details_page script")
                 return NutritionalInfo(needs_review=True, review_notes="Product details script not found")
-
-            # Debug log the script content
-            script_content = script_tag.string
-            self.status_callback(f"Script content length: {len(script_content)}")
-            self.status_callback("Looking for product__details div in script")
-
-            # Try to extract the product details div content from the script
-            details_match = re.search(r'<div class=\\?"product__details\\?"[^>]*>(.*?)</div>', script_content, re.DOTALL)
-
-            if not details_match:
-                self.status_callback("Product details div pattern not found in script")
-                # Try logging part of the script content for debugging
-                sample_content = script_content[:500] + "..." if len(script_content) > 500 else script_content
-                self.status_callback(f"Script content sample: {sample_content}")
-                return NutritionalInfo(needs_review=True, review_notes="Product details div not found in script")
-
-            self.status_callback("Found product details div, decoding content")
-            details_html = details_match.group(1).encode('utf-8').decode('unicode_escape')
-            self.status_callback(f"Decoded HTML length: {len(details_html)}")
-
-            details_soup = BeautifulSoup(details_html, 'html.parser')
-            self.status_callback("Successfully parsed details HTML")
-
-            info = NutritionalInfo()
-
-            # Look for ingredients with detailed logging
-            ingredients_pattern = re.compile(r'(sastāvdaļas|ingredients)[:\s]+(.*)', re.IGNORECASE)
-            ingredients_text = details_soup.get_text()
-            self.status_callback(f"Looking for ingredients in text (length: {len(ingredients_text)})")
-
-            ingredients_match = ingredients_pattern.search(ingredients_text)
-            if ingredients_match:
-                info.ingredients = ingredients_match.group(2).strip()[:1000]
-                self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
-            else:
-                self.status_callback("No ingredients found")
-
-            # Look for nutrition table
-            nutrition_table = details_soup.find('table')
-            if nutrition_table:
-                self.status_callback("Found nutrition table, processing rows")
-                for row in nutrition_table.find_all('tr'):
-                    cells = row.find_all(['td', 'th'])
-                    if len(cells) < 2:
-                        continue
-
-                    label = cells[0].get_text(strip=True).lower()
-                    value = cells[1].get_text(strip=True)
-                    self.status_callback(f"Processing nutrition row - Label: {label}, Value: {value}")
-
-                    if re.search(r'enerģētiskā vērtība|energy value', label, re.IGNORECASE):
-                        info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
-                        self.status_callback(f"Extracted energy values: {info.energy_kj}kJ, {info.energy_kcal}kcal")
-                    elif re.search(r'^tauki$|^fat$', label, re.IGNORECASE):
-                        info.fat = self._extract_decimal(value)
-                        self.status_callback(f"Extracted fat: {info.fat}g")
-                    elif re.search(r'piesātinātās taukskābes|saturated fatty acids', label, re.IGNORECASE):
-                        info.saturated_fat = self._extract_decimal(value)
-                        self.status_callback(f"Extracted saturated fat: {info.saturated_fat}g")
-                    elif re.search(r'^ogļhidrāti$|^carbohydrates$', label, re.IGNORECASE):
-                        info.carbohydrates = self._extract_decimal(value)
-                        self.status_callback(f"Extracted carbohydrates: {info.carbohydrates}g")
-                    elif re.search(r'tostarp cukuri|including sugars', label, re.IGNORECASE):
-                        info.sugars = self._extract_decimal(value)
-                        self.status_callback(f"Extracted sugars: {info.sugars}g")
-                    elif re.search(r'^olbaltumvielas$|^protein$', label, re.IGNORECASE):
-                        info.protein = self._extract_decimal(value)
-                        self.status_callback(f"Extracted protein: {info.protein}g")
-                    elif re.search(r'^sāls$|^salt$', label, re.IGNORECASE):
-                        info.salt = self._extract_decimal(value)
-                        self.status_callback(f"Extracted salt: {info.salt}g")
-            else:
-                self.status_callback("No nutrition table found, trying text extraction")
-                text = details_soup.get_text()
-
-                # Try to find energy values
-                energy_match = re.search(r'(\d+(?:[,.]\d+)?)\s*kJ\s*(?:/|\s)\s*(\d+(?:[,.]\d+)?)\s*kcal', text)
-                if energy_match:
-                    info.energy_kj = self._extract_decimal(energy_match.group(1))
-                    info.energy_kcal = self._extract_decimal(energy_match.group(2))
-
-                # Try to find other values
-                patterns = {
-                    'fat': r'(?:tauki|fat)[:\s]+(\d+(?:[,.]\d+)?)',
-                    'carbohydrates': r'(?:ogļhidrāti|carbohydrates)[:\s]+(\d+(?:[,.]\d+)?)',
-                    'protein': r'(?:olbaltumvielas|protein)[:\s]+(\d+(?:[,.]\d+)?)',
-                    'salt': r'(?:sāls|salt)[:\s]+(\d+(?:[,.]\d+)?)'
-                }
-
-                for nutrient, pattern in patterns.items():
-                    match = re.search(pattern, text, re.IGNORECASE)
-                    if match:
-                        value = self._extract_decimal(match.group(1))
-                        setattr(info, nutrient, value)
-
-            # Check if we found any nutritional information
-            if not any([info.energy_kj, info.energy_kcal, info.fat, info.carbohydrates, info.protein]):
-                info.needs_review = True
-                info.review_notes = "Could not extract structured nutritional information"
-                logging.warning(f"No nutritional values found for {product_url}")
-
-            return info
 
         except Exception as e:
             logging.error(f"Error scraping nutritional info: {str(e)}")
