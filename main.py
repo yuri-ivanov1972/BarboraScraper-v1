@@ -86,8 +86,20 @@ def main():
         st.error(f"Database Connection Error: {error_msg}")
         st.stop()
 
-    # Add last update time indicator
-    last_update = st.empty()
+    # Show existing data and last update time
+    try:
+        last_update_time = db.get_last_update_time()
+        if last_update_time:
+            st.markdown(f"*Last updated: {last_update_time.strftime('%Y-%m-%d %H:%M:%S')}*")
+
+        products = db.get_products()
+        if products:
+            st.info(f"Showing {len(products)} products from the database")
+        else:
+            st.info("No products in database. Click 'Refresh Data' to fetch products.")
+    except Exception as e:
+        error_msg = handle_error(e)
+        st.error(f"Error loading existing data: {error_msg}")
 
     # Add status area for scraping progress
     status_area = st.empty()
@@ -108,8 +120,8 @@ def main():
                 if products:
                     try:
                         db.save_products(products)
-                        st.success(f"Successfully updated data! Found {len(products)} products.")
-                        last_update.markdown(f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*")
+                        st.success(f"Successfully added {len(products)} new products!")
+                        st.experimental_rerun()
                     except Exception as e:
                         error_msg = handle_error(e)
                         st.error(f"Error saving products: {error_msg}")
@@ -187,7 +199,7 @@ def main():
                         <h4>Categories</h4>
                         <h2>{}</h2>
                     </div>
-                """.format(filtered_df['Category'].nunique()), unsafe_allow_html=True)
+                """.format(pd.Series(filtered_df['Category']).nunique()), unsafe_allow_html=True)
             with col4:
                 st.markdown("""
                     <div class="metric-card">

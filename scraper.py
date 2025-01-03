@@ -19,16 +19,7 @@ class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/augli-un-darzeni/c/SH-2",
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-17",
-            "https://www.rimi.lv/e-veikals/lv/produkti/veganiem-un-vegetariesiem/c/SH-16",
-            "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/c/SH-6",
-            "https://www.rimi.lv/e-veikals/lv/produkti/piena-produkti-un-olas/c/SH-11",
-            "https://www.rimi.lv/e-veikals/lv/produkti/maize-un-konditoreja/c/SH-7",
-            "https://www.rimi.lv/e-veikals/lv/produkti/saldetie-edieni/c/SH-12",
-            "https://www.rimi.lv/e-veikals/lv/produkti/iepakota-partika/c/SH-4",
-            "https://www.rimi.lv/e-veikals/lv/produkti/saldumi-un-uzkodas/c/SH-13",
-            "https://www.rimi.lv/e-veikals/lv/produkti/dzerieni/c/SH-5"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-17"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -42,7 +33,7 @@ class RimiScraper:
         }
         self.session = self._create_session()
         self.status_callback = status_callback or (lambda x: None)
-        self.page_size = 80  # Set page size to 80 items
+        self.page_size = 20  # Set page size to 20 items
 
     def _create_session(self) -> requests.Session:
         """Create a session with retry strategy"""
