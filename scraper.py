@@ -7,6 +7,7 @@ import re
 import time
 import random
 import json
+import html
 from typing import List, Dict, Optional, Union, Callable, Tuple
 from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 from dataclasses import dataclass
@@ -557,150 +558,104 @@ class RimiScraper:
                     soup = BeautifulSoup(response.text, 'html.parser')
                     self.status_callback("Created BeautifulSoup object")
 
-                    # Extract product data
-                    gtm_element = soup.find(attrs={'data-gtm-eec-product': True})
-
-                    # Try to get data from JSON-LD first
+                    # Extract product data from JSON-LD
                     json_ld = None
                     for script in soup.find_all('script', type='application/ld+json'):
                         try:
-                            # Clean and unescape the JSON string
-                            json_str = script.string
-                            if json_str:
-                                # Remove any escaped newlines
-                                json_str = json_str.replace('\\n', ' ')
+                            # Clean and decode the JSON string
+                            if script.string:
+                                # First unescape HTML entities
+                                json_str = html.unescape(script.string)
+                                # Remove escaped newlines and normalize whitespace
+                                json_str = re.sub(r'\s+', ' ', json_str.replace('\\n', ' '))
                                 # Remove any escaped quotes within HTML attributes
                                 json_str = re.sub(r'\\(["\'])', r'\1', json_str)
-                                # Unescape HTML entities
-                                json_str = BeautifulSoup(json_str, 'html.parser').get_text()
 
+                                # Parse the JSON
                                 data = json.loads(json_str)
-                                if data.get('@type') == 'Product':
+                                if isinstance(data, dict) and data.get('@type') == 'Product':
                                     json_ld = data
                                     self.status_callback("Found product data in JSON-LD")
-                                    self.status_callback(f"JSON-LD SKU: {json_ld.get('sku')}")
+                                    self.status_callback(f"JSON-LD data: {json.dumps(data, indent=2)[:200]}...")
                                     break
                         except (json.JSONDecodeError, AttributeError) as e:
                             self.status_callback(f"Error parsing JSON-LD: {str(e)}")
-                            self.status_callback(f"Problematic JSON: {json_str[:100]}...")
+                            if script.string:
+                                self.status_callback(f"Raw JSON-LD content: {script.string[:100]}...")
                             continue
 
-                    if not gtm_element:
-                        self.status_callback(f"No GTM data found for {url}, trying alternative selectors...")
-                        # Try alternative product data extraction
-                        product_data = {
-                            'name': '',
-                            'price': '0',
-                            'id': '',
-                            'category': ''
-                        }
-
-                        # If we have JSON-LD data, use it
-                        if json_ld:
-                            product_data['name'] = json_ld.get('name', '')
-                            product_data['id'] = json_ld.get('sku', '')
-                            if 'offers' in json_ld and isinstance(json_ld['offers'], dict):
-                                product_data['price'] = json_ld['offers'].get('price', '0')
-                            self.status_callback(f"Using data from JSON-LD schema:")
-                            self.status_callback(f"Name: {product_data['name']}")
-                            self.status_callback(f"SKU: {product_data['id']}")
-                            self.status_callback(f"Price: {product_data['price']}")
-                    else:
-                        try:
-                            self.status_callback("Found GTM element, attempting to parse")
-                            product_data = json.loads(gtm_element['data-gtm-eec-product'])
-                            # If SKU is missing in GTM data but present in JSON-LD, use it
-                            if not product_data.get('id') and json_ld and json_ld.get('sku'):
-                                product_data['id'] = json_ld['sku']
-                                self.status_callback("Using SKU from JSON-LD schema")
-                            self.status_callback(f"Successfully parsed GTM data: {product_data}")
-                        except json.JSONDecodeError as e:
-                            self.status_callback(f"Error parsing GTM data: {str(e)}")
-                            continue
-
-                    # Get price per unit
-                    price_per_unit_elem = soup.select_one('.price-per-unit, .unit-price')
-                    price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
-
-                    # Get image URL
-                    img_elem = soup.select_one('.card__image-wrapper img, .gallery-image img')
-                    image_url = None
-                    if img_elem:
-                        image_url = img_elem.get('data-src') or img_elem.get('src')
-
-                    product = {
-                        'name': product_data.get('name', ''),
-                        'price': self.clean_price(product_data.get('price', 0)),
-                        'price_per_unit': price_per_unit,
-                        'product_url': url,
-                        'image_url': image_url,
-                        'sku': product_data.get('id'),
-                        'category': product_data.get('category')
+                    # Initialize product data
+                    product_data = {
+                        'name': '',
+                        'price': '0',
+                        'id': '',
+                        'category': ''
                     }
 
-                    # Add detailed validation logging
+                    # Extract data from JSON-LD if available
+                    if json_ld:
+                        self.status_callback("Using data from JSON-LD schema")
+                        product_data['name'] = json_ld.get('name', '')
+                        product_data['id'] = json_ld.get('sku', '')
+                        if 'offers' in json_ld and isinstance(json_ld['offers'], dict):
+                            product_data['price'] = json_ld['offers'].get('price', '0')
+                        self.status_callback(f"Extracted from JSON-LD:")
+                        self.status_callback(f"Name: {product_data['name']}")
+                        self.status_callback(f"SKU: {product_data['id']}")
+                        self.status_callback(f"Price: {product_data['price']}")
+
+                    # Create the product dictionary
+                    product = {
+                        'name': product_data['name'],
+                        'price': self.clean_price(product_data['price']),
+                        'product_url': url,
+                        'image_url': None,  # Will be set later if found
+                        'sku': product_data['id'],
+                        'category': product_data['category']
+                    }
+
+                    # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
-                    # Check name
-                    if not product.get('name'):
+                    has_required_fields = True
+
+                    if not product['name']:
+                        has_required_fields = False
                         self.status_callback("❌ Missing required field: name")
                         name_elem = soup.find('h1', class_='name')
                         if name_elem:
-                            self.status_callback(f"  - Name element found but text was empty")
-                        else:
-                            self.status_callback(f"  - Could not find name element in HTML")
+                            self.status_callback(f"  Found name in HTML: {name_elem.get_text(strip=True)}")
 
-                    # Check SKU
-                    if not product.get('sku'):
+                    if not product['sku']:
+                        has_required_fields = False
                         self.status_callback("❌ Missing required field: sku")
-                        sku_elem = soup.find('div', class_='product-code')
-                        if sku_elem:
-                            self.status_callback(f"  - SKU element found but could not extract number")
-                            self.status_callback(f"  - Raw SKU text: {sku_elem.get_text(strip=True)}")
-                        else:
-                            self.status_callback(f"  - Could not find SKU element in HTML")
+                        self.status_callback("  Could not find SKU in JSON-LD data")
 
-                    # Check price
-                    if not product.get('price'):
+                    if not product['price']:
                         self.status_callback("⚠️ Warning: No price found")
                         price_elem = soup.find('div', class_='price-wrapper')
                         if price_elem:
-                            self.status_callback(f"  - Price element found but could not extract number")
-                            self.status_callback(f"  - Raw price text: {price_elem.get_text(strip=True)}")
-                        else:
-                            self.status_callback(f"  - Could not find price element in HTML")
+                            self.status_callback(f"  Raw price text: {price_elem.get_text(strip=True)}")
 
-                    # Show what we actually found
-                    self.status_callback("\n=== Data Found in HTML ===")
-                    name_elem = soup.find('h1', class_='name')
-                    self.status_callback(f"Name element text: {name_elem.get_text(strip=True) if name_elem else 'Not found'}")
-                    sku_elem = soup.find('div', class_='product-code')
-                    self.status_callback(f"SKU element text: {sku_elem.get_text(strip=True) if sku_elem else 'Not found'}")
-                    price_elem = soup.find('div', class_='price-wrapper')
-                    self.status_callback(f"Price element text: {price_elem.get_text(strip=True) if price_elem else 'Not found'}")
+                    # Get nutritional info if we have required fields
+                    if has_required_fields:
+                        nutrition, country_code, quantity = self.scrape_nutritional_info(url)
+                        if country_code:
+                            product['country_code'] = country_code
+                            self.status_callback(f"Added country code: {country_code}")
+                        if quantity and quantity[0]:
+                            product['quantity_value'] = quantity[0]
+                            product['quantity_unit'] = quantity[1]
+                            self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
 
-
-                    # Get nutritional info and additional details
-                    nutrition, country_code, quantity = self.scrape_nutritional_info(url)
-                    self.status_callback("Retrieved nutritional information")
-
-                    if country_code:
-                        product['country_code'] = country_code
-                        self.status_callback(f"Added country code: {country_code}")
-                    if quantity and quantity[0] is not None:
-                        product['quantity_value'] = quantity[0]
-                        product['quantity_unit'] = quantity[1]
-                        self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
-
-                    if product.get('name') and product.get('sku'):
                         products_with_nutrition.append({
                             'product': product,
                             'nutrition': nutrition
                         })
-                        self.status_callback(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
+                        self.status_callback(f"✅ Successfully added product: {product['name']} (SKU: {product['sku']})")
                     else:
                         self.status_callback("⚠️ Product skipped: Missing required fields")
                         self.status_callback("  Required: name and sku")
-                        self.status_callback(f"  Found: name='{product.get('name')}', sku='{product.get('sku')}'")
+                        self.status_callback(f"  Found: name='{product['name']}', sku='{product['sku']}'")
 
                     time.sleep(random.uniform(0.5, 1))
 
@@ -708,11 +663,7 @@ class RimiScraper:
                     self.status_callback(f"Error processing product {url}: {str(e)}")
                     continue
 
-            if not products_with_nutrition:
-                self.status_callback("No products were successfully scraped")
-            else:
-                self.status_callback(f"Successfully scraped {len(products_with_nutrition)} products")
-
+            self.status_callback(f"Successfully scraped {len(products_with_nutrition)} products")
             return products_with_nutrition
 
         except Exception as e:
