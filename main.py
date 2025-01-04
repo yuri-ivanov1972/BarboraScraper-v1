@@ -104,7 +104,14 @@ def debug_product_url(url: str) -> list:
         debug_logs.append(f"Starting debug for URL: {url}")
 
         debug_logs.append("\n=== Starting Nutritional Info Scraping ===")
-        nutrition_info = scraper.scrape_nutritional_info(url)
+        nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(url)
+
+        debug_logs.append("\n=== Product Details ===")
+        debug_logs.append(f"Country of Origin: {country_code if country_code else 'Not found'}")
+        if quantity and quantity[0]:
+            debug_logs.append(f"Quantity: {quantity[0]} {quantity[1]}")
+        else:
+            debug_logs.append("Quantity: Not found")
 
         debug_logs.append("\n=== Final Nutrition Info ===")
         debug_logs.append(f"Ingredients: {nutrition_info.ingredients[:100]}..." if nutrition_info.ingredients else "No ingredients found")
