@@ -151,7 +151,6 @@ class RimiScraper:
         params = {
             'pageSize': self.page_size,
             'pageIndex': page_index,
-            'page': page_index,  # Include both for compatibility
             'sort': 'name-asc'
         }
 
@@ -294,7 +293,6 @@ class RimiScraper:
         try:
             if not product_url:
                 return NutritionalInfo(needs_review=True, review_notes="Missing product URL"), None, None
-
             self.status_callback(f"Fetching nutritional info from {product_url}")
             response = self.session.get(product_url)
             if response.status_code != 200:
@@ -476,6 +474,7 @@ class RimiScraper:
                 if match:
                     total_items = int(match.group())
                     max_pages = (total_items + self.page_size - 1) // self.page_size
+                    self.status_callback(f"Found {total_items} products, will process in {max_pages} pages")
                     return total_items, max_pages
 
             # Fallback to pagination
@@ -486,6 +485,7 @@ class RimiScraper:
                     max_page = max(int(link.get('data-page', 1)) for link in page_links)
                     # Estimate total products based on page size
                     total_items = max_page * self.page_size
+                    self.status_callback(f"Found {max_page} pages from pagination")
                     return total_items, max_page
 
             return 0, 0
@@ -526,37 +526,34 @@ class RimiScraper:
                         try:
                             self.status_callback(f"Processing page {page}/{category_pages}")
 
-                            # Build the correct URL for the current page
-                            page_url = self.build_page_url(category_url, page)
+                            # Get the URL for the current page
+                            current_url = self.build_page_url(category_url, page)
+                            self.status_callback(f"Fetching URL: {current_url}")
 
-                            # Add a longer delay between pages to ensure proper loading
+                            # Add delay between pages
                             if page > 1:
                                 time.sleep(random.uniform(2, 3))
 
-                            response = self.session.get(page_url)
-
+                            response = self.session.get(current_url)
                             if response.status_code != 200:
                                 self.status_callback(f"Failed to access page {page}. Status code: {response.status_code}")
                                 continue
 
-                            # Add debug logging for the response
-                            self.status_callback(f"Page {page} response length: {len(response.text)}")
-
-                            products = self.extract_product_info(response.text, page_url)
+                            # Extract products from the page
+                            products = self.extract_product_info(response.text, current_url)
 
                             if not products:
-                                self.status_callback(f"No products found on page {page}, retrying with longer delay...")
+                                self.status_callback(f"No products found on page {page}, retrying...")
                                 time.sleep(random.uniform(3, 4))
-                                response = self.session.get(page_url)
-                                products = self.extract_product_info(response.text, page_url)
+                                response = self.session.get(current_url)
+                                products = self.extract_product_info(response.text, current_url)
 
                             self.status_callback(f"Found {len(products)} products on page {page}")
 
+                            # Process each product
                             for product in products:
                                 if product.get('product_url'):
                                     self.status_callback(f"Processing product: {product['name']} ({product.get('sku', 'No SKU')})")
-
-                                    # Add delay between product processing
                                     time.sleep(random.uniform(1, 2))
 
                                     nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
@@ -573,10 +570,6 @@ class RimiScraper:
                                     })
 
                             all_products.extend(products)
-
-                            # Add longer delay between pages
-                            if page < category_pages:
-                                time.sleep(random.uniform(2, 3))
 
                         except Exception as e:
                             logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
