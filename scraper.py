@@ -584,12 +584,32 @@ class RimiScraper:
                                     product['sku'] = data.get('sku', '')
                                     product['image_url'] = data.get('image', [None])[0] if isinstance(data.get('image'), list) else data.get('image')
 
-                                    # Extract price from offers
-                                    if 'offers' in data and isinstance(data['offers'], dict):
-                                        price = data['offers'].get('price')
-                                        if price:
-                                            product['price'] = self.clean_price(price)
-                                            self.status_callback(f"Found price in ld+json: {price}")
+                                    # Extract price from offers with detailed logging
+                                    if 'offers' in data:
+                                        offers = data['offers']
+                                        self.status_callback(f"Found offers data: {json.dumps(offers, indent=2)}")
+
+                                        if isinstance(offers, dict):
+                                            price = offers.get('price')
+                                            if price:
+                                                try:
+                                                    product['price'] = self.clean_price(price)
+                                                    self.status_callback(f"Successfully extracted price from ld+json: {price} -> {product['price']}")
+                                                except (InvalidOperation, ValueError) as e:
+                                                    self.status_callback(f"Error converting price '{price}': {str(e)}")
+                                        elif isinstance(offers, list) and offers:
+                                            # Handle case where offers is a list
+                                            first_offer = offers[0]
+                                            if isinstance(first_offer, dict):
+                                                price = first_offer.get('price')
+                                                if price:
+                                                    try:
+                                                        product['price'] = self.clean_price(price)
+                                                        self.status_callback(f"Successfully extracted price from first offer: {price} -> {product['price']}")
+                                                    except (InvalidOperation, ValueError) as e:
+                                                        self.status_callback(f"Error converting price '{price}': {str(e)}")
+                                    else:
+                                        self.status_callback("No offers data found in ld+json")
                                     break
                         except (json.JSONDecodeError, AttributeError) as e:
                             self.status_callback(f"Error parsing ld+json: {str(e)}")
@@ -658,6 +678,10 @@ class RimiScraper:
                     # Get nutritional info if we have required fields
                     if has_required_fields:
                         nutrition, country_code, quantity = self.scrape_nutritional_info(url)
+                        products_with_nutrition.append({
+                            'product': product,
+                            'nutrition': nutrition
+                        })
                         if country_code:
                             product['country_code'] = country_code
                             self.status_callback(f"Added country code: {country_code}")
@@ -665,11 +689,6 @@ class RimiScraper:
                             product['quantity_value'] = quantity[0]
                             product['quantity_unit'] = quantity[1]
                             self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
-
-                        products_with_nutrition.append({
-                            'product': product,
-                            'nutrition': nutrition
-                        })
                         self.status_callback(f"✅ Successfully added product: {product['name']} (SKU: {product['sku']})")
                     else:
                         self.status_callback("⚠️ Product skipped: Missing required fields")
