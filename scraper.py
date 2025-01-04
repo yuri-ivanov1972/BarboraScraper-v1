@@ -632,19 +632,34 @@ class RimiScraper:
                                 # Handle escaped characters
                                 html_content = html_content.encode().decode('unicode-escape')
                                 html_content = html_content.replace('\\/', '/')
-                                details_soup = BeautifulSoup(html_content, 'html.parser')
+                                self.status_callback(f"Successfully extracted details HTML content, length: {len(html_content)}")
 
-                                # Try to find category in the details HTML
-                                category_match = re.search(r'\"category\":\"(SH-[^\"]+)\"', html_content)
+                                # Try to extract category using a more specific pattern
+                                category_match = re.search(r'SH-[0-9-]+', html_content)
                                 if category_match:
-                                    product['category'] = category_match.group(1)
+                                    product['category'] = category_match.group(0)
                                     self.status_callback(f"Found category in details: {product['category']}")
                                 else:
-                                    self.status_callback("Could not find category in product details")
-                                    product['category'] = 'SH-unknown'
+                                    # Try extracting from URL as fallback
+                                    path_parts = urlparse(url).path.split('/')
+                                    if 'produkti' in path_parts:
+                                        produkti_index = path_parts.index('produkti')
+                                        if len(path_parts) > produkti_index + 1:
+                                            category = path_parts[produkti_index + 1]
+                                            product['category'] = f"SH-{category}"
+                                            self.status_callback(f"Using URL-based category as fallback: {product['category']}")
+                                        else:
+                                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                                            self.status_callback("Using default category")
+                                    else:
+                                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                                        self.status_callback("Using default category")
                         except Exception as e:
                             self.status_callback(f"Error extracting category from details: {str(e)}")
-                            product['category'] = 'SH-unknown'
+                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                    else:
+                        self.status_callback("Product details script not found")
+                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
 
                     # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
