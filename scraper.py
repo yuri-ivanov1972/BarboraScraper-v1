@@ -287,11 +287,11 @@ class RimiScraper:
                                                 info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
                                             elif 'tauki' == label:
                                                 info.fat = self._extract_decimal(value)
-                                            elif 'piesātinātās taukskābes' in label:
+                                            elif 'piesātinātās taukskābes' in label or 'tostarp piesātinātās taukskābes' in label:
                                                 info.saturated_fat = self._extract_decimal(value)
                                             elif 'ogļhidrāti' == label:
                                                 info.carbohydrates = self._extract_decimal(value)
-                                            elif 'cukuri' in label:
+                                            elif 'cukuri' in label or 'tostarp cukuri' in label:
                                                 info.sugars = self._extract_decimal(value)
                                             elif 'olbaltumvielas' == label:
                                                 info.protein = self._extract_decimal(value)
