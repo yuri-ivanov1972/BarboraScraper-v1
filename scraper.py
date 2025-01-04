@@ -551,69 +551,108 @@ class RimiScraper:
                         self.status_callback(f"Failed to access product {url}. Status code: {response.status_code}")
                         continue
 
+                    self.status_callback("Successfully fetched product page")
+
                     # Parse the product information
                     soup = BeautifulSoup(response.text, 'html.parser')
+                    self.status_callback("Created BeautifulSoup object")
 
                     # Extract product data
                     gtm_element = soup.find(attrs={'data-gtm-eec-product': True})
                     if not gtm_element:
-                        self.status_callback(f"No GTM data found for {url}")
-                        continue
-
-                    try:
-                        product_data = json.loads(gtm_element['data-gtm-eec-product'])
-
-                        # Get price per unit
-                        price_per_unit_elem = soup.select_one('.price-per-unit, .unit-price')
-                        price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
-
-                        # Get image URL
-                        img_elem = soup.select_one('.card__image-wrapper img')
-                        image_url = None
-                        if img_elem:
-                            image_url = img_elem.get('data-src') or img_elem.get('src')
-
-                        product = {
-                            'name': product_data.get('name', ''),
-                            'price': self.clean_price(product_data.get('price', 0)),
-                            'price_per_unit': price_per_unit,
-                            'product_url': url,
-                            'image_url': image_url,
-                            'sku': product_data.get('id'),
-                            'category': product_data.get('category')
+                        self.status_callback(f"No GTM data found for {url}, trying alternative selectors...")
+                        # Try alternative product data extraction
+                        product_data = {
+                            'name': '',
+                            'price': '0',
+                            'id': '',
+                            'category': ''
                         }
 
-                        # Get nutritional info and additional details
-                        nutrition, country_code, quantity = self.scrape_nutritional_info(url)
+                        name_elem = soup.find('h1', class_='name')
+                        if name_elem:
+                            product_data['name'] = name_elem.get_text(strip=True)
 
-                        if country_code:
-                            product['country_code'] = country_code
-                            self.status_callback(f"Added country code: {country_code}")
-                        if quantity and quantity[0] is not None:
-                            product['quantity_value'] = quantity[0]
-                            product['quantity_unit'] = quantity[1]
-                            self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
+                        price_elem = soup.find('div', class_='price-wrapper')
+                        if price_elem:
+                            price_text = price_elem.get_text(strip=True)
+                            price_match = re.search(r'(\d+[.,]\d+)', price_text)
+                            if price_match:
+                                product_data['price'] = price_match.group(1)
 
-                        self.status_callback("\n=== Product Data ===")
-                        self.status_callback(f"SKU: {product.get('sku')}")
-                        self.status_callback(f"Name: {product.get('name')}")
-                        self.status_callback(f"Country: {product.get('country_code')}")
-                        self.status_callback(f"Quantity: {product.get('quantity_value')} {product.get('quantity_unit')}")
+                        sku_elem = soup.find('div', class_='product-code')
+                        if sku_elem:
+                            sku_text = sku_elem.get_text(strip=True)
+                            sku_match = re.search(r'(\d+)', sku_text)
+                            if sku_match:
+                                product_data['id'] = sku_match.group(1)
+                    else:
+                        try:
+                            product_data = json.loads(gtm_element['data-gtm-eec-product'])
+                            self.status_callback("Successfully parsed GTM data")
+                        except json.JSONDecodeError as e:
+                            self.status_callback(f"Error parsing GTM data: {str(e)}")
+                            continue
 
+                    # Get price per unit
+                    price_per_unit_elem = soup.select_one('.price-per-unit, .unit-price')
+                    price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
+
+                    # Get image URL
+                    img_elem = soup.select_one('.card__image-wrapper img, .gallery-image img')
+                    image_url = None
+                    if img_elem:
+                        image_url = img_elem.get('data-src') or img_elem.get('src')
+
+                    product = {
+                        'name': product_data.get('name', ''),
+                        'price': self.clean_price(product_data.get('price', 0)),
+                        'price_per_unit': price_per_unit,
+                        'product_url': url,
+                        'image_url': image_url,
+                        'sku': product_data.get('id'),
+                        'category': product_data.get('category')
+                    }
+
+                    self.status_callback("Successfully created product object")
+
+                    # Get nutritional info and additional details
+                    nutrition, country_code, quantity = self.scrape_nutritional_info(url)
+                    self.status_callback("Retrieved nutritional information")
+
+                    if country_code:
+                        product['country_code'] = country_code
+                        self.status_callback(f"Added country code: {country_code}")
+                    if quantity and quantity[0] is not None:
+                        product['quantity_value'] = quantity[0]
+                        product['quantity_unit'] = quantity[1]
+                        self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
+
+                    self.status_callback("\n=== Product Data ===")
+                    self.status_callback(f"SKU: {product.get('sku')}")
+                    self.status_callback(f"Name: {product.get('name')}")
+                    self.status_callback(f"Country: {product.get('country_code')}")
+                    self.status_callback(f"Quantity: {product.get('quantity_value')} {product.get('quantity_unit')}")
+
+                    if product.get('name') and product.get('sku'):
                         products_with_nutrition.append({
                             'product': product,
                             'nutrition': nutrition
                         })
-
-                    except json.JSONDecodeError as e:
-                        self.status_callback(f"Error parsing GTM data: {str(e)}")
-                        continue
+                        self.status_callback(f"Successfully added product to results: {product.get('name')}")
+                    else:
+                        self.status_callback(f"Skipping product due to missing required data")
 
                     time.sleep(random.uniform(0.5, 1))
 
                 except Exception as e:
                     self.status_callback(f"Error processing product {url}: {str(e)}")
                     continue
+
+            if not products_with_nutrition:
+                self.status_callback("No products were successfully scraped")
+            else:
+                self.status_callback(f"Successfully scraped {len(products_with_nutrition)} products")
 
             return products_with_nutrition
 
