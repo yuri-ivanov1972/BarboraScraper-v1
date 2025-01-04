@@ -559,6 +559,20 @@ class RimiScraper:
 
                     # Extract product data
                     gtm_element = soup.find(attrs={'data-gtm-eec-product': True})
+
+                    # Try to get data from JSON-LD first
+                    json_ld = None
+                    for script in soup.find_all('script', type='application/ld+json'):
+                        try:
+                            data = json.loads(script.string)
+                            if data.get('@type') == 'Product':
+                                json_ld = data
+                                self.status_callback("Found product data in JSON-LD")
+                                break
+                        except (json.JSONDecodeError, AttributeError) as e:
+                            self.status_callback(f"Error parsing JSON-LD: {str(e)}")
+                            continue
+
                     if not gtm_element:
                         self.status_callback(f"No GTM data found for {url}, trying alternative selectors...")
                         # Try alternative product data extraction
@@ -569,30 +583,43 @@ class RimiScraper:
                             'category': ''
                         }
 
-                        name_elem = soup.find('h1', class_='name')
-                        if name_elem:
-                            product_data['name'] = name_elem.get_text(strip=True)
-                            self.status_callback(f"Found name: {product_data['name']}")
+                        # If we have JSON-LD data, use it
+                        if json_ld:
+                            product_data['name'] = json_ld.get('name', '')
+                            product_data['id'] = json_ld.get('sku', '')
+                            if 'offers' in json_ld and isinstance(json_ld['offers'], dict):
+                                product_data['price'] = json_ld['offers'].get('price', '0')
+                            self.status_callback(f"Using data from JSON-LD schema")
+                        else:
+                            # Fallback to HTML parsing
+                            name_elem = soup.find('h1', class_='name')
+                            if name_elem:
+                                product_data['name'] = name_elem.get_text(strip=True)
+                                self.status_callback(f"Found name: {product_data['name']}")
 
-                        price_elem = soup.find('div', class_='price-wrapper')
-                        if price_elem:
-                            price_text = price_elem.get_text(strip=True)
-                            price_match = re.search(r'(\d+[.,]\d+)', price_text)
-                            if price_match:
-                                product_data['price'] = price_match.group(1)
-                                self.status_callback(f"Found price: {product_data['price']}")
+                            price_elem = soup.find('div', class_='price-wrapper')
+                            if price_elem:
+                                price_text = price_elem.get_text(strip=True)
+                                price_match = re.search(r'(\d+[.,]\d+)', price_text)
+                                if price_match:
+                                    product_data['price'] = price_match.group(1)
+                                    self.status_callback(f"Found price: {product_data['price']}")
 
-                        sku_elem = soup.find('div', class_='product-code')
-                        if sku_elem:
-                            sku_text = sku_elem.get_text(strip=True)
-                            sku_match = re.search(r'(\d+)', sku_text)
-                            if sku_match:
-                                product_data['id'] = sku_match.group(1)
-                                self.status_callback(f"Found SKU: {product_data['id']}")
+                            sku_elem = soup.find('div', class_='product-code')
+                            if sku_elem:
+                                sku_text = sku_elem.get_text(strip=True)
+                                sku_match = re.search(r'(\d+)', sku_text)
+                                if sku_match:
+                                    product_data['id'] = sku_match.group(1)
+                                    self.status_callback(f"Found SKU: {product_data['id']}")
                     else:
                         try:
                             self.status_callback("Found GTM element, attempting to parse")
                             product_data = json.loads(gtm_element['data-gtm-eec-product'])
+                            # If SKU is missing in GTM data but present in JSON-LD, use it
+                            if not product_data.get('id') and json_ld and json_ld.get('sku'):
+                                product_data['id'] = json_ld['sku']
+                                self.status_callback("Using SKU from JSON-LD schema")
                             self.status_callback(f"Successfully parsed GTM data: {product_data}")
                         except json.JSONDecodeError as e:
                             self.status_callback(f"Error parsing GTM data: {str(e)}")
