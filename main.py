@@ -104,7 +104,9 @@ def debug_product_url(url: str) -> list:
         debug_logs.append(f"Starting debug for URL: {url}")
 
         debug_logs.append("\n=== Starting Nutritional Info Scraping ===")
-        nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(url)
+        # Remove any parentheses and extra whitespace from URL
+        cleaned_url = url.strip().strip('()')
+        nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(cleaned_url)
 
         debug_logs.append("\n=== Product Details ===")
         debug_logs.append(f"Country of Origin: {country_code if country_code else 'Not found'}")
