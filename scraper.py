@@ -303,6 +303,7 @@ class RimiScraper:
                     if quantity_value:
                         quantity = (quantity_value, quantity_unit)
 
+            # Find and parse the product details script
             script_tag = None
             for script in soup.find_all('script'):
                 if script.string and 'Storefront.product_details_page' in script.string:
@@ -313,128 +314,114 @@ class RimiScraper:
                 script_content = script_tag.string
                 self.status_callback("Found product details script")
 
-                # Extract the tabs section
-                tabs_match = re.search(r'tabs:\s*(\[.*?\])', script_content, re.DOTALL)
-                if tabs_match:
-                    tabs_content = tabs_match.group(1)
+                # Extract the tabs section using a more reliable method
+                try:
+                    # First, try to find the details tab in the script content
+                    details_match = re.search(r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']', 
+                                           script_content, re.DOTALL)
 
-                    # Find the details tab
-                    details_match = re.search(r'\{[^}]*index:\s*0[^}]*identifier:\s*["\']details["\'][^}]*html:\s*["\']([^"\']+)["\']', tabs_content, re.DOTALL)
+                    if not details_match:
+                        # Try alternative pattern
+                        details_match = re.search(r'html:\s*["\']([^"\']+)["\'].*?identifier:\s*["\']details["\']', 
+                                               script_content, re.DOTALL)
 
                     if details_match:
                         html_content = details_match.group(1)
 
-                        try:
-                            # Handle escaped characters
-                            html_content = html_content.encode().decode('unicode-escape')
-                            html_content = html_content.replace('\\/', '/')
-                            html_content = html_content.replace('\\"', '"')
+                        # Handle escaped characters
+                        html_content = html_content.encode().decode('unicode-escape')
+                        html_content = html_content.replace('\\/', '/')
+                        html_content = html_content.replace('\\"', '"')
 
-                            details_soup = BeautifulSoup(html_content, 'html.parser')
-                            self.status_callback("\n=== Script Content Analysis ===")
-                            self.status_callback(f"HTML Content Length: {len(html_content)}")
+                        self.status_callback(f"Successfully extracted details HTML content, length: {len(html_content)}")
 
-                            # Try to find quantity and country again in the details tab if not found earlier
-                            if not country_code or not quantity[0]:
-                                self.status_callback("Searching for country and quantity in details tab...")
-                                for item in details_soup.find_all('li', class_='item'):
-                                    span = item.find('span')
-                                    if span:
-                                        label = span.get_text(strip=True)
-                                        self.status_callback(f"Found item with label: {label}")
-                                        text_div = item.find('div', class_='text')
-                                        if text_div and text_div.p:
-                                            value = text_div.p.get_text(strip=True)
-                                            self.status_callback(f"Found value: {value}")
+                        details_soup = BeautifulSoup(html_content, 'html.parser')
 
-                                            # Extract country of origin
-                                            if 'Izcelsmes valsts' in label and not country_code:
-                                                country_code = get_country_code(value)
-                                                self.status_callback(f"Extracted country code: {country_code}")
-                                            # Extract quantity
-                                            elif 'Daudzums' in label and not quantity[0]:
-                                                quantity_value, quantity_unit = extract_quantity(value)
-                                                if quantity_value:
-                                                    quantity = (quantity_value, quantity_unit)
-                                                    self.status_callback(f"Extracted quantity: {quantity_value} {quantity_unit}")
-
-                            # Find ingredients
-                            self.status_callback("\nSearching for ingredients...")
-                            for section in details_soup.find_all('div', class_='product__list-wrapper'):
-                                heading = section.find('p', class_='heading')
-                                if heading:
-                                    self.status_callback(f"Found section with heading: {heading.get_text(strip=True)}")
-                                if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
-                                    text_div = section.find('div', class_='text')
+                        # Try to find quantity and country again in the details tab if not found earlier
+                        if not country_code or not quantity[0]:
+                            self.status_callback("Searching for country and quantity in details tab...")
+                            for item in details_soup.find_all('li', class_='item'):
+                                span = item.find('span')
+                                if span:
+                                    label = span.get_text(strip=True)
+                                    self.status_callback(f"Found item with label: {label}")
+                                    text_div = item.find('div', class_='text')
                                     if text_div and text_div.p:
-                                        info.ingredients = text_div.p.get_text(strip=True)
-                                        self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
-                                        break
+                                        value = text_div.p.get_text(strip=True)
+                                        self.status_callback(f"Found value: {value}")
 
-                            # Find nutrition table
-                            self.status_callback("\nSearching for nutrition table...")
-                            tables = details_soup.find_all('table')
-                            self.status_callback(f"Found {len(tables)} tables")
-                            nutrition_table = None
-                            for table in tables:
-                                headers = table.find_all('th')
-                                if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
-                                    nutrition_table = table
-                                    self.status_callback("Found nutrition table")
-                                    break
+                                        # Extract country of origin
+                                        if 'Izcelsmes valsts' in label and not country_code:
+                                            country_code = get_country_code(value)
+                                            self.status_callback(f"Extracted country code: {country_code}")
+                                        # Extract quantity
+                                        elif 'Daudzums' in label and not quantity[0]:
+                                            quantity_value, quantity_unit = extract_quantity(value)
+                                            if quantity_value:
+                                                quantity = (quantity_value, quantity_unit)
+                                                self.status_callback(f"Extracted quantity: {quantity_value} {quantity_unit}")
 
-                            if nutrition_table:
-                                for row in nutrition_table.find_all('tr'):
-                                    cells = row.find_all(['td'])
-                                    if len(cells) >= 2:
-                                        label = cells[0].get_text(strip=True).lower()
-                                        value = cells[1].get_text(strip=True)
-                                        self.status_callback(f"Processing nutrition row: {label} = {value}")
+                        # Find ingredients
+                        for section in details_soup.find_all('div', class_='product__list-wrapper'):
+                            heading = section.find('p', class_='heading')
+                            if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
+                                text_div = section.find('div', class_='text')
+                                if text_div and text_div.p:
+                                    info.ingredients = text_div.p.get_text(strip=True)
+                                    self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
+                                break
 
-                                        if 'enerģētiskā vērtība' in label:
-                                            info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
-                                        elif 'tauki' == label:
-                                            info.fat = self._extract_decimal(value)
-                                        elif 'piesātinātās taukskābes' in label or 'tostarp piesātinātās taukskābes' in label:
-                                            info.saturated_fat = self._extract_decimal(value)
-                                        elif 'ogļhidrāti' == label:
-                                            info.carbohydrates = self._extract_decimal(value)
-                                        elif 'cukuri' in label or 'tostarp cukuri' in label:
-                                            info.sugars = self._extract_decimal(value)
-                                        elif 'olbaltumvielas' == label:
-                                            info.protein = self._extract_decimal(value)
-                                        elif 'sāls' == label:
-                                            info.salt = self._extract_decimal(value)
+                        # Find nutrition table
+                        tables = details_soup.find_all('table')
+                        nutrition_table = None
+                        for table in tables:
+                            headers = table.find_all('th')
+                            if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
+                                nutrition_table = table
+                                self.status_callback("Found nutrition table")
+                                break
 
-                            # Add logging for debugging
-                            self.status_callback("\n=== Extracted Data Summary ===")
-                            self.status_callback(f"Country Code: {country_code}")
-                            self.status_callback(f"Quantity: {quantity[0]} {quantity[1] if quantity[1] else 'N/A'}")
-                            self.status_callback(f"Ingredients: {info.ingredients[:100]}..." if info.ingredients else "No ingredients found")
-                            self.status_callback(f"Energy: {info.energy_kj}kJ / {info.energy_kcal}kcal")
-                            self.status_callback(f"Fat: {info.fat}g")
-                            self.status_callback(f"Saturated Fat: {info.saturated_fat}g")
-                            self.status_callback(f"Carbohydrates: {info.carbohydrates}g")
-                            self.status_callback(f"Sugars: {info.sugars}g")
-                            self.status_callback(f"Protein: {info.protein}g")
-                            self.status_callback(f"Salt: {info.salt}g")
+                        if nutrition_table:
+                            for row in nutrition_table.find_all('tr'):
+                                cells = row.find_all(['td'])
+                                if len(cells) >= 2:
+                                    label = cells[0].get_text(strip=True).lower()
+                                    value = cells[1].get_text(strip=True)
 
-                            if not any([info.ingredients, info.energy_kj, info.energy_kcal, info.fat, 
-                                      info.saturated_fat, info.carbohydrates, info.sugars, 
-                                      info.protein, info.salt]):
-                                info.needs_review = True
-                                info.review_notes = "No nutritional information found"
-                                self.status_callback("⚠️ No nutritional information found")
+                                    if 'enerģētiskā vērtība' in label:
+                                        info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
+                                    elif 'tauki' == label:
+                                        info.fat = self._extract_decimal(value)
+                                    elif 'piesātinātās taukskābes' in label:
+                                        info.saturated_fat = self._extract_decimal(value)
+                                    elif 'ogļhidrāti' == label:
+                                        info.carbohydrates = self._extract_decimal(value)
+                                    elif 'cukuri' in label:
+                                        info.sugars = self._extract_decimal(value)
+                                    elif 'olbaltumvielas' == label:
+                                        info.protein = self._extract_decimal(value)
+                                    elif 'sāls' == label:
+                                        info.salt = self._extract_decimal(value)
 
-                            return info, country_code, quantity
+                    else:
+                        self.status_callback("Could not find details tab content in script")
+                        return NutritionalInfo(needs_review=True, review_notes="Details tab content not found"), None, None
 
-                        except Exception as e:
-                            self.status_callback(f"❌ Error processing HTML content: {str(e)}")
-                            return NutritionalInfo(needs_review=True, review_notes=f"Processing error: {str(e)}"), None, None
+                except Exception as e:
+                    self.status_callback(f"Error processing details tab: {str(e)}")
+                    return NutritionalInfo(needs_review=True, review_notes=f"Error processing details: {str(e)}"), None, None
 
-                    return NutritionalInfo(needs_review=True, review_notes="Could not find details tab"), None, None
-                self.status_callback("No matching script found")
+            else:
+                self.status_callback("Product details script not found")
                 return NutritionalInfo(needs_review=True, review_notes="Product details script not found"), None, None
+
+            # Add summary logging
+            self.status_callback("\n=== Extracted Data Summary ===")
+            self.status_callback(f"Country Code: {country_code}")
+            self.status_callback(f"Quantity: {quantity[0]} {quantity[1] if quantity[1] else 'N/A'}")
+            self.status_callback(f"Ingredients: {info.ingredients[:100]}..." if info.ingredients else "No ingredients found")
+
+            return info, country_code, quantity
 
         except Exception as e:
             logging.error(f"Error scraping nutritional info: {str(e)}")
