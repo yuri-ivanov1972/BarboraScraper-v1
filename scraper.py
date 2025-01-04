@@ -142,21 +142,32 @@ class RimiScraper:
 
     def build_page_url(self, category_url: str, page: int) -> str:
         """Build URL for specific page number"""
-        parsed = urlparse(category_url)
-        query = parse_qs(parsed.query)
+        try:
+            parsed = urlparse(category_url)
+            query_params = parse_qs(parsed.query)
 
-        # Rimi uses 0-based page index
-        page_index = page - 1
+            # Rimi uses 0-based page index
+            page_index = page - 1
 
-        params = {
-            'pageSize': self.page_size,
-            'pageIndex': page_index,
-            'sort': 'name-asc'
-        }
+            # Preserve existing query parameters
+            params = {k: v[0] for k, v in query_params.items() if k not in ['pageSize', 'pageIndex', 'page']}
 
-        # Construct the URL with parameters
-        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
-        return f"{base_url}?{urlencode(params)}"
+            # Add pagination parameters
+            params.update({
+                'pageSize': str(self.page_size),
+                'pageIndex': str(page_index)
+            })
+
+            # Construct the URL preserving the path
+            base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+            final_url = f"{base_url}?{urlencode(params)}"
+
+            self.status_callback(f"Generated URL for page {page}: {final_url}")
+            return final_url
+
+        except Exception as e:
+            logging.error(f"Error building page URL: {str(e)}")
+            return category_url
 
     def clean_price(self, price_str: str) -> Decimal:
         """Clean and convert price string to Decimal"""
@@ -460,13 +471,15 @@ class RimiScraper:
     def get_total_products(self, category_url: str) -> Tuple[int, int]:
         """Get total number of products and pages for a category"""
         try:
+            self.status_callback(f"Checking total products for category: {category_url}")
             response = self.session.get(category_url)
             if response.status_code != 200:
+                self.status_callback(f"Failed to access category URL. Status code: {response.status_code}")
                 return 0, 0
 
             soup = BeautifulSoup(response.text, 'html.parser')
 
-            # Try to get total products from results count
+            # Try to get total products from results count first
             total_items_elem = soup.find('div', class_='results-count')
             if total_items_elem:
                 total_text = total_items_elem.get_text(strip=True)
@@ -474,7 +487,8 @@ class RimiScraper:
                 if match:
                     total_items = int(match.group())
                     max_pages = (total_items + self.page_size - 1) // self.page_size
-                    self.status_callback(f"Found {total_items} products, will process in {max_pages} pages")
+                    self.status_callback(f"Found {total_items} total products from results count")
+                    self.status_callback(f"Calculated {max_pages} total pages (page size: {self.page_size})")
                     return total_items, max_pages
 
             # Fallback to pagination
@@ -483,14 +497,16 @@ class RimiScraper:
                 page_links = pagination.find_all('a', attrs={'data-page': True})
                 if page_links:
                     max_page = max(int(link.get('data-page', 1)) for link in page_links)
-                    # Estimate total products based on page size
                     total_items = max_page * self.page_size
-                    self.status_callback(f"Found {max_page} pages from pagination")
+                    self.status_callback(f"Found {max_page} pages from pagination links")
+                    self.status_callback(f"Estimated {total_items} total products")
                     return total_items, max_page
 
+            self.status_callback("Could not determine total products or pages")
             return 0, 0
         except Exception as e:
             logging.error(f"Error getting total products: {str(e)}")
+            self.status_callback(f"Error determining total products: {str(e)}")
             return 0, 0
 
     def scrape_products(self) -> List[Dict[str, Union[str, Decimal]]]:
