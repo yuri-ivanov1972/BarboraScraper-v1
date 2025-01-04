@@ -146,18 +146,18 @@ class RimiScraper:
             parsed = urlparse(category_url)
             query_params = parse_qs(parsed.query)
 
-            # Preserve existing query parameters
+            # Preserve existing query parameters except pagination ones
             params = {k: v[0] for k, v in query_params.items() if k not in ['pageSize', 'pageIndex', 'currentPage', 'page']}
 
             # Add pagination parameters
             params['pageSize'] = str(self.page_size)
-            params['pageIndex'] = str(page)  # Start from 1, not 0
+            params['currentPage'] = str(page)  # Use currentPage and start from 1
 
             # Construct the URL preserving the path
             base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
             final_url = f"{base_url}?{urlencode(params)}"
 
-            logging.info(f"Generated URL for page {page}: {final_url}") #Added logging
+            logging.info(f"Generated URL for page {page}: {final_url}")
             self.status_callback(f"Generated URL for page {page}: {final_url}")
             return final_url
 
@@ -706,8 +706,7 @@ class RimiScraper:
                                     if impressions and isinstance(impressions, list) and len(impressions) > 0:
                                         category = impressions[0].get('category', '')
                                         if category:
-                                            # Take the first part of the category path (most specific)
-                                            product['category'] = category.split('/')[0]
+                                            # Take the first part of the category path (most specific)                                            product['category'] = category.split('/')[0]
                                             self.status_callback(f"Found category in dataLayer: {product['category']}")
                         except (json.JSONDecodeError, AttributeError) as e:
                             self.status_callback(f"Error parsing dataLayer: {str(e)}")
