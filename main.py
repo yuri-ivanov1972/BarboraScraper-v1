@@ -138,11 +138,15 @@ def main():
     st.title("🛒 Rimi Product Scraper")
     st.markdown("### A tool for monitoring Rimi supermarket products and prices")
 
-    # Initialize session state for debug section
+    # Initialize session state for debug section and progress tracking
     if 'show_debug' not in st.session_state:
         st.session_state.show_debug = False
     if 'debug_logs' not in st.session_state:
         st.session_state.debug_logs = None
+    if 'total_products' not in st.session_state:
+        st.session_state.total_products = 0
+    if 'processed_products' not in st.session_state:
+        st.session_state.processed_products = 0
 
     # Initialize database
     try:
@@ -158,9 +162,25 @@ def main():
     with tab1:
         # Add refresh button
         if st.button("🔄 Refresh Data"):
+            progress_bar = st.progress(0)
+            progress_text = st.empty()
+
+            def update_progress(msg: str):
+                if "Found" in msg and "potential product elements" in msg:
+                    # Extract total products count
+                    count = int(''.join(filter(str.isdigit, msg)))
+                    st.session_state.total_products = count
+                    st.session_state.processed_products = 0
+                elif "Successfully parsed product" in msg:
+                    st.session_state.processed_products += 1
+                    if st.session_state.total_products > 0:
+                        progress = st.session_state.processed_products / st.session_state.total_products
+                        progress_bar.progress(min(progress, 1.0))
+                        progress_text.text(f"Processing products: {st.session_state.processed_products}/{st.session_state.total_products}")
+
             with st.spinner("Scraping product data..."):
                 try:
-                    scraper = RimiScraper(status_callback=lambda msg: None)  # Reduced debug output
+                    scraper = RimiScraper(status_callback=update_progress)
                     products_with_nutrition = scraper.scrape_products()
 
                     if products_with_nutrition:
@@ -178,6 +198,10 @@ def main():
 
                 except Exception as e:
                     st.error(f"Error during data refresh: {str(e)}")
+
+            # Clean up progress indicators
+            progress_bar.empty()
+            progress_text.empty()
 
         # Display existing data
         try:
