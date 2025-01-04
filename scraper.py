@@ -331,42 +331,56 @@ class RimiScraper:
                             html_content = html_content.replace('\\"', '"')
 
                             details_soup = BeautifulSoup(html_content, 'html.parser')
+                            self.status_callback("\n=== Script Content Analysis ===")
+                            self.status_callback(f"HTML Content Length: {len(html_content)}")
 
                             # Try to find quantity and country again in the details tab if not found earlier
                             if not country_code or not quantity[0]:
+                                self.status_callback("Searching for country and quantity in details tab...")
                                 for item in details_soup.find_all('li', class_='item'):
                                     span = item.find('span')
                                     if span:
                                         label = span.get_text(strip=True)
+                                        self.status_callback(f"Found item with label: {label}")
                                         text_div = item.find('div', class_='text')
                                         if text_div and text_div.p:
                                             value = text_div.p.get_text(strip=True)
+                                            self.status_callback(f"Found value: {value}")
 
                                             # Extract country of origin
                                             if 'Izcelsmes valsts' in label and not country_code:
                                                 country_code = get_country_code(value)
+                                                self.status_callback(f"Extracted country code: {country_code}")
                                             # Extract quantity
                                             elif 'Daudzums' in label and not quantity[0]:
                                                 quantity_value, quantity_unit = extract_quantity(value)
                                                 if quantity_value:
                                                     quantity = (quantity_value, quantity_unit)
+                                                    self.status_callback(f"Extracted quantity: {quantity_value} {quantity_unit}")
 
                             # Find ingredients
+                            self.status_callback("\nSearching for ingredients...")
                             for section in details_soup.find_all('div', class_='product__list-wrapper'):
                                 heading = section.find('p', class_='heading')
+                                if heading:
+                                    self.status_callback(f"Found section with heading: {heading.get_text(strip=True)}")
                                 if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
                                     text_div = section.find('div', class_='text')
                                     if text_div and text_div.p:
                                         info.ingredients = text_div.p.get_text(strip=True)
+                                        self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
                                         break
 
-                            # Find nutrition table by looking for specific header
+                            # Find nutrition table
+                            self.status_callback("\nSearching for nutrition table...")
                             tables = details_soup.find_all('table')
+                            self.status_callback(f"Found {len(tables)} tables")
                             nutrition_table = None
                             for table in tables:
                                 headers = table.find_all('th')
                                 if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
                                     nutrition_table = table
+                                    self.status_callback("Found nutrition table")
                                     break
 
                             if nutrition_table:
@@ -375,6 +389,7 @@ class RimiScraper:
                                     if len(cells) >= 2:
                                         label = cells[0].get_text(strip=True).lower()
                                         value = cells[1].get_text(strip=True)
+                                        self.status_callback(f"Processing nutrition row: {label} = {value}")
 
                                         if 'enerģētiskā vērtība' in label:
                                             info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
@@ -392,7 +407,9 @@ class RimiScraper:
                                             info.salt = self._extract_decimal(value)
 
                             # Add logging for debugging
-                            self.status_callback("\n=== Extracted Data ===")
+                            self.status_callback("\n=== Extracted Data Summary ===")
+                            self.status_callback(f"Country Code: {country_code}")
+                            self.status_callback(f"Quantity: {quantity[0]} {quantity[1] if quantity[1] else 'N/A'}")
                             self.status_callback(f"Ingredients: {info.ingredients[:100]}..." if info.ingredients else "No ingredients found")
                             self.status_callback(f"Energy: {info.energy_kj}kJ / {info.energy_kcal}kcal")
                             self.status_callback(f"Fat: {info.fat}g")
@@ -402,10 +419,17 @@ class RimiScraper:
                             self.status_callback(f"Protein: {info.protein}g")
                             self.status_callback(f"Salt: {info.salt}g")
 
+                            if not any([info.ingredients, info.energy_kj, info.energy_kcal, info.fat, 
+                                      info.saturated_fat, info.carbohydrates, info.sugars, 
+                                      info.protein, info.salt]):
+                                info.needs_review = True
+                                info.review_notes = "No nutritional information found"
+                                self.status_callback("⚠️ No nutritional information found")
+
                             return info, country_code, quantity
 
                         except Exception as e:
-                            self.status_callback(f"Error processing HTML content: {str(e)}")
+                            self.status_callback(f"❌ Error processing HTML content: {str(e)}")
                             return NutritionalInfo(needs_review=True, review_notes=f"Processing error: {str(e)}"), None, None
 
                     return NutritionalInfo(needs_review=True, review_notes="Could not find details tab"), None, None
