@@ -6,6 +6,7 @@ import logging
 import traceback
 from datetime import datetime
 import psycopg2
+from psycopg2.extras import RealDictCursor # Added for RealDictCursor
 
 # Configure logging
 logging.basicConfig(
@@ -89,7 +90,7 @@ st.markdown("""
         margin: 1rem 0;
     }
     </style>
-    """, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 def debug_product_url(url: str) -> list:
     """Debug scraping process for a specific URL"""
@@ -134,6 +135,15 @@ def debug_product_url(url: str) -> list:
 
     return debug_logs
 
+SPECIFIC_PRODUCTS = [
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/liellops-burgundijas-gaume-ar-bulguru-400g/p/2000297",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/piedevas-un-merces/merce-loku-400g/p/2000165",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/cala-galas-tikkamasala-ar-basm-ris-400g/p/2000291",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/marineta-gala/calu-pussparni-teriyaki-marinade-400g/p/2000324",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/cukas-mele-varita-kg/p/2000330",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511"
+]
+
 def main():
     st.title("🛒 Rimi Product Scraper")
     st.markdown("### A tool for monitoring Rimi supermarket products and prices")
@@ -147,6 +157,8 @@ def main():
         st.session_state.total_products = 0
     if 'processed_products' not in st.session_state:
         st.session_state.processed_products = 0
+    if 'specific_products_logs' not in st.session_state:
+        st.session_state.specific_products_logs = []
 
     # Initialize database
     try:
@@ -157,51 +169,80 @@ def main():
         st.stop()
 
     # Add tabs for different sections
-    tab1, tab2, tab3 = st.tabs(["Products Overview", "Product Details", "Debug"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Products Overview", "Product Details", "Debug", "Specific Products Debug"])
 
     with tab1:
-        # Add refresh button
-        if st.button("🔄 Refresh Data"):
-            progress_bar = st.progress(0)
-            progress_text = st.empty()
+        col1, col2 = st.columns(2)
+        with col1:
+            # Add refresh button
+            if st.button("🔄 Refresh All Data"):
+                progress_bar = st.progress(0)
+                progress_text = st.empty()
 
-            def update_progress(msg: str):
-                if "Found" in msg and "potential product elements" in msg:
-                    # Extract total products count
-                    count = int(''.join(filter(str.isdigit, msg)))
-                    st.session_state.total_products = count
-                    st.session_state.processed_products = 0
-                elif "Successfully parsed product" in msg:
-                    st.session_state.processed_products += 1
-                    if st.session_state.total_products > 0:
-                        progress = st.session_state.processed_products / st.session_state.total_products
-                        progress_bar.progress(min(progress, 1.0))
-                        progress_text.text(f"Processing products: {st.session_state.processed_products}/{st.session_state.total_products}")
+                def update_progress(msg: str):
+                    if "Found" in msg and "potential product elements" in msg:
+                        # Extract total products count
+                        count = int(''.join(filter(str.isdigit, msg)))
+                        st.session_state.total_products = count
+                        st.session_state.processed_products = 0
+                    elif "Successfully parsed product" in msg:
+                        st.session_state.processed_products += 1
+                        if st.session_state.total_products > 0:
+                            progress = st.session_state.processed_products / st.session_state.total_products
+                            progress_bar.progress(min(progress, 1.0))
+                            progress_text.text(f"Processing products: {st.session_state.processed_products}/{st.session_state.total_products}")
 
-            with st.spinner("Scraping product data..."):
-                try:
-                    scraper = RimiScraper(status_callback=update_progress)
-                    products_with_nutrition = scraper.scrape_products()
+                with st.spinner("Scraping product data..."):
+                    try:
+                        scraper = RimiScraper(status_callback=update_progress)
+                        products_with_nutrition = scraper.scrape_products()
 
-                    if products_with_nutrition:
-                        try:
-                            result = db.save_products_with_nutrition(products_with_nutrition)
-                            st.success(f"""Successfully processed {len(products_with_nutrition)} products!
-                                     New: {result['new_products']}, 
-                                     Updated: {result['updated_products']}, 
-                                     Reviews needed: {result['needs_review']}""")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Error saving products: {str(e)}")
-                    else:
-                        st.warning("No products found during scraping. Please try again later.")
+                        if products_with_nutrition:
+                            try:
+                                result = db.save_products_with_nutrition(products_with_nutrition)
+                                st.success(f"""Successfully processed {len(products_with_nutrition)} products!
+                                         New: {result['new_products']}, 
+                                         Updated: {result['updated_products']}, 
+                                         Reviews needed: {result['needs_review']}""")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving products: {str(e)}")
+                        else:
+                            st.warning("No products found during scraping. Please try again later.")
 
-                except Exception as e:
-                    st.error(f"Error during data refresh: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Error during data refresh: {str(e)}")
 
-            # Clean up progress indicators
-            progress_bar.empty()
-            progress_text.empty()
+                # Clean up progress indicators
+                progress_bar.empty()
+                progress_text.empty()
+
+        with col2:
+            # Add button for specific products
+            if st.button("🎯 Refresh Specific Products"):
+                progress_text = st.empty()
+
+                with st.spinner("Scraping specific products..."):
+                    try:
+                        scraper = RimiScraper(status_callback=lambda msg: progress_text.text(msg))
+                        products_with_nutrition = scraper.scrape_specific_products(SPECIFIC_PRODUCTS)
+
+                        if products_with_nutrition:
+                            try:
+                                result = db.save_products_with_nutrition(products_with_nutrition)
+                                st.success(f"""Successfully processed specific products!
+                                             New: {result['new_products']}, 
+                                             Updated: {result['updated_products']}, 
+                                             Reviews needed: {result['needs_review']}""")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving products: {str(e)}")
+                        else:
+                            st.warning("No products found during scraping. Please try again later.")
+
+                    except Exception as e:
+                        st.error(f"Error during data refresh: {str(e)}")
+
 
         # Display existing data
         try:
@@ -313,6 +354,58 @@ def main():
                 elif "success" in log.lower() or "found" in log.lower():
                     css_class += " success"
                 st.markdown(f'<div class="{css_class}">{log}</div>', unsafe_allow_html=True)
+
+    with tab4:
+        st.markdown("### 🎯 Specific Products Debug")
+        st.markdown("This tab shows detailed information about specific products that need attention.")
+
+        # Display current values for specific products
+        st.markdown("#### Current Database Values")
+        try:
+            specific_skus = ['2000297', '2000165', '2000291', '2000324', '2000330', '2000511']
+            with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT p.*, n.ingredients, n.energy_kj, n.energy_kcal, n.needs_review
+                    FROM products p
+                    LEFT JOIN product_nutrition n ON p.sku = n.sku
+                    WHERE p.sku = ANY(%s)
+                    ORDER BY p.sku
+                """, (specific_skus,))
+                specific_products = cur.fetchall()
+
+                if specific_products:
+                    for product in specific_products:
+                        with st.expander(f"{product['name']} (SKU: {product['sku']})"):
+                            st.markdown("##### Basic Information")
+                            st.markdown(f"**Price:** €{product['price']}")
+                            st.markdown(f"**Quantity:** {product['quantity_value']} {product['quantity_unit']}")
+                            st.markdown(f"**Country:** {product['country_code']}")
+                            st.markdown(f"**Last Updated:** {product['updated_at']}")
+
+                            st.markdown("##### Nutritional Information")
+                            if product['ingredients']:
+                                st.markdown(f"**Ingredients:** {product['ingredients'][:200]}...")
+                            if product['energy_kj']:
+                                st.markdown(f"**Energy:** {product['energy_kj']}kJ / {product['energy_kcal']}kcal")
+                            if product['needs_review']:
+                                st.warning("⚠️ This product needs nutrition review")
+                else:
+                    st.info("No specific products found in database")
+
+        except Exception as e:
+            st.error(f"Error fetching specific products: {str(e)}")
+
+        # Display scraping logs
+        if st.session_state.specific_products_logs:
+            st.markdown("#### Recent Scraping Logs")
+            for log in st.session_state.specific_products_logs:
+                css_class = "debug-log"
+                if "error" in log.lower() or "❌" in log:
+                    css_class += " error"
+                elif "success" in log.lower() or "found" in log.lower():
+                    css_class += " success"
+                st.markdown(f'<div class="{css_class}">{log}</div>', unsafe_allow_html=True)
+
 
 if __name__ == "__main__":
     main()

@@ -544,3 +544,92 @@ class RimiScraper:
         except Exception as e:
             logging.error(f"Scraping error: {str(e)}")
             raise ScraperError(str(e))
+    
+    def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
+        """Scrape specific product URLs"""
+        try:
+            self.status_callback("Initializing specific products scraper session...")
+            products_with_nutrition = []
+
+            for url in urls:
+                try:
+                    self.status_callback(f"\nProcessing specific product: {url}")
+
+                    # Clean URL
+                    url = url.strip().strip('|')
+
+                    # Fetch the product page
+                    response = self.session.get(url)
+                    if response.status_code != 200:
+                        self.status_callback(f"Failed to access product {url}. Status code: {response.status_code}")
+                        continue
+
+                    # Parse the product information
+                    soup = BeautifulSoup(response.text, 'html.parser')
+
+                    # Extract product data
+                    gtm_element = soup.find(attrs={'data-gtm-eec-product': True})
+                    if not gtm_element:
+                        self.status_callback(f"No GTM data found for {url}")
+                        continue
+
+                    try:
+                        product_data = json.loads(gtm_element['data-gtm-eec-product'])
+
+                        # Get price per unit
+                        price_per_unit_elem = soup.select_one('.price-per-unit, .unit-price')
+                        price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
+
+                        # Get image URL
+                        img_elem = soup.select_one('.card__image-wrapper img')
+                        image_url = None
+                        if img_elem:
+                            image_url = img_elem.get('data-src') or img_elem.get('src')
+
+                        product = {
+                            'name': product_data.get('name', ''),
+                            'price': self.clean_price(product_data.get('price', 0)),
+                            'price_per_unit': price_per_unit,
+                            'product_url': url,
+                            'image_url': image_url,
+                            'sku': product_data.get('id'),
+                            'category': product_data.get('category')
+                        }
+
+                        # Get nutritional info and additional details
+                        nutrition, country_code, quantity = self.scrape_nutritional_info(url)
+
+                        if country_code:
+                            product['country_code'] = country_code
+                            self.status_callback(f"Added country code: {country_code}")
+                        if quantity and quantity[0] is not None:
+                            product['quantity_value'] = quantity[0]
+                            product['quantity_unit'] = quantity[1]
+                            self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
+
+                        self.status_callback("\n=== Product Data ===")
+                        self.status_callback(f"SKU: {product.get('sku')}")
+                        self.status_callback(f"Name: {product.get('name')}")
+                        self.status_callback(f"Country: {product.get('country_code')}")
+                        self.status_callback(f"Quantity: {product.get('quantity_value')} {product.get('quantity_unit')}")
+
+                        products_with_nutrition.append({
+                            'product': product,
+                            'nutrition': nutrition
+                        })
+
+                    except json.JSONDecodeError as e:
+                        self.status_callback(f"Error parsing GTM data: {str(e)}")
+                        continue
+
+                    time.sleep(random.uniform(0.5, 1))
+
+                except Exception as e:
+                    self.status_callback(f"Error processing product {url}: {str(e)}")
+                    continue
+
+            return products_with_nutrition
+
+        except Exception as e:
+            logging.error(f"Scraping error: {str(e)}")
+            raise ScraperError(str(e))
