@@ -584,6 +584,16 @@ class RimiScraper:
                                 self.status_callback(f"Problematic JSON: {script.string[:100]}...")
                             continue
 
+                    # Initialize product data
+                    product = {
+                        'name': '',
+                        'price': '0',
+                        'sku': '',
+                        'category': 'SH-gala-zivis-un-gatava-kulinarija',  # Default category
+                        'product_url': url,
+                        'image_url': None,
+                    }
+
                     # Extract category from statistics script
                     category_script = soup.find('script', attrs={
                         'type': 'text/plain',
@@ -604,53 +614,25 @@ class RimiScraper:
                                             # Take the first part of the category path (most specific)
                                             product['category'] = category.split('/')[0]
                                             self.status_callback(f"Found category in dataLayer: {product['category']}")
-                                        else:
-                                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                                            self.status_callback("No category found in dataLayer impression")
-                                    else:
-                                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                                        self.status_callback("No valid impressions in dataLayer")
-                                else:
-                                    product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                                    self.status_callback("No ecommerce data in dataLayer")
                         except (json.JSONDecodeError, AttributeError) as e:
                             self.status_callback(f"Error parsing dataLayer: {str(e)}")
-                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                    else:
-                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                        self.status_callback("Statistics script not found")
-
-                    # Initialize product data
-                    product_data = {
-                        'name': '',
-                        'price': '0',
-                        'id': '',
-                        'category': product['category']  # Use extracted category
-                    }
 
                     # Extract data from JSON-LD if available
                     if json_ld:
                         self.status_callback("Using data from JSON-LD schema:")
-                        product_data['name'] = json_ld.get('name', '')
-                        product_data['id'] = json_ld.get('sku', '')
+                        product['name'] = json_ld.get('name', '')
+                        product['sku'] = json_ld.get('sku', '')
                         if 'offers' in json_ld and isinstance(json_ld['offers'], dict):
-                            product_data['price'] = json_ld['offers'].get('price', '0')
-                        self.status_callback(f"Name: {product_data['name']}")
-                        self.status_callback(f"SKU: {product_data['id']}")
-                        self.status_callback(f"Price: {product_data['price']}")
+                            product['price'] = self.clean_price(json_ld['offers'].get('price', '0'))
+                        product['image_url'] = json_ld.get('image', [None])[0] if isinstance(json_ld.get('image'), list) else json_ld.get('image')
 
-                    # Create the product dictionary
-                    product = {
-                        'name': product_data['name'],
-                        'price': self.clean_price(product_data['price']),
-                        'product_url': url,
-                        'image_url': json_ld.get('image', [None])[0] if isinstance(json_ld.get('image'), list) else json_ld.get('image'),
-                        'sku': product_data['id'],
-                        'category': product_data['category']
-                    }
+                        self.status_callback(f"Name: {product['name']}")
+                        self.status_callback(f"SKU: {product['sku']}")
+                        self.status_callback(f"Price: {product['price']}")
 
                     # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
+
                     has_required_fields = True
 
                     if not product['name']:
