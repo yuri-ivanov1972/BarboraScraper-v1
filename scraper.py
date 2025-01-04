@@ -696,28 +696,7 @@ class RimiScraper:
                             'product': product,
                             'nutrition': nutrition
                         })
-                        self.status_callbackself.status_callback(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
-                    else:
-                        self.status_callback("⚠️ Product skipped: Missing required fields")
-                        self.status_callback("  Required: name and sku")
-                        self.status_callback(f"  Found: name='{product.get('name')}', sku='{product.get('sku')}'")
-
-                    time.sleep(random.uniform(0.5, 1))
-
-                except Exception as e:
-                    self.status_callback(f"Error processing product {url}: {str(e)}")
-                    continue
-
-            if not products_with_nutrition:
-                self.status_callback("No products were successfully scraped")
-            else:
-                self.status_callback(f"Successfully scraped {len(products_with_nutrition)} products")
-
-            return products_with_nutrition
-
-        except Exception as e:
-            logging.error(f"Scraping error: {str(e)}")
-            raise ScraperError(str(e))(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
+                        self.status_callback(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
                     else:
                         self.status_callback("⚠️ Product skipped: Missing required fields")
                         self.status_callback("  Required: name and sku")
