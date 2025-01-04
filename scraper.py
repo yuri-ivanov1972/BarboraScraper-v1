@@ -533,7 +533,6 @@ class RimiScraper:
             logging.error(f"Scraping error: {str(e)}")
             raise ScraperError(str(e))
 
-
     def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
         """Scrape specific product URLs"""
         try:
@@ -585,27 +584,12 @@ class RimiScraper:
                                 self.status_callback(f"Problematic JSON: {script.string[:100]}...")
                             continue
 
-                    # Extract category from URL path
-                    try:
-                        # Parse URL path to get category
-                        path_parts = urlparse(url).path.split('/')
-                        if 'produkti' in path_parts:
-                            produkti_index = path_parts.index('produkti')
-                            if len(path_parts) > produkti_index + 1:
-                                category = path_parts[produkti_index + 1]
-                                product = {'category': f"SH-{category}"}
-                                self.status_callback(f"Extracted category from URL: {product['category']}")
-                    except (ValueError, IndexError) as e:
-                        self.status_callback(f"Error extracting category from URL: {str(e)}")
-                        product = {'category': 'SH-unknown'}
-
-
                     # Initialize product data
                     product_data = {
                         'name': '',
                         'price': '0',
                         'id': '',
-                        'category': product['category']  # Use extracted category
+                        'category': ''  # Will be set from product details
                     }
 
                     # Extract data from JSON-LD if available
@@ -627,9 +611,40 @@ class RimiScraper:
                         'product_url': url,
                         'image_url': json_ld.get('image', [None])[0] if isinstance(json_ld.get('image'), list) else json_ld.get('image'),
                         'sku': product_data['id'],
-                        'category': product_data['category']
+                        'category': ''  # Will be updated after extracting from details
                     }
 
+                    # Extract category from product details
+                    details_script = None
+                    for script in soup.find_all('script'):
+                        if script.string and 'Storefront.product_details_page' in script.string:
+                            details_script = script
+                            break
+
+                    if details_script:
+                        try:
+                            # Extract details HTML content
+                            details_match = re.search(r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']', 
+                                                  details_script.string, re.DOTALL)
+
+                            if details_match:
+                                html_content = details_match.group(1)
+                                # Handle escaped characters
+                                html_content = html_content.encode().decode('unicode-escape')
+                                html_content = html_content.replace('\\/', '/')
+                                details_soup = BeautifulSoup(html_content, 'html.parser')
+
+                                # Try to find category in the details HTML
+                                category_match = re.search(r'\"category\":\"(SH-[^\"]+)\"', html_content)
+                                if category_match:
+                                    product['category'] = category_match.group(1)
+                                    self.status_callback(f"Found category in details: {product['category']}")
+                                else:
+                                    self.status_callback("Could not find category in product details")
+                                    product['category'] = 'SH-unknown'
+                        except Exception as e:
+                            self.status_callback(f"Error extracting category from details: {str(e)}")
+                            product['category'] = 'SH-unknown'
 
                     # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
