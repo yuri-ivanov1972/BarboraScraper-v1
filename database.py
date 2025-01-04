@@ -44,6 +44,9 @@ class Database:
                             image_url TEXT,
                             sku VARCHAR(50) UNIQUE,
                             category TEXT,
+                            quantity_value DECIMAL(10,2),
+                            quantity_unit VARCHAR(50),
+                            country_code VARCHAR(2),
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
@@ -288,6 +291,9 @@ class Database:
                                 product_url = %s,
                                 image_url = %s,
                                 category = %s,
+                                quantity_value = %s,
+                                quantity_unit = %s,
+                                country_code = %s,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE sku = %s
                         """, (
@@ -297,6 +303,9 @@ class Database:
                             product.get('product_url'),
                             product.get('image_url'),
                             product.get('category'),
+                            product.get('quantity_value'),
+                            product.get('quantity_unit'),
+                            product.get('country_code'),
                             product.get('sku')
                         ))
                         updated_products += 1
@@ -304,8 +313,9 @@ class Database:
                         # Insert new product
                         cur.execute("""
                             INSERT INTO products 
-                            (name, price, price_per_unit, product_url, image_url, sku, category)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            (name, price, price_per_unit, product_url, image_url, sku, category,
+                             quantity_value, quantity_unit, country_code)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         """, (
                             product['name'],
                             product['price'],
@@ -313,7 +323,10 @@ class Database:
                             product.get('product_url'),
                             product.get('image_url'),
                             product.get('sku'),
-                            product.get('category')
+                            product.get('category'),
+                            product.get('quantity_value'),
+                            product.get('quantity_unit'),
+                            product.get('country_code')
                         ))
                         new_products += 1
 

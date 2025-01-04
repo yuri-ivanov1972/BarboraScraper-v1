@@ -12,6 +12,50 @@ from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 from dataclasses import dataclass
 from bs4 import BeautifulSoup
 
+# Add country code mapping
+COUNTRY_MAPPING = {
+    'Latvija': 'LV',
+    'Igaunija': 'EE',
+    'Lietuva': 'LT',
+    'Polija': 'PL',
+    'Vācija': 'DE',
+    # Add more mappings as needed
+}
+
+def extract_quantity(text: str) -> Tuple[Optional[Decimal], Optional[str]]:
+    """Extract numeric value and unit from quantity text"""
+    if not text:
+        return None, None
+
+    # Pattern to match number followed by unit
+    pattern = r'(\d+(?:[,.]\d+)?)\s*([kKmMlLgG]+)'
+    match = re.search(pattern, text)
+
+    if match:
+        value_str = match.group(1).replace(',', '.')
+        unit = match.group(2).lower()
+
+        try:
+            value = Decimal(value_str)
+            # Normalize units
+            if unit in ['l', 'л']:
+                unit = 'l'
+            elif unit in ['kg', 'кг']:
+                unit = 'kg'
+            elif unit in ['g', 'г']:
+                unit = 'g'
+                value = value / 1000  # Convert to kg
+                unit = 'kg'
+            return value, unit
+        except (InvalidOperation, ValueError):
+            return None, None
+
+    return None, None
+
+def get_country_code(country_name: str) -> Optional[str]:
+    """Convert country name to ISO country code"""
+    return COUNTRY_MAPPING.get(country_name.strip())
+
 class ScraperError(Exception):
     """Custom exception for scraper-related errors"""
     pass
@@ -144,6 +188,14 @@ class RimiScraper:
                             if img_elem:
                                 image_url = img_elem.get('data-src') or img_elem.get('src')
 
+                            # Extract quantity and unit if available
+                            quantity_value = None
+                            quantity_unit = None
+                            quantity_elem = product.select_one('.quantity, .amount')
+                            if quantity_elem:
+                                quantity_text = quantity_elem.get_text(strip=True)
+                                quantity_value, quantity_unit = extract_quantity(quantity_text)
+
                             product_info = {
                                 'name': product_data.get('name', ''),
                                 'price': self.clean_price(product_data.get('price', 0)),
@@ -151,7 +203,10 @@ class RimiScraper:
                                 'product_url': product_url,
                                 'image_url': image_url,
                                 'sku': product_data.get('id'),
-                                'category': product_data.get('category')
+                                'category': product_data.get('category'),
+                                'quantity_value': quantity_value,
+                                'quantity_unit': quantity_unit,
+                                'country_code': None  # Will be updated in product details page
                             }
 
                             if product_info['name'] and product_info['price'] > 0:
@@ -197,22 +252,24 @@ class RimiScraper:
             logging.error(f"Error extracting energy values: {str(e)}")
             return None, None
 
-    def scrape_nutritional_info(self, product_url: str) -> NutritionalInfo:
-        """Scrape nutritional information from product detail page"""
+    def scrape_nutritional_info(self, product_url: str) -> Tuple[NutritionalInfo, Optional[str], Optional[Tuple[Decimal, str]]]:
+        """Scrape nutritional information and additional details from product detail page"""
         try:
             if not product_url:
-                return NutritionalInfo(needs_review=True, review_notes="Missing product URL")
+                return NutritionalInfo(needs_review=True, review_notes="Missing product URL"), None, None
 
             self.status_callback(f"Fetching nutritional info from {product_url}")
             response = self.session.get(product_url)
             if response.status_code != 200:
-                return NutritionalInfo(needs_review=True, review_notes=f"Failed to fetch page: {response.status_code}")
+                return NutritionalInfo(needs_review=True, review_notes=f"Failed to fetch page: {response.status_code}"), None, None
 
             soup = BeautifulSoup(response.text, 'html.parser')
             self.status_callback("Page fetched successfully, looking for product details script")
 
             # Initialize nutritional info
             info = NutritionalInfo()
+            country_code = None
+            quantity = None, None
 
             script_tag = None
             for script in soup.find_all('script'):
@@ -235,7 +292,6 @@ class RimiScraper:
                     if details_match:
                         html_content = details_match.group(1)
 
-                        # Unescape the content
                         try:
                             # Handle escaped characters
                             html_content = html_content.encode().decode('unicode-escape')
@@ -243,6 +299,23 @@ class RimiScraper:
                             html_content = html_content.replace('\\"', '"')
 
                             details_soup = BeautifulSoup(html_content, 'html.parser')
+
+                            # Find basic product details
+                            for item in details_soup.find_all('li', class_='item'):
+                                span = item.find('span')
+                                if span:
+                                    label = span.get_text(strip=True)
+                                    text_div = item.find('div', class_='text')
+                                    if text_div and text_div.p:
+                                        value = text_div.p.get_text(strip=True)
+
+                                        # Extract country of origin
+                                        if 'Izcelsmes valsts' in label:
+                                            country_code = get_country_code(value)
+                                        # Extract quantity
+                                        elif 'Daudzums' in label:
+                                            quantity_value, quantity_unit = extract_quantity(value)
+                                            quantity = (quantity_value, quantity_unit)
 
                             # Find ingredients
                             for section in details_soup.find_all('div', class_='product__list-wrapper'):
@@ -295,22 +368,19 @@ class RimiScraper:
                             self.status_callback(f"Protein: {info.protein}g")
                             self.status_callback(f"Salt: {info.salt}g")
 
-                            return info
+                            return info, country_code, quantity
+
                         except Exception as e:
                             self.status_callback(f"Error processing HTML content: {str(e)}")
-                            return NutritionalInfo(needs_review=True, review_notes=f"Processing error: {str(e)}")
+                            return NutritionalInfo(needs_review=True, review_notes=f"Processing error: {str(e)}"), None, None
 
-                    return NutritionalInfo(needs_review=True, review_notes="Could not find details tab")
-                else:
-                    self.status_callback("Could not find tabs section")
-                    return NutritionalInfo(needs_review=True, review_notes="Tabs section not found")
-
-            self.status_callback("No matching script found")
-            return NutritionalInfo(needs_review=True, review_notes="Product details script not found")
+                    return NutritionalInfo(needs_review=True, review_notes="Could not find details tab"), None, None
+                self.status_callback("No matching script found")
+                return NutritionalInfo(needs_review=True, review_notes="Product details script not found"), None, None
 
         except Exception as e:
             logging.error(f"Error scraping nutritional info: {str(e)}")
-            return NutritionalInfo(needs_review=True, review_notes=f"Error: {str(e)}")
+            return NutritionalInfo(needs_review=True, review_notes=f"Error: {str(e)}"), None, None
 
     def scrape_products(self) -> List[Dict[str, Union[str, Decimal]]]:
         """Scrape product information from multiple Rimi categories"""
@@ -335,7 +405,15 @@ class RimiScraper:
 
                     for product in products:
                         if product.get('product_url'):
-                            nutrition = self.scrape_nutritional_info(product['product_url'])
+                            nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
+
+                            # Update product with additional details
+                            if country_code:
+                                product['country_code'] = country_code
+                            if quantity and quantity[0] is not None:
+                                product['quantity_value'] = quantity[0]
+                                product['quantity_unit'] = quantity[1]
+
                             products_with_nutrition.append({
                                 'product': product,
                                 'nutrition': nutrition
@@ -360,7 +438,10 @@ class RimiScraper:
 
                             for product in page_products:
                                 if product.get('product_url'):
-                                    nutrition = self.scrape_nutritional_info(product['product_url'])
+                                    nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
+                                    product['country_code'] = country_code
+                                    product['quantity_value'] = quantity[0]
+                                    product['quantity_unit'] = quantity[1]
                                     products_with_nutrition.append({
                                         'product': product,
                                         'nutrition': nutrition
