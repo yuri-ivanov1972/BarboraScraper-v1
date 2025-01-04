@@ -564,13 +564,25 @@ class RimiScraper:
                     json_ld = None
                     for script in soup.find_all('script', type='application/ld+json'):
                         try:
-                            data = json.loads(script.string)
-                            if data.get('@type') == 'Product':
-                                json_ld = data
-                                self.status_callback("Found product data in JSON-LD")
-                                break
+                            # Clean and unescape the JSON string
+                            json_str = script.string
+                            if json_str:
+                                # Remove any escaped newlines
+                                json_str = json_str.replace('\\n', ' ')
+                                # Remove any escaped quotes within HTML attributes
+                                json_str = re.sub(r'\\(["\'])', r'\1', json_str)
+                                # Unescape HTML entities
+                                json_str = BeautifulSoup(json_str, 'html.parser').get_text()
+
+                                data = json.loads(json_str)
+                                if data.get('@type') == 'Product':
+                                    json_ld = data
+                                    self.status_callback("Found product data in JSON-LD")
+                                    self.status_callback(f"JSON-LD SKU: {json_ld.get('sku')}")
+                                    break
                         except (json.JSONDecodeError, AttributeError) as e:
                             self.status_callback(f"Error parsing JSON-LD: {str(e)}")
+                            self.status_callback(f"Problematic JSON: {json_str[:100]}...")
                             continue
 
                     if not gtm_element:
@@ -589,29 +601,10 @@ class RimiScraper:
                             product_data['id'] = json_ld.get('sku', '')
                             if 'offers' in json_ld and isinstance(json_ld['offers'], dict):
                                 product_data['price'] = json_ld['offers'].get('price', '0')
-                            self.status_callback(f"Using data from JSON-LD schema")
-                        else:
-                            # Fallback to HTML parsing
-                            name_elem = soup.find('h1', class_='name')
-                            if name_elem:
-                                product_data['name'] = name_elem.get_text(strip=True)
-                                self.status_callback(f"Found name: {product_data['name']}")
-
-                            price_elem = soup.find('div', class_='price-wrapper')
-                            if price_elem:
-                                price_text = price_elem.get_text(strip=True)
-                                price_match = re.search(r'(\d+[.,]\d+)', price_text)
-                                if price_match:
-                                    product_data['price'] = price_match.group(1)
-                                    self.status_callback(f"Found price: {product_data['price']}")
-
-                            sku_elem = soup.find('div', class_='product-code')
-                            if sku_elem:
-                                sku_text = sku_elem.get_text(strip=True)
-                                sku_match = re.search(r'(\d+)', sku_text)
-                                if sku_match:
-                                    product_data['id'] = sku_match.group(1)
-                                    self.status_callback(f"Found SKU: {product_data['id']}")
+                            self.status_callback(f"Using data from JSON-LD schema:")
+                            self.status_callback(f"Name: {product_data['name']}")
+                            self.status_callback(f"SKU: {product_data['id']}")
+                            self.status_callback(f"Price: {product_data['price']}")
                     else:
                         try:
                             self.status_callback("Found GTM element, attempting to parse")
@@ -650,6 +643,7 @@ class RimiScraper:
                     # Check name
                     if not product.get('name'):
                         self.status_callback("❌ Missing required field: name")
+                        name_elem = soup.find('h1', class_='name')
                         if name_elem:
                             self.status_callback(f"  - Name element found but text was empty")
                         else:
@@ -658,6 +652,7 @@ class RimiScraper:
                     # Check SKU
                     if not product.get('sku'):
                         self.status_callback("❌ Missing required field: sku")
+                        sku_elem = soup.find('div', class_='product-code')
                         if sku_elem:
                             self.status_callback(f"  - SKU element found but could not extract number")
                             self.status_callback(f"  - Raw SKU text: {sku_elem.get_text(strip=True)}")
@@ -667,6 +662,7 @@ class RimiScraper:
                     # Check price
                     if not product.get('price'):
                         self.status_callback("⚠️ Warning: No price found")
+                        price_elem = soup.find('div', class_='price-wrapper')
                         if price_elem:
                             self.status_callback(f"  - Price element found but could not extract number")
                             self.status_callback(f"  - Raw price text: {price_elem.get_text(strip=True)}")
@@ -675,8 +671,11 @@ class RimiScraper:
 
                     # Show what we actually found
                     self.status_callback("\n=== Data Found in HTML ===")
+                    name_elem = soup.find('h1', class_='name')
                     self.status_callback(f"Name element text: {name_elem.get_text(strip=True) if name_elem else 'Not found'}")
+                    sku_elem = soup.find('div', class_='product-code')
                     self.status_callback(f"SKU element text: {sku_elem.get_text(strip=True) if sku_elem else 'Not found'}")
+                    price_elem = soup.find('div', class_='price-wrapper')
                     self.status_callback(f"Price element text: {price_elem.get_text(strip=True) if price_elem else 'Not found'}")
 
 
@@ -697,7 +696,28 @@ class RimiScraper:
                             'product': product,
                             'nutrition': nutrition
                         })
-                        self.status_callback(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
+                        self.status_callbackself.status_callback(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
+                    else:
+                        self.status_callback("⚠️ Product skipped: Missing required fields")
+                        self.status_callback("  Required: name and sku")
+                        self.status_callback(f"  Found: name='{product.get('name')}', sku='{product.get('sku')}'")
+
+                    time.sleep(random.uniform(0.5, 1))
+
+                except Exception as e:
+                    self.status_callback(f"Error processing product {url}: {str(e)}")
+                    continue
+
+            if not products_with_nutrition:
+                self.status_callback("No products were successfully scraped")
+            else:
+                self.status_callback(f"Successfully scraped {len(products_with_nutrition)} products")
+
+            return products_with_nutrition
+
+        except Exception as e:
+            logging.error(f"Scraping error: {str(e)}")
+            raise ScraperError(str(e))(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
                     else:
                         self.status_callback("⚠️ Product skipped: Missing required fields")
                         self.status_callback("  Required: name and sku")
