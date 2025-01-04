@@ -558,32 +558,6 @@ class RimiScraper:
                     soup = BeautifulSoup(response.text, 'html.parser')
                     self.status_callback("Created BeautifulSoup object")
 
-                    # Extract product data from JSON-LD
-                    json_ld = None
-                    for script in soup.find_all('script', type='application/ld+json'):
-                        try:
-                            # Clean and decode the JSON string
-                            if script.string:
-                                # First unescape HTML entities
-                                json_str = html.unescape(script.string)
-                                # Remove escaped newlines and normalize whitespace
-                                json_str = re.sub(r'\s+', ' ', json_str.replace('\\n', ' '))
-                                # Remove any escaped quotes within HTML attributes
-                                json_str = re.sub(r'\\(["\'])', r'\1', json_str)
-
-                                # Parse the JSON
-                                data = json.loads(json_str)
-                                if isinstance(data, dict) and data.get('@type') == 'Product':
-                                    json_ld = data
-                                    self.status_callback("Found product data in JSON-LD")
-                                    self.status_callback(f"JSON-LD data: {json.dumps(data, indent=2)[:200]}...")
-                                    break
-                        except (json.JSONDecodeError, AttributeError) as e:
-                            self.status_callback(f"Error parsing JSON-LD: {str(e)}")
-                            if script.string:
-                                self.status_callback(f"Problematic JSON: {script.string[:100]}...")
-                            continue
-
                     # Initialize product data
                     product = {
                         'name': '',
@@ -593,6 +567,35 @@ class RimiScraper:
                         'product_url': url,
                         'image_url': None,
                     }
+
+                    # First try to get product data from ld+json script
+                    for script in soup.find_all('script', type='application/ld+json'):
+                        try:
+                            if script.string:
+                                # Clean and parse JSON
+                                json_str = html.unescape(script.string)
+                                json_str = re.sub(r'\s+', ' ', json_str.replace('\\n', ' '))
+                                json_str = re.sub(r'\\(["\'])', r'\1', json_str)
+
+                                data = json.loads(json_str)
+                                if isinstance(data, dict) and data.get('@type') == 'Product':
+                                    self.status_callback("Found product data in ld+json")
+                                    product['name'] = data.get('name', '')
+                                    product['sku'] = data.get('sku', '')
+                                    product['image_url'] = data.get('image', [None])[0] if isinstance(data.get('image'), list) else data.get('image')
+
+                                    # Extract price from offers
+                                    if 'offers' in data and isinstance(data['offers'], dict):
+                                        price = data['offers'].get('price')
+                                        if price:
+                                            product['price'] = self.clean_price(price)
+                                            self.status_callback(f"Found price in ld+json: {price}")
+                                    break
+                        except (json.JSONDecodeError, AttributeError) as e:
+                            self.status_callback(f"Error parsing ld+json: {str(e)}")
+                            if script.string:
+                                self.status_callback(f"Problematic JSON: {script.string[:100]}...")
+                            continue
 
                     # Extract category from statistics script
                     category_script = soup.find('script', attrs={
@@ -617,19 +620,6 @@ class RimiScraper:
                         except (json.JSONDecodeError, AttributeError) as e:
                             self.status_callback(f"Error parsing dataLayer: {str(e)}")
 
-                    # Extract data from JSON-LD if available
-                    if json_ld:
-                        self.status_callback("Using data from JSON-LD schema:")
-                        product['name'] = json_ld.get('name', '')
-                        product['sku'] = json_ld.get('sku', '')
-                        if 'offers' in json_ld and isinstance(json_ld['offers'], dict):
-                            product['price'] = self.clean_price(json_ld['offers'].get('price', '0'))
-                        product['image_url'] = json_ld.get('image', [None])[0] if isinstance(json_ld.get('image'), list) else json_ld.get('image')
-
-                        self.status_callback(f"Name: {product['name']}")
-                        self.status_callback(f"SKU: {product['sku']}")
-                        self.status_callback(f"Price: {product['price']}")
-
                     # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
 
@@ -640,18 +630,21 @@ class RimiScraper:
                         self.status_callback("❌ Missing required field: name")
                         name_elem = soup.find('h1', class_='name')
                         if name_elem:
-                            self.status_callback(f"  Found name in HTML: {name_elem.get_text(strip=True)}")
+                            name_text = name_elem.get_text(strip=True)
+                            self.status_callback(f"  - Name element found but text was empty")
 
                     if not product['sku']:
                         has_required_fields = False
                         self.status_callback("❌ Missing required field: sku")
-                        self.status_callback("  Could not find SKU in JSON-LD data")
+                        self.status_callback("  - Could not find SKU element in HTML")
 
-                    if not product['price']:
+                    if not product['price'] or Decimal(product['price']) <= 0:
                         self.status_callback("⚠️ Warning: No price found")
-                        price_elem = soup.find('div', class_='price-wrapper')
+                        price_elem = soup.select_one('.price-wrapper .price, .price-tag')
                         if price_elem:
-                            self.status_callback(f"  Raw price text: {price_elem.get_text(strip=True)}")
+                            price_text = price_elem.get_text(strip=True)
+                            self.status_callback(f"  - Price element found but could not extract number")
+                            self.status_callback(f"  - Raw price text: {price_text}")
 
                     if not product['image_url']:
                         self.status_callback("⚠️ Warning: No image URL found in JSON-LD")
