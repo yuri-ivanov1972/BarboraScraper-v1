@@ -145,15 +145,19 @@ class RimiScraper:
         parsed = urlparse(category_url)
         query = parse_qs(parsed.query)
 
+        # Rimi uses 0-based page index
+        page_index = page - 1
+
         params = {
-            'page': page,
             'pageSize': self.page_size,
-            'query': ':relevance',
+            'pageIndex': page_index,
+            'page': page_index,  # Include both for compatibility
             'sort': 'name-asc'
         }
 
         # Construct the URL with parameters
-        return f"{category_url}{'&' if '?' in category_url else '?'}{urlencode(params)}"
+        base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+        return f"{base_url}?{urlencode(params)}"
 
     def clean_price(self, price_str: str) -> Decimal:
         """Clean and convert price string to Decimal"""
@@ -507,22 +511,39 @@ class RimiScraper:
                         try:
                             self.status_callback(f"Processing page {page}/{category_pages}")
 
+                            # Build the correct URL for the current page
+                            page_url = self.build_page_url(category_url, page)
+
+                            # Add a longer delay between pages to ensure proper loading
                             if page > 1:
-                                page_url = self.build_page_url(category_url, page)
-                                response = self.session.get(page_url)
-                            else:
-                                response = self.session.get(category_url)
+                                time.sleep(random.uniform(2, 3))
+
+                            response = self.session.get(page_url)
 
                             if response.status_code != 200:
                                 self.status_callback(f"Failed to access page {page}. Status code: {response.status_code}")
                                 continue
 
-                            products = self.extract_product_info(response.text, category_url)
+                            # Add debug logging for the response
+                            self.status_callback(f"Page {page} response length: {len(response.text)}")
+
+                            products = self.extract_product_info(response.text, page_url)
+
+                            if not products:
+                                self.status_callback(f"No products found on page {page}, retrying with longer delay...")
+                                time.sleep(random.uniform(3, 4))
+                                response = self.session.get(page_url)
+                                products = self.extract_product_info(response.text, page_url)
+
                             self.status_callback(f"Found {len(products)} products on page {page}")
 
                             for product in products:
                                 if product.get('product_url'):
                                     self.status_callback(f"Processing product: {product['name']} ({product.get('sku', 'No SKU')})")
+
+                                    # Add delay between product processing
+                                    time.sleep(random.uniform(1, 2))
+
                                     nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
 
                                     if country_code:
@@ -536,13 +557,11 @@ class RimiScraper:
                                         'nutrition': nutrition
                                     })
 
-                                time.sleep(random.uniform(0.5, 1))
-
                             all_products.extend(products)
 
-                            # Add delay between pages
+                            # Add longer delay between pages
                             if page < category_pages:
-                                time.sleep(random.uniform(1, 2))
+                                time.sleep(random.uniform(2, 3))
 
                         except Exception as e:
                             logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
@@ -709,7 +728,7 @@ class RimiScraper:
                                 self.status_callback(f"Found image URL in HTML: {product['image_url']}")
 
                     # Get nutritional info if we have required fields
-                    if hasrequired_fields:
+                    if has_required_fields:
                         nutrition, country_code, quantity = self.scrape_nutritional_info(url)
                         products_with_nutrition.append({
                             'product': product,
