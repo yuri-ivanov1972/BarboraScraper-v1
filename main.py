@@ -144,7 +144,8 @@ SPECIFIC_PRODUCTS = [
     "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/cala-galas-tikkamasala-ar-basm-ris-400g/p/2000291",
     "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/marineta-gala/calu-pussparni-teriyaki-marinade-400g/p/2000324",
     "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/cukas-mele-varita-kg/p/2000330",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511"
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/jaunums-gatavots-rimi-ipasi-tev-/klingeris-ar-sokoladi-kg/p/228913"
 ]
 
 def main():
@@ -377,7 +378,7 @@ def main():
         # Display current values for specific products
         st.markdown("#### Current Database Values")
         try:
-            specific_skus = ['2000297', '2000165', '2000291', '2000324', '2000330', '2000511']
+            specific_skus = ['2000297', '2000165', '2000291', '2000324', '2000330', '2000511', '228913']
             with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT p.*, n.ingredients, n.energy_kj, n.energy_kcal, n.needs_review
