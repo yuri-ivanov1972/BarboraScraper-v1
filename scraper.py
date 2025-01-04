@@ -164,7 +164,16 @@ class RimiScraper:
         try:
             if not price_str:
                 return Decimal('0.00')
-            return Decimal(str(price_str))
+            # Remove any currency symbols and whitespace
+            cleaned = re.sub(r'[^\d.,]', '', str(price_str).strip().replace(' ', ''))
+            # Replace comma with period for decimal point
+            cleaned = cleaned.replace(',', '.')
+            # Handle cases where there might be multiple periods
+            if cleaned.count('.') > 1:
+                # Keep only the last period for decimal places
+                parts = cleaned.split('.')
+                cleaned = parts[0].replace('.', '') + '.' + parts[-1]
+            return Decimal(cleaned)
         except (InvalidOperation, ValueError) as e:
             logging.error(f"Price conversion error for '{price_str}': {str(e)}")
             return Decimal('0.00')
@@ -178,6 +187,7 @@ class RimiScraper:
             self.status_callback("Analyzing page structure...")
             logging.debug(f"Raw HTML content length: {len(html_content)}")
 
+            # Try to find product price in multiple ways
             products = soup.find_all(attrs={'data-gtm-eec-product': True})
 
             if not products:
@@ -193,45 +203,50 @@ class RimiScraper:
             for index, product in enumerate(products, 1):
                 try:
                     gtm_data = product.get('data-gtm-eec-product')
+                    product_info = {}
+
                     if gtm_data:
                         try:
                             product_data = json.loads(gtm_data)
 
-                            price_per_unit_elem = product.select_one('.price-per-unit, .unit-price')
-                            price_per_unit = price_per_unit_elem.get_text(strip=True) if price_per_unit_elem else None
+                            # Extract price from GTM data
+                            raw_price = product_data.get('price', 0)
+                            self.status_callback(f"Raw price from GTM data: {raw_price}")
+                            price = self.clean_price(raw_price)
 
+                            # If price is 0, try to find it in the HTML
+                            if price == 0:
+                                price_elem = product.select_one('.price-wrapper .price, .card-price')
+                                if price_elem:
+                                    raw_price = price_elem.get_text(strip=True)
+                                    self.status_callback(f"Raw price from HTML: {raw_price}")
+                                    price = self.clean_price(raw_price)
+
+                            product_info = {
+                                'name': product_data.get('name', ''),
+                                'price': price,
+                                'sku': product_data.get('id'),
+                                'category': product_data.get('category'),
+                            }
+
+                            # Get additional information
                             url_elem = product.select_one('a.card__url.js-gtm-eec-product-click')
-                            product_url = url_elem.get('href') if url_elem else None
-                            if product_url:
-                                product_url = f"{self.base_url}{product_url}"
+                            if url_elem:
+                                product_info['product_url'] = f"{self.base_url}{url_elem.get('href')}"
 
                             img_elem = product.select_one('.card__image-wrapper img')
-                            image_url = None
                             if img_elem:
-                                image_url = img_elem.get('data-src') or img_elem.get('src')
+                                product_info['image_url'] = img_elem.get('data-src') or img_elem.get('src')
 
                             # Extract quantity and unit if available
-                            quantity_value = None
-                            quantity_unit = None
                             quantity_elem = product.select_one('.quantity, .amount')
                             if quantity_elem:
                                 quantity_text = quantity_elem.get_text(strip=True)
                                 quantity_value, quantity_unit = extract_quantity(quantity_text)
+                                product_info['quantity_value'] = quantity_value
+                                product_info['quantity_unit'] = quantity_unit
 
-                            product_info = {
-                                'name': product_data.get('name', ''),
-                                'price': self.clean_price(product_data.get('price', 0)),
-                                'price_per_unit': price_per_unit,
-                                'product_url': product_url,
-                                'image_url': image_url,
-                                'sku': product_data.get('id'),
-                                'category': product_data.get('category'),
-                                'quantity_value': quantity_value,
-                                'quantity_unit': quantity_unit,
-                                'country_code': None  # Will be updated in product details page
-                            }
-
-                            if product_info['name'] and product_info['price'] > 0:
+                            if product_info.get('name') and product_info['price'] > 0:
                                 products_list.append(product_info)
                                 self.status_callback(f"Successfully parsed product {index}: {product_info['name']} - €{product_info['price']}")
                             else:
