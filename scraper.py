@@ -584,22 +584,57 @@ class RimiScraper:
                                 self.status_callback(f"Problematic JSON: {script.string[:100]}...")
                             continue
 
+                    # Extract category from statistics script
+                    category_script = soup.find('script', attrs={
+                        'type': 'text/plain',
+                        'data-cookieconsent': 'statistics'
+                    })
+
+                    if category_script and category_script.string:
+                        try:
+                            # Find the dataLayer.push content
+                            datalayer_match = re.search(r'dataLayer\.push\((.*?)\);', category_script.string, re.DOTALL)
+                            if datalayer_match:
+                                datalayer_data = json.loads(datalayer_match.group(1))
+                                if 'ecommerce' in datalayer_data and 'impressions' in datalayer_data['ecommerce']:
+                                    impressions = datalayer_data['ecommerce']['impressions']
+                                    if impressions and isinstance(impressions, list) and len(impressions) > 0:
+                                        category = impressions[0].get('category', '')
+                                        if category:
+                                            # Take the first part of the category path (most specific)
+                                            product['category'] = category.split('/')[0]
+                                            self.status_callback(f"Found category in dataLayer: {product['category']}")
+                                        else:
+                                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                                            self.status_callback("No category found in dataLayer impression")
+                                    else:
+                                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                                        self.status_callback("No valid impressions in dataLayer")
+                                else:
+                                    product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                                    self.status_callback("No ecommerce data in dataLayer")
+                        except (json.JSONDecodeError, AttributeError) as e:
+                            self.status_callback(f"Error parsing dataLayer: {str(e)}")
+                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                    else:
+                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
+                        self.status_callback("Statistics script not found")
+
                     # Initialize product data
                     product_data = {
                         'name': '',
                         'price': '0',
                         'id': '',
-                        'category': ''  # Will be set from product details
+                        'category': product['category']  # Use extracted category
                     }
 
                     # Extract data from JSON-LD if available
                     if json_ld:
-                        self.status_callback("Using data from JSON-LD schema")
+                        self.status_callback("Using data from JSON-LD schema:")
                         product_data['name'] = json_ld.get('name', '')
                         product_data['id'] = json_ld.get('sku', '')
                         if 'offers' in json_ld and isinstance(json_ld['offers'], dict):
                             product_data['price'] = json_ld['offers'].get('price', '0')
-                        self.status_callback(f"Extracted from JSON-LD:")
                         self.status_callback(f"Name: {product_data['name']}")
                         self.status_callback(f"SKU: {product_data['id']}")
                         self.status_callback(f"Price: {product_data['price']}")
@@ -611,55 +646,8 @@ class RimiScraper:
                         'product_url': url,
                         'image_url': json_ld.get('image', [None])[0] if isinstance(json_ld.get('image'), list) else json_ld.get('image'),
                         'sku': product_data['id'],
-                        'category': ''  # Will be updated after extracting from details
+                        'category': product_data['category']
                     }
-
-                    # Extract category from product details
-                    details_script = None
-                    for script in soup.find_all('script'):
-                        if script.string and 'Storefront.product_details_page' in script.string:
-                            details_script = script
-                            break
-
-                    if details_script:
-                        try:
-                            # Extract details HTML content
-                            details_match = re.search(r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']', 
-                                                  details_script.string, re.DOTALL)
-
-                            if details_match:
-                                html_content = details_match.group(1)
-                                # Handle escaped characters
-                                html_content = html_content.encode().decode('unicode-escape')
-                                html_content = html_content.replace('\\/', '/')
-                                self.status_callback(f"Successfully extracted details HTML content, length: {len(html_content)}")
-
-                                # Try to extract category using a more specific pattern
-                                category_match = re.search(r'SH-[0-9-]+', html_content)
-                                if category_match:
-                                    product['category'] = category_match.group(0)
-                                    self.status_callback(f"Found category in details: {product['category']}")
-                                else:
-                                    # Try extracting from URL as fallback
-                                    path_parts = urlparse(url).path.split('/')
-                                    if 'produkti' in path_parts:
-                                        produkti_index = path_parts.index('produkti')
-                                        if len(path_parts) > produkti_index + 1:
-                                            category = path_parts[produkti_index + 1]
-                                            product['category'] = f"SH-{category}"
-                                            self.status_callback(f"Using URL-based category as fallback: {product['category']}")
-                                        else:
-                                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                                            self.status_callback("Using default category")
-                                    else:
-                                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                                        self.status_callback("Using default category")
-                        except Exception as e:
-                            self.status_callback(f"Error extracting category from details: {str(e)}")
-                            product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
-                    else:
-                        self.status_callback("Product details script not found")
-                        product['category'] = 'SH-gala-zivis-un-gatava-kulinarija'
 
                     # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
