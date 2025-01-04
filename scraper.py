@@ -211,109 +211,99 @@ class RimiScraper:
             soup = BeautifulSoup(response.text, 'html.parser')
             self.status_callback("Page fetched successfully, looking for product details script")
 
+            # Initialize nutritional info
+            info = NutritionalInfo()
+
             script_tag = None
             for script in soup.find_all('script'):
                 if script.string and 'Storefront.product_details_page' in script.string:
                     script_tag = script
-                    self.status_callback("Found Storefront.product_details_page script")
+                    break
 
-                    # Extract the complete script content
-                    script_content = script_tag.string
-                    self.status_callback("=== Script Content Analysis ===")
-                    self.status_callback(f"Total length: {len(script_content)}")
+            if script_tag:
+                script_content = script_tag.string
+                self.status_callback("Found product details script")
 
-                    # Find the tabs array section
-                    tabs_pattern = r'tabs:\s*\[(.*?)\]'
-                    tabs_match = re.search(tabs_pattern, script_content, re.DOTALL)
+                # Extract the tabs section
+                tabs_match = re.search(r'tabs:\s*(\[.*?\])', script_content, re.DOTALL)
+                if tabs_match:
+                    tabs_content = tabs_match.group(1)
 
-                    if tabs_match:
-                        tabs_content = tabs_match.group(1)
-                        self.status_callback("\nFound tabs section")
+                    # Find the details tab
+                    details_match = re.search(r'\{[^}]*index:\s*0[^}]*identifier:\s*["\']details["\'][^}]*html:\s*["\']([^"\']+)["\']', tabs_content, re.DOTALL)
 
-                        # Find the specific tab with index 0 and identifier 'details'
-                        tab_pattern = r'\{\s*index:\s*0,\s*identifier:\s*["\']details["\'],.*?html:\s*["\']([^"\']+)["\']'
-                        tab_match = re.search(tab_pattern, tabs_content, re.DOTALL)
+                    if details_match:
+                        html_content = details_match.group(1)
 
-                        if tab_match:
-                            self.status_callback("Found details tab")
-                            raw_html = tab_match.group(1)
-                            self.status_callback(f"Raw HTML length: {len(raw_html)}")
+                        # Unescape the content
+                        try:
+                            # Handle escaped characters
+                            html_content = html_content.encode().decode('unicode-escape')
+                            html_content = html_content.replace('\\/', '/')
+                            html_content = html_content.replace('\\"', '"')
 
-                            try:
-                                # Handle multiple levels of escaping
-                                unescaped = raw_html
-                                # First, handle standard escapes
-                                unescaped = unescaped.replace('\\\\', '\\')
-                                unescaped = unescaped.replace('\\"', '"')
-                                # Then handle unicode escapes
-                                while '\\u' in unescaped:
-                                    unescaped = unescaped.encode().decode('unicode-escape')
+                            details_soup = BeautifulSoup(html_content, 'html.parser')
 
-                                # Parse the HTML content
-                                details_soup = BeautifulSoup(unescaped, 'html.parser')
-
-                                # Initialize nutritional info
-                                info = NutritionalInfo()
-
-                                # Extract ingredients - updated logic
-                                for section in details_soup.find_all('div', class_='product__list-wrapper'):
-                                    heading = section.find('p', class_='heading')
-                                    if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
-                                        text_div = section.find('div', class_='text')
-                                        if text_div and text_div.p:
-                                            info.ingredients = text_div.p.get_text(strip=True)
-                                            self.status_callback(f"Found ingredients: {info.ingredients[:100]}...")
+                            # Find ingredients
+                            for section in details_soup.find_all('div', class_='product__list-wrapper'):
+                                heading = section.find('p', class_='heading')
+                                if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
+                                    text_div = section.find('div', class_='text')
+                                    if text_div and text_div.p:
+                                        info.ingredients = text_div.p.get_text(strip=True)
                                         break
 
-                                # Find nutrition table - updated to look for specific header
-                                nutrition_tables = details_soup.find_all('table')
-                                nutrition_table = None
-                                for table in nutrition_tables:
-                                    headers = table.find_all(['th'])
-                                    if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
-                                        nutrition_table = table
-                                        break
+                            # Find nutrition table by looking for specific header
+                            tables = details_soup.find_all('table')
+                            nutrition_table = None
+                            for table in tables:
+                                headers = table.find_all('th')
+                                if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
+                                    nutrition_table = table
+                                    break
 
-                                if nutrition_table:
-                                    self.status_callback("Found nutrition table")
+                            if nutrition_table:
+                                for row in nutrition_table.find_all('tr'):
+                                    cells = row.find_all(['td'])
+                                    if len(cells) >= 2:
+                                        label = cells[0].get_text(strip=True).lower()
+                                        value = cells[1].get_text(strip=True)
 
-                                    for row in nutrition_table.find_all('tr'):
-                                        cells = row.find_all(['td', 'th'])
-                                        if len(cells) >= 2:
-                                            label = cells[0].get_text(strip=True).lower()
-                                            value = cells[1].get_text(strip=True)
+                                        if 'enerģētiskā vērtība' in label:
+                                            info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
+                                        elif 'tauki' == label:
+                                            info.fat = self._extract_decimal(value)
+                                        elif 'piesātinātās taukskābes' in label or 'tostarp piesātinātās taukskābes' in label:
+                                            info.saturated_fat = self._extract_decimal(value)
+                                        elif 'ogļhidrāti' == label:
+                                            info.carbohydrates = self._extract_decimal(value)
+                                        elif 'cukuri' in label or 'tostarp cukuri' in label:
+                                            info.sugars = self._extract_decimal(value)
+                                        elif 'olbaltumvielas' == label:
+                                            info.protein = self._extract_decimal(value)
+                                        elif 'sāls' == label:
+                                            info.salt = self._extract_decimal(value)
 
-                                            if 'enerģētiskā vērtība' in label:
-                                                info.energy_kj, info.energy_kcal = self._extract_energy_values(value)
-                                            elif 'tauki' == label:
-                                                info.fat = self._extract_decimal(value)
-                                            elif 'piesātinātās taukskābes' in label or 'tostarp piesātinātās taukskābes' in label:
-                                                info.saturated_fat = self._extract_decimal(value)
-                                            elif 'ogļhidrāti' == label:
-                                                info.carbohydrates = self._extract_decimal(value)
-                                            elif 'cukuri' in label or 'tostarp cukuri' in label:
-                                                info.sugars = self._extract_decimal(value)
-                                            elif 'olbaltumvielas' == label:
-                                                info.protein = self._extract_decimal(value)
-                                            elif 'sāls' == label:
-                                                info.salt = self._extract_decimal(value)
+                            # Add logging for debugging
+                            self.status_callback("\n=== Extracted Data ===")
+                            self.status_callback(f"Ingredients: {info.ingredients[:100]}..." if info.ingredients else "No ingredients found")
+                            self.status_callback(f"Energy: {info.energy_kj}kJ / {info.energy_kcal}kcal")
+                            self.status_callback(f"Fat: {info.fat}g")
+                            self.status_callback(f"Saturated Fat: {info.saturated_fat}g")
+                            self.status_callback(f"Carbohydrates: {info.carbohydrates}g")
+                            self.status_callback(f"Sugars: {info.sugars}g")
+                            self.status_callback(f"Protein: {info.protein}g")
+                            self.status_callback(f"Salt: {info.salt}g")
 
-                                    return info
-                                else:
-                                    self.status_callback("No nutrition table found")
-                                    info.needs_review = True
-                                    info.review_notes = "No nutrition table found in content"
-                                    return info
+                            return info
+                        except Exception as e:
+                            self.status_callback(f"Error processing HTML content: {str(e)}")
+                            return NutritionalInfo(needs_review=True, review_notes=f"Processing error: {str(e)}")
 
-                            except Exception as e:
-                                self.status_callback(f"Error processing HTML content: {str(e)}")
-                                return NutritionalInfo(needs_review=True, review_notes=f"Processing error: {str(e)}")
-                        else:
-                            self.status_callback("Could not find details tab")
-                            return NutritionalInfo(needs_review=True, review_notes="Details tab not found")
-                    else:
-                        self.status_callback("Could not find tabs section")
-                        return NutritionalInfo(needs_review=True, review_notes="Tabs section not found")
+                    return NutritionalInfo(needs_review=True, review_notes="Could not find details tab")
+                else:
+                    self.status_callback("Could not find tabs section")
+                    return NutritionalInfo(needs_review=True, review_notes="Tabs section not found")
 
             self.status_callback("No matching script found")
             return NutritionalInfo(needs_review=True, review_notes="Product details script not found")
