@@ -32,6 +32,27 @@ st.markdown("""
         background-color: #FFB74D !important;
         color: black !important;
     }
+    .nutritional-info {
+        background-color: #f5f5f5;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+    .nutritional-info h4 {
+        color: #2196F3;
+        margin-bottom: 0.5rem;
+    }
+    .nutritional-info table {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+    .nutritional-info td {
+        padding: 0.25rem;
+    }
+    .nutritional-info td:first-child {
+        font-weight: bold;
+        width: 40%;
+    }
     .debug-section {
         background-color: #FFF3E0;
         padding: 1rem;
@@ -123,26 +144,23 @@ def main():
         st.stop()
 
     # Add tabs for different sections
-    tab1, tab2 = st.tabs(["Main", "Debug"])
+    tab1, tab2, tab3 = st.tabs(["Products Overview", "Product Details", "Debug"])
 
     with tab1:
         # Add refresh button
         if st.button("🔄 Refresh Data"):
             with st.spinner("Scraping product data..."):
                 try:
-                    scraper = RimiScraper(status_callback=lambda msg: st.markdown(f"""
-                        <div class="status-area">
-                            <h4>Scraping Status</h4>
-                            <p>{msg}</p>
-                        </div>
-                    """, unsafe_allow_html=True))
-
+                    scraper = RimiScraper(status_callback=lambda msg: None)  # Reduced debug output
                     products_with_nutrition = scraper.scrape_products()
 
                     if products_with_nutrition:
                         try:
                             result = db.save_products_with_nutrition(products_with_nutrition)
-                            st.success(f"Successfully processed {len(products_with_nutrition)} products!")
+                            st.success(f"""Successfully processed {len(products_with_nutrition)} products!
+                                     New: {result['new_products']}, 
+                                     Updated: {result['updated_products']}, 
+                                     Reviews needed: {result['needs_review']}""")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Error saving products: {str(e)}")
@@ -163,6 +181,74 @@ def main():
             st.error(f"Error displaying data: {str(e)}")
 
     with tab2:
+        st.markdown("### 🔍 Product Details")
+        try:
+            products = db.get_products()
+            if products:
+                # Convert to DataFrame for easier handling
+                df = pd.DataFrame(products)
+
+                # Create product selector
+                selected_product = st.selectbox(
+                    "Select a product to view details:",
+                    options=df['sku'].tolist(),
+                    format_func=lambda x: df[df['sku'] == x]['name'].iloc[0]
+                )
+
+                if selected_product:
+                    # Get nutritional info for selected product
+                    nutrition = db.get_product_nutrition(selected_product)
+
+                    if nutrition:
+                        product_info = df[df['sku'] == selected_product].iloc[0]
+
+                        # Display product basic info
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"#### {product_info['name']}")
+                            st.markdown(f"**Price:** €{product_info['price']}")
+                            if product_info['price_per_unit']:
+                                st.markdown(f"**Price per unit:** {product_info['price_per_unit']}")
+                            st.markdown(f"**Category:** {product_info['category']}")
+
+                        # Display nutritional information
+                        st.markdown("#### 📊 Nutritional Information")
+                        st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+
+                        if nutrition['ingredients']:
+                            st.markdown("##### Ingredients")
+                            st.markdown(nutrition['ingredients'])
+
+                        st.markdown("##### Nutrition per 100g/ml")
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            st.markdown("**Energy**")
+                            st.markdown(f"- {nutrition['energy_kj']} kJ")
+                            st.markdown(f"- {nutrition['energy_kcal']} kcal")
+
+                            st.markdown("**Fats**")
+                            st.markdown(f"- Total: {nutrition['fat']}g")
+                            st.markdown(f"- Saturated: {nutrition['saturated_fat']}g")
+
+                        with col2:
+                            st.markdown("**Carbohydrates**")
+                            st.markdown(f"- Total: {nutrition['carbohydrates']}g")
+                            st.markdown(f"- Sugars: {nutrition['sugars']}g")
+
+                            st.markdown("**Other**")
+                            st.markdown(f"- Protein: {nutrition['protein']}g")
+                            st.markdown(f"- Salt: {nutrition['salt']}g")
+
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    else:
+                        st.warning("No nutritional information available for this product.")
+            else:
+                st.info("No products available. Please refresh the data first.")
+        except Exception as e:
+            st.error(f"Error displaying product details: {str(e)}")
+
+    with tab3:
         st.markdown('<div class="debug-header"><h2>🔍 Debug Single Product</h2></div>', unsafe_allow_html=True)
         st.markdown("""
         <div class="debug-instructions">
