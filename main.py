@@ -170,6 +170,8 @@ def main():
         st.session_state.specific_products_logs = []
     if 'scraping_logs_history' not in st.session_state:
         st.session_state.scraping_logs_history = []
+    if 'current_scraping_logs' not in st.session_state:
+        st.session_state.current_scraping_logs = []
 
     # Initialize database
     try:
@@ -191,9 +193,15 @@ def main():
                 progress_text = st.empty()
                 status_text = st.empty()
 
+                # Clear previous logs for this run
+                st.session_state.current_scraping_logs = []
+
                 def update_progress(msg: str):
+                    # Add log with timestamp
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    st.session_state.current_scraping_logs.append(f"[{timestamp}] {msg}")
+
                     if "Total products to process:" in msg:
-                        # Extract total from message like "Total products to process: X across Y pages"
                         match = re.search(r"Total products to process: (\d+) across (\d+) pages", msg)
                         if match:
                             st.session_state.total_products = int(match.group(1))
@@ -201,7 +209,6 @@ def main():
                             st.session_state.processed_products = 0
                             progress_text.text(f"Found {st.session_state.total_products} products across {st.session_state.total_pages} pages")
                     elif "Processing page" in msg:
-                        # Update current page
                         match = re.search(r"Processing page (\d+)/(\d+)", msg)
                         if match:
                             st.session_state.current_page = int(match.group(1))
@@ -218,21 +225,35 @@ def main():
                         scraper = RimiScraper(status_callback=update_progress)
                         products_with_nutrition = scraper.scrape_products()
 
+                        # Store current run's logs in history with timestamp
+                        if st.session_state.current_scraping_logs:
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            st.session_state.scraping_logs_history.append((timestamp, st.session_state.current_scraping_logs))
+
                         if products_with_nutrition:
                             try:
                                 result = db.save_products_with_nutrition(products_with_nutrition)
-                                st.success(f"""Successfully processed {len(products_with_nutrition)} products!
+                                success_msg = f"""Successfully processed {len(products_with_nutrition)} products!
                                             New: {result['new_products']}, 
                                             Updated: {result['updated_products']}, 
-                                            Reviews needed: {result['needs_review']}""")
+                                            Reviews needed: {result['needs_review']}"""
+                                st.success(success_msg)
+                                # Add final result to logs
+                                update_progress(success_msg)
                                 st.rerun()
                             except Exception as e:
-                                st.error(f"Error saving products: {str(e)}")
+                                error_msg = f"Error saving products: {str(e)}"
+                                st.error(error_msg)
+                                update_progress(f"❌ {error_msg}")
                         else:
-                            st.warning("No products found during scraping. Please try again later.")
+                            warning_msg = "No products found during scraping. Please try again later."
+                            st.warning(warning_msg)
+                            update_progress(f"⚠️ {warning_msg}")
 
                     except Exception as e:
-                        st.error(f"Error during data refresh: {str(e)}")
+                        error_msg = f"Error during data refresh: {str(e)}"
+                        st.error(error_msg)
+                        update_progress(f"❌ {error_msg}")
 
                 # Clean up progress indicators
                 progress_bar.empty()
@@ -451,7 +472,7 @@ def main():
 
         # Display logs with timestamps
         if st.session_state.scraping_logs_history:
-            for timestamp, logs in st.session_state.scraping_logs_history:
+            for timestamp, logs in reversed(st.session_state.scraping_logs_history):
                 with st.expander(f"Scraping attempt at {timestamp}"):
                     for log in logs:
                         css_class = "debug-log"
