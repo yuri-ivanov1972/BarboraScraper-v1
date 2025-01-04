@@ -224,8 +224,17 @@ def main():
 
                 with st.spinner("Scraping specific products..."):
                     try:
-                        scraper = RimiScraper(status_callback=lambda msg: progress_text.text(msg))
+                        # Create a list to store logs
+                        scraping_logs = []
+                        def log_callback(msg):
+                            progress_text.text(msg)
+                            scraping_logs.append(msg)
+
+                        scraper = RimiScraper(status_callback=log_callback)
                         products_with_nutrition = scraper.scrape_specific_products(SPECIFIC_PRODUCTS)
+
+                        # Store logs in session state
+                        st.session_state.specific_products_logs = scraping_logs
 
                         if products_with_nutrition:
                             try:
