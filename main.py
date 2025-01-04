@@ -89,6 +89,9 @@ st.markdown("""
         border-radius: 0.25rem;
         margin: 1rem 0;
     }
+    .debug-log.warning {
+        border-left-color: #FFB74D;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -159,6 +162,8 @@ def main():
         st.session_state.processed_products = 0
     if 'specific_products_logs' not in st.session_state:
         st.session_state.specific_products_logs = []
+    if 'scraping_logs_history' not in st.session_state:
+        st.session_state.scraping_logs_history = []
 
     # Initialize database
     try:
@@ -169,7 +174,7 @@ def main():
         st.stop()
 
     # Add tabs for different sections
-    tab1, tab2, tab3, tab4 = st.tabs(["Products Overview", "Product Details", "Debug", "Specific Products Debug"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Products Overview", "Product Details", "Debug", "Specific Products Debug", "Scraping Logs"])
 
     with tab1:
         col1, col2 = st.columns(2)
@@ -201,9 +206,9 @@ def main():
                             try:
                                 result = db.save_products_with_nutrition(products_with_nutrition)
                                 st.success(f"""Successfully processed {len(products_with_nutrition)} products!
-                                         New: {result['new_products']}, 
-                                         Updated: {result['updated_products']}, 
-                                         Reviews needed: {result['needs_review']}""")
+                                            New: {result['new_products']}, 
+                                            Updated: {result['updated_products']}, 
+                                            Reviews needed: {result['needs_review']}""")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error saving products: {str(e)}")
@@ -233,16 +238,17 @@ def main():
                         scraper = RimiScraper(status_callback=log_callback)
                         products_with_nutrition = scraper.scrape_specific_products(SPECIFIC_PRODUCTS)
 
-                        # Store logs in session state
-                        st.session_state.specific_products_logs = scraping_logs
+                        # Store logs in session state with timestamp
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        st.session_state.scraping_logs_history.append((timestamp, scraping_logs))
 
                         if products_with_nutrition:
                             try:
                                 result = db.save_products_with_nutrition(products_with_nutrition)
                                 st.success(f"""Successfully processed specific products!
-                                             New: {result['new_products']}, 
-                                             Updated: {result['updated_products']}, 
-                                             Reviews needed: {result['needs_review']}""")
+                                                New: {result['new_products']}, 
+                                                Updated: {result['updated_products']}, 
+                                                Reviews needed: {result['needs_review']}""")
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error saving products: {str(e)}")
@@ -414,6 +420,33 @@ def main():
                 elif "success" in log.lower() or "found" in log.lower():
                     css_class += " success"
                 st.markdown(f'<div class="{css_class}">{log}</div>', unsafe_allow_html=True)
+
+    with tab5:
+        st.markdown("### 📝 Scraping Logs History")
+        st.markdown("This tab shows the complete history of scraping attempts and their results.")
+
+        # Add clear logs button
+        col1, col2 = st.columns([1, 5])
+        with col1:
+            if st.button("Clear Logs"):
+                st.session_state.scraping_logs_history = []
+                st.rerun()
+
+        # Display logs with timestamps
+        if st.session_state.scraping_logs_history:
+            for timestamp, logs in st.session_state.scraping_logs_history:
+                with st.expander(f"Scraping attempt at {timestamp}"):
+                    for log in logs:
+                        css_class = "debug-log"
+                        if "error" in log.lower() or "❌" in log:
+                            css_class += " error"
+                        elif "success" in log.lower() or "✅" in log:
+                            css_class += " success"
+                        elif "warning" in log.lower() or "⚠️" in log:
+                            css_class += " warning"
+                        st.markdown(f'<div class="{css_class}">{log}</div>', unsafe_allow_html=True)
+        else:
+            st.info("No scraping logs available. Try running the scraper to see the logs.")
 
 
 if __name__ == "__main__":

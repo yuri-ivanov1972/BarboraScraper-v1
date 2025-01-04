@@ -618,11 +618,40 @@ class RimiScraper:
                         'category': product_data.get('category')
                     }
 
-                    self.status_callback("\n=== Product Data Before Validation ===")
-                    self.status_callback(f"Name: {product.get('name')}")
-                    self.status_callback(f"SKU: {product.get('sku')}")
-                    self.status_callback(f"Price: {product.get('price')}")
-                    self.status_callback(f"Category: {product.get('category')}")
+                    # Add detailed validation logging
+                    self.status_callback("\n=== Product Data Validation ===")
+                    # Check name
+                    if not product.get('name'):
+                        self.status_callback("❌ Missing required field: name")
+                        if name_elem:
+                            self.status_callback(f"  - Name element found but text was empty")
+                        else:
+                            self.status_callback(f"  - Could not find name element in HTML")
+
+                    # Check SKU
+                    if not product.get('sku'):
+                        self.status_callback("❌ Missing required field: sku")
+                        if sku_elem:
+                            self.status_callback(f"  - SKU element found but could not extract number")
+                            self.status_callback(f"  - Raw SKU text: {sku_elem.get_text(strip=True)}")
+                        else:
+                            self.status_callback(f"  - Could not find SKU element in HTML")
+
+                    # Check price
+                    if not product.get('price'):
+                        self.status_callback("⚠️ Warning: No price found")
+                        if price_elem:
+                            self.status_callback(f"  - Price element found but could not extract number")
+                            self.status_callback(f"  - Raw price text: {price_elem.get_text(strip=True)}")
+                        else:
+                            self.status_callback(f"  - Could not find price element in HTML")
+
+                    # Show what we actually found
+                    self.status_callback("\n=== Data Found in HTML ===")
+                    self.status_callback(f"Name element text: {name_elem.get_text(strip=True) if name_elem else 'Not found'}")
+                    self.status_callback(f"SKU element text: {sku_elem.get_text(strip=True) if sku_elem else 'Not found'}")
+                    self.status_callback(f"Price element text: {price_elem.get_text(strip=True) if price_elem else 'Not found'}")
+
 
                     # Get nutritional info and additional details
                     nutrition, country_code, quantity = self.scrape_nutritional_info(url)
@@ -636,19 +665,16 @@ class RimiScraper:
                         product['quantity_unit'] = quantity[1]
                         self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
 
-                    if not product.get('name'):
-                        self.status_callback("❌ Missing required field: name")
-                    if not product.get('sku'):
-                        self.status_callback("❌ Missing required field: sku")
-
                     if product.get('name') and product.get('sku'):
                         products_with_nutrition.append({
                             'product': product,
                             'nutrition': nutrition
                         })
-                        self.status_callback(f"✅ Successfully added product to results: {product.get('name')}")
+                        self.status_callback(f"✅ Successfully added product: {product.get('name')} (SKU: {product.get('sku')})")
                     else:
-                        self.status_callback(f"⚠️ Skipping product due to missing required data")
+                        self.status_callback("⚠️ Product skipped: Missing required fields")
+                        self.status_callback("  Required: name and sku")
+                        self.status_callback(f"  Found: name='{product.get('name')}', sku='{product.get('sku')}'")
 
                     time.sleep(random.uniform(0.5, 1))
 
