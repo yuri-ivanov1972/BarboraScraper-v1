@@ -146,22 +146,18 @@ class RimiScraper:
             parsed = urlparse(category_url)
             query_params = parse_qs(parsed.query)
 
-            # Rimi uses 0-based page index
-            page_index = page - 1
-
             # Preserve existing query parameters
-            params = {k: v[0] for k, v in query_params.items() if k not in ['pageSize', 'pageIndex', 'page']}
+            params = {k: v[0] for k, v in query_params.items() if k not in ['pageSize', 'pageIndex', 'currentPage', 'page']}
 
             # Add pagination parameters
-            params.update({
-                'pageSize': str(self.page_size),
-                'pageIndex': str(page_index)
-            })
+            params['pageSize'] = str(self.page_size)
+            params['pageIndex'] = str(page)  # Start from 1, not 0
 
             # Construct the URL preserving the path
             base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
             final_url = f"{base_url}?{urlencode(params)}"
 
+            logging.info(f"Generated URL for page {page}: {final_url}") #Added logging
             self.status_callback(f"Generated URL for page {page}: {final_url}")
             return final_url
 
