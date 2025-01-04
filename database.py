@@ -283,32 +283,68 @@ class Database:
 
                     if cur.fetchone():
                         # Update existing product
+                        # Compare values to see if update is needed
+                        current_values = {
+                            'name': product['name'],
+                            'price': Decimal(str(product['price'])),
+                            'price_per_unit': product.get('price_per_unit'),
+                            'product_url': product.get('product_url'),
+                            'image_url': product.get('image_url'),
+                            'category': product.get('category'),
+                            'quantity_value': product.get('quantity_value'),
+                            'quantity_unit': product.get('quantity_unit'),
+                            'country_code': product.get('country_code')
+                        }
+
                         cur.execute("""
-                            UPDATE products 
-                            SET name = %s,
-                                price = %s,
-                                price_per_unit = %s,
-                                product_url = %s,
-                                image_url = %s,
-                                category = %s,
-                                quantity_value = %s,
-                                quantity_unit = %s,
-                                country_code = %s,
-                                updated_at = CURRENT_TIMESTAMP
+                            SELECT name, price, price_per_unit, product_url, image_url, 
+                                   category, quantity_value, quantity_unit, country_code 
+                            FROM products 
                             WHERE sku = %s
-                        """, (
-                            product['name'],
-                            product['price'],
-                            product.get('price_per_unit'),
-                            product.get('product_url'),
-                            product.get('image_url'),
-                            product.get('category'),
-                            product.get('quantity_value'),
-                            product.get('quantity_unit'),
-                            product.get('country_code'),
-                            product.get('sku')
-                        ))
-                        updated_products += 1
+                        """, (product.get('sku'),))
+
+                        existing = cur.fetchone()
+                        db_values = {
+                            'name': existing[0],
+                            'price': existing[1],
+                            'price_per_unit': existing[2],
+                            'product_url': existing[3],
+                            'image_url': existing[4],
+                            'category': existing[5],
+                            'quantity_value': existing[6],
+                            'quantity_unit': existing[7],
+                            'country_code': existing[8]
+                        }
+
+                        if current_values != db_values:
+                            # Update existing product if data has changed
+                            cur.execute("""
+                                UPDATE products 
+                                SET name = %s, 
+                                    price = %s, 
+                                    price_per_unit = %s, 
+                                    product_url = %s, 
+                                    image_url = %s, 
+                                    category = %s,
+                                    quantity_value = %s,
+                                    quantity_unit = %s,
+                                    country_code = %s,
+                                    updated_at = CURRENT_TIMESTAMP
+                                WHERE sku = %s
+                            """, (
+                                product['name'],
+                                product['price'],
+                                product.get('price_per_unit'),
+                                product.get('product_url'),
+                                product.get('image_url'),
+                                product.get('category'),
+                                product.get('quantity_value'),
+                                product.get('quantity_unit'),
+                                product.get('country_code'),
+                                product.get('sku')
+                            ))
+                            logging.info(f"Updated product {product['name']} (SKU: {product.get('sku')})")
+                            updated_products += 1
                     else:
                         # Insert new product
                         cur.execute("""
