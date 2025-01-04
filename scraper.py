@@ -585,12 +585,27 @@ class RimiScraper:
                                 self.status_callback(f"Problematic JSON: {script.string[:100]}...")
                             continue
 
+                    # Extract category from URL path
+                    try:
+                        # Parse URL path to get category
+                        path_parts = urlparse(url).path.split('/')
+                        if 'produkti' in path_parts:
+                            produkti_index = path_parts.index('produkti')
+                            if len(path_parts) > produkti_index + 1:
+                                category = path_parts[produkti_index + 1]
+                                product = {'category': f"SH-{category}"}
+                                self.status_callback(f"Extracted category from URL: {product['category']}")
+                    except (ValueError, IndexError) as e:
+                        self.status_callback(f"Error extracting category from URL: {str(e)}")
+                        product = {'category': 'SH-unknown'}
+
+
                     # Initialize product data
                     product_data = {
                         'name': '',
                         'price': '0',
                         'id': '',
-                        'category': ''
+                        'category': product['category']  # Use extracted category
                     }
 
                     # Extract data from JSON-LD if available
@@ -612,38 +627,9 @@ class RimiScraper:
                         'product_url': url,
                         'image_url': json_ld.get('image', [None])[0] if isinstance(json_ld.get('image'), list) else json_ld.get('image'),
                         'sku': product_data['id'],
-                        'category': ''  # Will be extracted from details
+                        'category': product_data['category']
                     }
 
-                    # Extract category from product details
-                    details_script = None
-                    for script in soup.find_all('script'):
-                        if script.string and 'Storefront.product_details_page' in script.string:
-                            details_script = script
-                            break
-
-                    if details_script:
-                        try:
-                            # Extract category from product details
-                            details_html = re.search(r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']', 
-                                                details_script.string, re.DOTALL)
-                            if details_html:
-                                html_content = details_html.group(1)
-                                html_content = html_content.encode().decode('unicode-escape')
-                                details_soup = BeautifulSoup(html_content, 'html.parser')
-
-                                # Look for category information
-                                for item in details_soup.find_all('li', class_='item'):
-                                    span = item.find('span')
-                                    if span and 'Kategorija' in span.get_text(strip=True):
-                                        text_div = item.find('div', class_='text')
-                                        if text_div and text_div.p:
-                                            category_text = text_div.p.get_text(strip=True)
-                                            product['category'] = f"SH-{category_text}"
-                                            self.status_callback(f"Found category in details: {category_text}")
-                                            break
-                        except Exception as e:
-                            self.status_callback(f"Error extracting category from details: {str(e)}")
 
                     # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
