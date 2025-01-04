@@ -7,6 +7,7 @@ import traceback
 from datetime import datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor # Added for RealDictCursor
+import re
 
 # Configure logging
 logging.basicConfig(
@@ -152,7 +153,7 @@ def main():
     st.title("🛒 Rimi Product Scraper")
     st.markdown("### A tool for monitoring Rimi supermarket products and prices")
 
-    # Initialize session state for debug section and progress tracking
+    # Initialize session state
     if 'show_debug' not in st.session_state:
         st.session_state.show_debug = False
     if 'debug_logs' not in st.session_state:
@@ -161,6 +162,10 @@ def main():
         st.session_state.total_products = 0
     if 'processed_products' not in st.session_state:
         st.session_state.processed_products = 0
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = 1
+    if 'total_pages' not in st.session_state:
+        st.session_state.total_pages = 0
     if 'specific_products_logs' not in st.session_state:
         st.session_state.specific_products_logs = []
     if 'scraping_logs_history' not in st.session_state:
@@ -184,19 +189,29 @@ def main():
             if st.button("🔄 Refresh All Data"):
                 progress_bar = st.progress(0)
                 progress_text = st.empty()
+                status_text = st.empty()
 
                 def update_progress(msg: str):
-                    if "Found" in msg and "potential product elements" in msg:
-                        # Extract total products count
-                        count = int(''.join(filter(str.isdigit, msg)))
-                        st.session_state.total_products = count
-                        st.session_state.processed_products = 0
+                    if "Total products to process:" in msg:
+                        # Extract total from message like "Total products to process: X across Y pages"
+                        match = re.search(r"Total products to process: (\d+) across (\d+) pages", msg)
+                        if match:
+                            st.session_state.total_products = int(match.group(1))
+                            st.session_state.total_pages = int(match.group(2))
+                            st.session_state.processed_products = 0
+                            progress_text.text(f"Found {st.session_state.total_products} products across {st.session_state.total_pages} pages")
+                    elif "Processing page" in msg:
+                        # Update current page
+                        match = re.search(r"Processing page (\d+)/(\d+)", msg)
+                        if match:
+                            st.session_state.current_page = int(match.group(1))
+                            progress_text.text(f"Processing page {st.session_state.current_page}/{st.session_state.total_pages}")
                     elif "Successfully parsed product" in msg:
                         st.session_state.processed_products += 1
                         if st.session_state.total_products > 0:
                             progress = st.session_state.processed_products / st.session_state.total_products
                             progress_bar.progress(min(progress, 1.0))
-                            progress_text.text(f"Processing products: {st.session_state.processed_products}/{st.session_state.total_products}")
+                            status_text.text(f"Processed {st.session_state.processed_products}/{st.session_state.total_products} products")
 
                 with st.spinner("Scraping product data..."):
                     try:
@@ -222,6 +237,7 @@ def main():
                 # Clean up progress indicators
                 progress_bar.empty()
                 progress_text.empty()
+                status_text.empty()
 
         with col2:
             # Add button for specific products
