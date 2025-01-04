@@ -27,8 +27,8 @@ def extract_quantity(text: str) -> Tuple[Optional[Decimal], Optional[str]]:
     if not text:
         return None, None
 
-    # Pattern to match number followed by unit
-    pattern = r'(\d+(?:[,.]\d+)?)\s*([kKmMlLgG]+)'
+    # Pattern to match number followed by unit, now including more variations
+    pattern = r'(\d+(?:[,.]\d+)?)\s*([kKmMlLgG]+[gG]?)'
     match = re.search(pattern, text)
 
     if match:
@@ -40,9 +40,9 @@ def extract_quantity(text: str) -> Tuple[Optional[Decimal], Optional[str]]:
             # Normalize units
             if unit in ['l', 'л']:
                 unit = 'l'
-            elif unit in ['kg', 'кг']:
+            elif unit in ['kg', 'кг', 'kg']:
                 unit = 'kg'
-            elif unit in ['g', 'г']:
+            elif unit in ['g', 'г', 'gg', 'g']:
                 unit = 'g'
                 value = value / 1000  # Convert to kg
                 unit = 'kg'
@@ -54,7 +54,12 @@ def extract_quantity(text: str) -> Tuple[Optional[Decimal], Optional[str]]:
 
 def get_country_code(country_name: str) -> Optional[str]:
     """Convert country name to ISO country code"""
-    return COUNTRY_MAPPING.get(country_name.strip())
+    if not country_name:
+        return None
+
+    # Clean the input string
+    cleaned_name = country_name.strip().split(',')[0]  # Take first country if multiple
+    return COUNTRY_MAPPING.get(cleaned_name)
 
 class ScraperError(Exception):
     """Custom exception for scraper-related errors"""
@@ -271,6 +276,33 @@ class RimiScraper:
             country_code = None
             quantity = None, None
 
+            # First try to find quantity and country directly from the page
+            for item in soup.find_all('li', class_='item'):
+                span = item.find('span')
+                if span:
+                    label = span.get_text(strip=True)
+                    text_div = item.find('div', class_='text')
+                    if text_div and text_div.p:
+                        value = text_div.p.get_text(strip=True)
+
+                        # Extract country of origin
+                        if 'Izcelsmes valsts' in label:
+                            country_code = get_country_code(value)
+                        # Extract quantity
+                        elif 'Daudzums' in label:
+                            quantity_value, quantity_unit = extract_quantity(value)
+                            quantity = (quantity_value, quantity_unit)
+
+            # If quantity not found, try to extract from product title or other elements
+            if not quantity[0]:
+                # Try product title
+                title_elem = soup.find('h1', class_='name')
+                if title_elem:
+                    title_text = title_elem.get_text(strip=True)
+                    quantity_value, quantity_unit = extract_quantity(title_text)
+                    if quantity_value:
+                        quantity = (quantity_value, quantity_unit)
+
             script_tag = None
             for script in soup.find_all('script'):
                 if script.string and 'Storefront.product_details_page' in script.string:
@@ -300,22 +332,24 @@ class RimiScraper:
 
                             details_soup = BeautifulSoup(html_content, 'html.parser')
 
-                            # Find basic product details
-                            for item in details_soup.find_all('li', class_='item'):
-                                span = item.find('span')
-                                if span:
-                                    label = span.get_text(strip=True)
-                                    text_div = item.find('div', class_='text')
-                                    if text_div and text_div.p:
-                                        value = text_div.p.get_text(strip=True)
+                            # Try to find quantity and country again in the details tab if not found earlier
+                            if not country_code or not quantity[0]:
+                                for item in details_soup.find_all('li', class_='item'):
+                                    span = item.find('span')
+                                    if span:
+                                        label = span.get_text(strip=True)
+                                        text_div = item.find('div', class_='text')
+                                        if text_div and text_div.p:
+                                            value = text_div.p.get_text(strip=True)
 
-                                        # Extract country of origin
-                                        if 'Izcelsmes valsts' in label:
-                                            country_code = get_country_code(value)
-                                        # Extract quantity
-                                        elif 'Daudzums' in label:
-                                            quantity_value, quantity_unit = extract_quantity(value)
-                                            quantity = (quantity_value, quantity_unit)
+                                            # Extract country of origin
+                                            if 'Izcelsmes valsts' in label and not country_code:
+                                                country_code = get_country_code(value)
+                                            # Extract quantity
+                                            elif 'Daudzums' in label and not quantity[0]:
+                                                quantity_value, quantity_unit = extract_quantity(value)
+                                                if quantity_value:
+                                                    quantity = (quantity_value, quantity_unit)
 
                             # Find ingredients
                             for section in details_soup.find_all('div', class_='product__list-wrapper'):
