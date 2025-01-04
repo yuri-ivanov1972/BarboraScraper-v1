@@ -463,14 +463,26 @@ class RimiScraper:
 
                     for product in products:
                         if product.get('product_url'):
+                            self.status_callback(f"\nProcessing product: {product.get('product_url')}")
                             nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
 
                             # Update product with additional details
                             if country_code:
                                 product['country_code'] = country_code
+                                self.status_callback(f"Added country code: {country_code}")
                             if quantity and quantity[0] is not None:
                                 product['quantity_value'] = quantity[0]
                                 product['quantity_unit'] = quantity[1]
+                                self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
+
+                            # Add specific logging for problematic SKUs
+                            if product.get('sku') in ['2000324', '2000330', '2000511']:
+                                self.status_callback(f"\n=== Problematic SKU Data ===")
+                                self.status_callback(f"SKU: {product.get('sku')}")
+                                self.status_callback(f"Name: {product.get('name')}")
+                                self.status_callback(f"Country: {product.get('country_code')}")
+                                self.status_callback(f"Quantity: {product.get('quantity_value')} {product.get('quantity_unit')}")
+                                self.status_callback(f"URL: {product.get('product_url')}")
 
                             products_with_nutrition.append({
                                 'product': product,
