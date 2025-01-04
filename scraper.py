@@ -572,6 +572,7 @@ class RimiScraper:
                         name_elem = soup.find('h1', class_='name')
                         if name_elem:
                             product_data['name'] = name_elem.get_text(strip=True)
+                            self.status_callback(f"Found name: {product_data['name']}")
 
                         price_elem = soup.find('div', class_='price-wrapper')
                         if price_elem:
@@ -579,6 +580,7 @@ class RimiScraper:
                             price_match = re.search(r'(\d+[.,]\d+)', price_text)
                             if price_match:
                                 product_data['price'] = price_match.group(1)
+                                self.status_callback(f"Found price: {product_data['price']}")
 
                         sku_elem = soup.find('div', class_='product-code')
                         if sku_elem:
@@ -586,10 +588,12 @@ class RimiScraper:
                             sku_match = re.search(r'(\d+)', sku_text)
                             if sku_match:
                                 product_data['id'] = sku_match.group(1)
+                                self.status_callback(f"Found SKU: {product_data['id']}")
                     else:
                         try:
+                            self.status_callback("Found GTM element, attempting to parse")
                             product_data = json.loads(gtm_element['data-gtm-eec-product'])
-                            self.status_callback("Successfully parsed GTM data")
+                            self.status_callback(f"Successfully parsed GTM data: {product_data}")
                         except json.JSONDecodeError as e:
                             self.status_callback(f"Error parsing GTM data: {str(e)}")
                             continue
@@ -614,7 +618,11 @@ class RimiScraper:
                         'category': product_data.get('category')
                     }
 
-                    self.status_callback("Successfully created product object")
+                    self.status_callback("\n=== Product Data Before Validation ===")
+                    self.status_callback(f"Name: {product.get('name')}")
+                    self.status_callback(f"SKU: {product.get('sku')}")
+                    self.status_callback(f"Price: {product.get('price')}")
+                    self.status_callback(f"Category: {product.get('category')}")
 
                     # Get nutritional info and additional details
                     nutrition, country_code, quantity = self.scrape_nutritional_info(url)
@@ -628,20 +636,19 @@ class RimiScraper:
                         product['quantity_unit'] = quantity[1]
                         self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
 
-                    self.status_callback("\n=== Product Data ===")
-                    self.status_callback(f"SKU: {product.get('sku')}")
-                    self.status_callback(f"Name: {product.get('name')}")
-                    self.status_callback(f"Country: {product.get('country_code')}")
-                    self.status_callback(f"Quantity: {product.get('quantity_value')} {product.get('quantity_unit')}")
+                    if not product.get('name'):
+                        self.status_callback("❌ Missing required field: name")
+                    if not product.get('sku'):
+                        self.status_callback("❌ Missing required field: sku")
 
                     if product.get('name') and product.get('sku'):
                         products_with_nutrition.append({
                             'product': product,
                             'nutrition': nutrition
                         })
-                        self.status_callback(f"Successfully added product to results: {product.get('name')}")
+                        self.status_callback(f"✅ Successfully added product to results: {product.get('name')}")
                     else:
-                        self.status_callback(f"Skipping product due to missing required data")
+                        self.status_callback(f"⚠️ Skipping product due to missing required data")
 
                     time.sleep(random.uniform(0.5, 1))
 
