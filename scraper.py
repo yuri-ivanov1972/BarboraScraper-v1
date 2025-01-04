@@ -533,6 +533,7 @@ class RimiScraper:
             logging.error(f"Scraping error: {str(e)}")
             raise ScraperError(str(e))
     
+
     def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
         """Scrape specific product URLs"""
         try:
@@ -609,10 +610,24 @@ class RimiScraper:
                         'name': product_data['name'],
                         'price': self.clean_price(product_data['price']),
                         'product_url': url,
-                        'image_url': None,  # Will be set later if found
+                        'image_url': json_ld.get('image', [None])[0] if isinstance(json_ld.get('image'), list) else json_ld.get('image'),
                         'sku': product_data['id'],
-                        'category': product_data['category']
+                        'category': ''  # Will be set from URL
                     }
+
+                    # Extract category from URL
+                    try:
+                        # Parse URL path to get category
+                        path_parts = urlparse(url).path.split('/')
+                        if len(path_parts) > 3:  # Ensure we have enough parts
+                            # Category is usually after 'produkti' in the path
+                            produkti_index = path_parts.index('produkti')
+                            if produkti_index + 1 < len(path_parts):
+                                category = path_parts[produkti_index + 1]
+                                product['category'] = f"SH-{category}"
+                                self.status_callback(f"Extracted category: {product['category']}")
+                    except (ValueError, IndexError) as e:
+                        self.status_callback(f"Could not extract category from URL: {str(e)}")
 
                     # Add validation logging
                     self.status_callback("\n=== Product Data Validation ===")
@@ -635,6 +650,15 @@ class RimiScraper:
                         price_elem = soup.find('div', class_='price-wrapper')
                         if price_elem:
                             self.status_callback(f"  Raw price text: {price_elem.get_text(strip=True)}")
+
+                    if not product['image_url']:
+                        self.status_callback("⚠️ Warning: No image URL found in JSON-LD")
+                        # Try to find image URL in HTML as fallback
+                        img_elem = soup.select_one('.gallery-image img, .card__image-wrapper img')
+                        if img_elem:
+                            product['image_url'] = img_elem.get('data-src') or img_elem.get('src')
+                            if product['image_url']:
+                                self.status_callback(f"Found image URL in HTML: {product['image_url']}")
 
                     # Get nutritional info if we have required fields
                     if has_required_fields:
