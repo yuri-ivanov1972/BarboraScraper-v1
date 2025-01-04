@@ -123,9 +123,19 @@ class RimiScraper:
             if pagination:
                 page_links = pagination.find_all('a', attrs={'data-page': True})
                 if page_links:
-                    max_page = max(int(link['data-page']) for link in page_links)
+                    max_page = max(int(link.get('data-page', 1)) for link in page_links)
+                    self.status_callback(f"Found pagination with {max_page} pages")
                     return max_page
-            return 1  # Return 1 if no pagination found
+            total_items_elem = soup.find('div', class_='results-count')
+            if total_items_elem:
+                total_text = total_items_elem.get_text(strip=True)
+                match = re.search(r'\d+', total_text)
+                if match:
+                    total_items = int(match.group())
+                    max_page = (total_items + self.page_size - 1) // self.page_size
+                    self.status_callback(f"Calculated {max_page} pages from {total_items} total items")
+                    return max_page
+            return 1
         except Exception as e:
             logging.error(f"Error extracting max page number: {str(e)}")
             return 1
@@ -133,15 +143,17 @@ class RimiScraper:
     def build_page_url(self, category_url: str, page: int) -> str:
         """Build URL for specific page number"""
         parsed = urlparse(category_url)
-        category_id = parsed.path.split('/')[-1]
+        query = parse_qs(parsed.query)
 
         params = {
-            'query': f':relevance:allCategories:{category_id}:assortmentStatus:inAssortment',
+            'page': page,
             'pageSize': self.page_size,
-            'currentPage': page
+            'query': ':relevance',
+            'sort': 'name-asc'
         }
 
-        return f"{category_url}?{urlencode(params)}"
+        # Construct the URL with parameters
+        return f"{category_url}{'&' if '?' in category_url else '?'}{urlencode(params)}"
 
     def clean_price(self, price_str: str) -> Decimal:
         """Clean and convert price string to Decimal"""
@@ -437,8 +449,9 @@ class RimiScraper:
 
             for category_url in self.category_urls:
                 try:
-                    self.status_callback(f"Processing category: {category_url}")
+                    self.status_callback(f"\nProcessing category: {category_url}")
 
+                    # Get first page and total pages
                     response = self.session.get(category_url)
                     if response.status_code != 200:
                         self.status_callback(f"Failed to access category {category_url}. Status code: {response.status_code}")
@@ -447,67 +460,44 @@ class RimiScraper:
                     max_pages = self.get_max_page_number(response.text)
                     self.status_callback(f"Found {max_pages} pages in category")
 
-                    products = self.extract_product_info(response.text, category_url)
-
-                    for product in products:
-                        if product.get('product_url'):
-                            self.status_callback(f"\nProcessing product: {product.get('product_url')}")
-                            nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
-
-                            # Update product with additional details
-                            if country_code:
-                                product['country_code'] = country_code
-                                self.status_callback(f"Added country code: {country_code}")
-                            if quantity and quantity[0] is not None:
-                                product['quantity_value'] = quantity[0]
-                                product['quantity_unit'] = quantity[1]
-                                self.status_callback(f"Added quantity: {quantity[0]} {quantity[1]}")
-
-                            # Add specific logging for problematic SKUs
-                            if product.get('sku') in ['2000324', '2000330', '2000511']:
-                                self.status_callback(f"\n=== Problematic SKU Data ===")
-                                self.status_callback(f"SKU: {product.get('sku')}")
-                                self.status_callback(f"Name: {product.get('name')}")
-                                self.status_callback(f"Country: {product.get('country_code')}")
-                                self.status_callback(f"Quantity: {product.get('quantity_value')} {product.get('quantity_unit')}")
-                                self.status_callback(f"URL: {product.get('product_url')}")
-
-                            products_with_nutrition.append({
-                                'product': product,
-                                'nutrition': nutrition
-                            })
-                        time.sleep(random.uniform(0.5, 1))
-
-                    all_products.extend(products)
-                    self.status_callback(f"Processed page 1/{max_pages} with {len(products)} products")
-
-                    for page in range(2, max_pages + 1):
+                    # Process all pages
+                    for page in range(1, max_pages + 1):
                         try:
-                            time.sleep(random.uniform(1, 2))
-                            page_url = self.build_page_url(category_url, page)
-                            self.status_callback(f"Fetching page {page}/{max_pages}")
+                            if page > 1:
+                                page_url = self.build_page_url(category_url, page)
+                                self.status_callback(f"Fetching page {page}/{max_pages}")
+                                response = self.session.get(page_url)
+                                if response.status_code != 200:
+                                    self.status_callback(f"Failed to access page {page}. Status code: {response.status_code}")
+                                    continue
 
-                            response = self.session.get(page_url)
-                            if response.status_code != 200:
-                                self.status_callback(f"Failed to access page {page}. Status code: {response.status_code}")
-                                continue
+                            products = self.extract_product_info(response.text, category_url)
+                            self.status_callback(f"Found {len(products)} products on page {page}")
 
-                            page_products = self.extract_product_info(response.text, page_url)
-
-                            for product in page_products:
+                            for product in products:
                                 if product.get('product_url'):
+                                    self.status_callback(f"\nProcessing product: {product['name']} ({product.get('sku', 'No SKU')})")
                                     nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
-                                    product['country_code'] = country_code
-                                    product['quantity_value'] = quantity[0]
-                                    product['quantity_unit'] = quantity[1]
+
+                                    if country_code:
+                                        product['country_code'] = country_code
+                                    if quantity and quantity[0]:
+                                        product['quantity_value'] = quantity[0]
+                                        product['quantity_unit'] = quantity[1]
+
                                     products_with_nutrition.append({
                                         'product': product,
                                         'nutrition': nutrition
                                     })
+
                                 time.sleep(random.uniform(0.5, 1))
 
-                            all_products.extend(page_products)
-                            self.status_callback(f"Processed page {page}/{max_pages} with {len(page_products)} products")
+                            all_products.extend(products)
+                            self.status_callback(f"Processed page {page}/{max_pages} with {len(products)} products")
+
+                            # Add delay between pages
+                            if page < max_pages:
+                                time.sleep(random.uniform(1, 2))
 
                         except Exception as e:
                             logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
