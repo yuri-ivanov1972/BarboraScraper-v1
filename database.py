@@ -6,90 +6,116 @@ from decimal import Decimal
 from dataclasses import asdict
 from scraper import NutritionalInfo
 from typing import Optional, Dict
+from psycopg2 import pool
+import time
 
 class Database:
     def __init__(self):
         self.conn = None
-        self.connect()
+        self.pool = None
+        self.max_retries = 3
+        self.retry_delay = 1  # seconds
+        self.setup_connection_pool()
         self.create_tables()
 
-    def connect(self):
-        """Establish database connection using environment variables"""
+    def setup_connection_pool(self):
+        """Setup a connection pool"""
         try:
-            self.conn = psycopg2.connect(
+            self.pool = pool.SimpleConnectionPool(
+                1, 5,  # min and max connections
                 host=os.getenv('PGHOST'),
                 database=os.getenv('PGDATABASE'),
                 user=os.getenv('PGUSER'),
                 password=os.getenv('PGPASSWORD'),
                 port=os.getenv('PGPORT')
             )
-            self.conn.autocommit = True
+            logging.info("Database connection pool created successfully")
         except Exception as e:
-            logging.error(f"Database connection error: {str(e)}")
+            logging.error(f"Error creating connection pool: {str(e)}")
             raise
+
+    def get_connection(self):
+        """Get a connection from the pool with retry logic"""
+        for attempt in range(self.max_retries):
+            try:
+                if self.pool:
+                    conn = self.pool.getconn()
+                    if conn:
+                        conn.autocommit = True
+                        return conn
+                raise Exception("Connection pool is not initialized")
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    logging.warning(f"Connection attempt {attempt + 1} failed: {str(e)}")
+                    time.sleep(self.retry_delay)
+                else:
+                    logging.error(f"All connection attempts failed: {str(e)}")
+                    raise
+
+    def return_connection(self, conn):
+        """Return a connection to the pool"""
+        if self.pool and conn:
+            self.pool.putconn(conn)
 
     def create_tables(self):
         """Create the required tables if they don't exist"""
-        try:             
-            if self.conn:  # Check if the connection is established
-                with self.conn.cursor() as cur:
-                    # Create table if it doesn't exist
-                    cur.execute("""
-                        CREATE TABLE IF NOT EXISTS products (
-                            id SERIAL PRIMARY KEY,
-                            name VARCHAR(255) NOT NULL,
-                            price DECIMAL(10, 2) NOT NULL,
-                            price_per_unit VARCHAR(50),
-                            product_url TEXT,
-                            image_url TEXT,
-                            sku VARCHAR(50) UNIQUE,
-                            category TEXT,
-                            quantity_value DECIMAL(10,2),
-                            quantity_unit VARCHAR(50),
-                            country_code VARCHAR(2),
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """)
-                    cur.execute("""
-                        CREATE TABLE IF NOT EXISTS product_nutrition (
-                            id SERIAL PRIMARY KEY,
-                            sku VARCHAR(50) UNIQUE REFERENCES products(sku),
-                            ingredients TEXT,
-                            energy_kj DECIMAL(10,2),
-                            energy_kcal DECIMAL(10,2),
-                            fat DECIMAL(10,2),
-                            saturated_fat DECIMAL(10,2),
-                            carbohydrates DECIMAL(10,2),
-                            sugars DECIMAL(10,2),
-                            protein DECIMAL(10,2),
-                            salt DECIMAL(10,2),
-                            needs_review BOOLEAN DEFAULT FALSE,
-                            review_notes TEXT,
-                            serving_size_unit VARCHAR(50),
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """)
-
-            else:
-                logging.error("Database connection is not established.")
-                raise Exception("Database connection error")        
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS products (
+                        id SERIAL PRIMARY KEY,
+                        name VARCHAR(255) NOT NULL,
+                        price DECIMAL(10, 2) NOT NULL,
+                        price_per_unit VARCHAR(50),
+                        product_url TEXT,
+                        image_url TEXT,
+                        sku VARCHAR(50) UNIQUE,
+                        category TEXT,
+                        quantity_value DECIMAL(10,2),
+                        quantity_unit VARCHAR(50),
+                        country_code VARCHAR(2),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS product_nutrition (
+                        id SERIAL PRIMARY KEY,
+                        sku VARCHAR(50) UNIQUE REFERENCES products(sku),
+                        ingredients TEXT,
+                        energy_kj DECIMAL(10,2),
+                        energy_kcal DECIMAL(10,2),
+                        fat DECIMAL(10,2),
+                        saturated_fat DECIMAL(10,2),
+                        carbohydrates DECIMAL(10,2),
+                        sugars DECIMAL(10,2),
+                        protein DECIMAL(10,2),
+                        salt DECIMAL(10,2),
+                        needs_review BOOLEAN DEFAULT FALSE,
+                        review_notes TEXT,
+                        serving_size_unit VARCHAR(50),
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
         except Exception as e:
             logging.error(f"Table creation error: {str(e)}")
             raise
+        finally:
+            if conn:
+                self.return_connection(conn)
 
     def save_products(self, products):
         """Save product data to database, updating existing records if needed"""
+        conn = None
         try:
-            if not self.conn:
-                raise Exception("Database connection is not established.")
-
+            conn = self.get_connection()
             new_products = 0
             updated_products = 0
 
-            with self.conn.cursor() as cur:
+            with conn.cursor() as cur:
                 for product in products:
-                    # Check if product exists
                     cur.execute("""
                         SELECT id, name, price, price_per_unit, product_url, image_url, category 
                         FROM products 
@@ -99,7 +125,6 @@ class Database:
                     existing_product = cur.fetchone()
 
                     if existing_product:
-                        # Compare values to see if update is needed
                         current_values = {
                             'name': product['name'],
                             'price': Decimal(str(product['price'])),
@@ -119,7 +144,6 @@ class Database:
                         }
 
                         if current_values != db_values:
-                            # Update existing product if data has changed
                             cur.execute("""
                                 UPDATE products 
                                 SET name = %s, 
@@ -141,7 +165,6 @@ class Database:
                             ))
                             updated_products += 1
                     else:
-                        # Insert new product
                         cur.execute("""
                             INSERT INTO products 
                             (name, price, price_per_unit, product_url, image_url, sku, category)
@@ -162,127 +185,31 @@ class Database:
         except Exception as e:
             logging.error(f"Data insertion error: {str(e)}")
             raise
-
-    def get_products(self):
-        """Retrieve all products from database"""
-        try:
-            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT * FROM products ORDER BY updated_at DESC, name")
-                return cur.fetchall()
-        except Exception as e:
-            logging.error(f"Data retrieval error: {str(e)}")
-            raise
-
-    def get_last_update_time(self):
-        """Get the most recent updated_at timestamp"""
-        try:
-            with self.conn.cursor() as cur:
-                cur.execute("SELECT MAX(updated_at) FROM products")
-                result = cur.fetchone()
-                return result[0] if result and result[0] else None
-        except Exception as e:
-            logging.error(f"Error getting last update time: {str(e)}")
-            return None
-
-    def save_product_nutrition(self, sku: str, nutrition: NutritionalInfo) -> None:
-        """Save or update nutritional information for a product"""
-        try:
-            if not self.conn:
-                raise Exception("Database connection is not established")
-
-            with self.conn.cursor() as cur:
-                # Check if nutrition info exists
-                cur.execute("""
-                    SELECT id FROM product_nutrition WHERE sku = %s
-                """, (sku,))
-
-                exists = cur.fetchone()
-
-                if exists:
-                    # Update existing record
-                    cur.execute("""
-                        UPDATE product_nutrition
-                        SET ingredients = %s,
-                            energy_kj = %s,
-                            energy_kcal = %s,
-                            fat = %s,
-                            saturated_fat = %s,
-                            carbohydrates = %s,
-                            sugars = %s,
-                            protein = %s,
-                            salt = %s,
-                            needs_review = %s,
-                            review_notes = %s,
-                            serving_size_unit = %s,
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE sku = %s
-                    """, (
-                        nutrition.ingredients,
-                        nutrition.energy_kj,
-                        nutrition.energy_kcal,
-                        nutrition.fat,
-                        nutrition.saturated_fat,
-                        nutrition.carbohydrates,
-                        nutrition.sugars,
-                        nutrition.protein,
-                        nutrition.salt,
-                        nutrition.needs_review,
-                        nutrition.review_notes,
-                        nutrition.serving_size_unit,
-                        sku
-                    ))
-                else:
-                    # Insert new record
-                    cur.execute("""
-                        INSERT INTO product_nutrition
-                        (sku, ingredients, energy_kj, energy_kcal, fat, saturated_fat,
-                        carbohydrates, sugars, protein, salt, needs_review, review_notes,
-                        serving_size_unit)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """, (
-                        sku,
-                        nutrition.ingredients,
-                        nutrition.energy_kj,
-                        nutrition.energy_kcal,
-                        nutrition.fat,
-                        nutrition.saturated_fat,
-                        nutrition.carbohydrates,
-                        nutrition.sugars,
-                        nutrition.protein,
-                        nutrition.salt,
-                        nutrition.needs_review,
-                        nutrition.review_notes,
-                        nutrition.serving_size_unit
-                    ))
-
-        except Exception as e:
-            logging.error(f"Error saving nutrition data: {str(e)}")
-            raise
+        finally:
+            if conn:
+                self.return_connection(conn)
 
     def save_products_with_nutrition(self, products_with_nutrition):
-        """Save both product and nutrition data"""
+        """Save both product and nutrition data with retry logic"""
+        conn = None
         try:
-            if not self.conn:
-                raise Exception("Database connection is not established")
-
+            conn = self.get_connection()
             new_products = 0
             updated_products = 0
             new_nutrition = 0
             updated_nutrition = 0
             needs_review = 0
 
-            with self.conn.cursor() as cur:
+            with conn.cursor() as cur:
                 for item in products_with_nutrition:
                     product = item['product']
                     nutrition = item['nutrition']
 
-                    # Extra logging for problematic SKUs
                     is_problematic = product.get('sku') in ['2000324', '2000330', '2000511']
                     if is_problematic:
                         logging.info(f"\n=== Processing problematic SKU: {product.get('sku')} ===")
                         logging.info(f"Input product data: {product}")
 
-                    # Save product first
                     cur.execute("""
                         SELECT name, price, price_per_unit, product_url, image_url, 
                                category, quantity_value, quantity_unit, country_code 
@@ -316,11 +243,10 @@ class Database:
                             'country_code': product.get('country_code')
                         }
 
-                        # Force update if quantity or country fields are NULL in database
                         should_update = (current_values != db_values or 
-                                          db_values['quantity_value'] is None or 
-                                          db_values['quantity_unit'] is None or 
-                                          db_values['country_code'] is None)
+                                      db_values['quantity_value'] is None or 
+                                      db_values['quantity_unit'] is None or 
+                                      db_values['country_code'] is None)
 
                         if is_problematic:
                             logging.info(f"Database values: {db_values}")
@@ -328,7 +254,6 @@ class Database:
                             logging.info(f"Should update: {should_update}")
 
                         if should_update:
-                            # Update existing product if data has changed
                             cur.execute("""
                                 UPDATE products 
                                 SET name = %s, 
@@ -358,7 +283,6 @@ class Database:
                                 logging.info(f"Updated problematic SKU: {product.get('sku')}")
                             updated_products += 1
                     else:
-                        # Insert new product
                         cur.execute("""
                             INSERT INTO products 
                             (name, price, price_per_unit, product_url, image_url, sku, category,
@@ -378,19 +302,68 @@ class Database:
                         ))
                         new_products += 1
 
-                    # Save nutrition data
+                    if nutrition.needs_review:
+                        needs_review += 1
+
                     cur.execute("""
                         SELECT id FROM product_nutrition WHERE sku = %s
                     """, (product.get('sku'),))
 
-                    if nutrition.needs_review:
-                        needs_review += 1
-
                     if cur.fetchone():
-                        self.save_product_nutrition(product.get('sku'), nutrition)
+                        cur.execute("""
+                            UPDATE product_nutrition
+                            SET ingredients = %s,
+                                energy_kj = %s,
+                                energy_kcal = %s,
+                                fat = %s,
+                                saturated_fat = %s,
+                                carbohydrates = %s,
+                                sugars = %s,
+                                protein = %s,
+                                salt = %s,
+                                needs_review = %s,
+                                review_notes = %s,
+                                serving_size_unit = %s,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE sku = %s
+                        """, (
+                            nutrition.ingredients,
+                            nutrition.energy_kj,
+                            nutrition.energy_kcal,
+                            nutrition.fat,
+                            nutrition.saturated_fat,
+                            nutrition.carbohydrates,
+                            nutrition.sugars,
+                            nutrition.protein,
+                            nutrition.salt,
+                            nutrition.needs_review,
+                            nutrition.review_notes,
+                            nutrition.serving_size_unit,
+                            product.get('sku')
+                        ))
                         updated_nutrition += 1
                     else:
-                        self.save_product_nutrition(product.get('sku'), nutrition)
+                        cur.execute("""
+                            INSERT INTO product_nutrition
+                            (sku, ingredients, energy_kj, energy_kcal, fat, saturated_fat,
+                            carbohydrates, sugars, protein, salt, needs_review, review_notes,
+                            serving_size_unit)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """, (
+                            product.get('sku'),
+                            nutrition.ingredients,
+                            nutrition.energy_kj,
+                            nutrition.energy_kcal,
+                            nutrition.fat,
+                            nutrition.saturated_fat,
+                            nutrition.carbohydrates,
+                            nutrition.sugars,
+                            nutrition.protein,
+                            nutrition.salt,
+                            nutrition.needs_review,
+                            nutrition.review_notes,
+                            nutrition.serving_size_unit
+                        ))
                         new_nutrition += 1
 
             return {
@@ -404,11 +377,117 @@ class Database:
         except Exception as e:
             logging.error(f"Error saving products with nutrition: {str(e)}")
             raise
+        finally:
+            if conn:
+                self.return_connection(conn)
+
+    def get_products(self):
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM products ORDER BY updated_at DESC, name")
+                return cur.fetchall()
+        except Exception as e:
+            logging.error(f"Data retrieval error: {str(e)}")
+            raise
+        finally:
+            if conn:
+                self.return_connection(conn)
+
+    def get_last_update_time(self):
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("SELECT MAX(updated_at) FROM products")
+                result = cur.fetchone()
+                return result[0] if result and result[0] else None
+        except Exception as e:
+            logging.error(f"Error getting last update time: {str(e)}")
+            return None
+        finally:
+            if conn:
+                self.return_connection(conn)
+
+    def save_product_nutrition(self, sku: str, nutrition: NutritionalInfo) -> None:
+        conn = None
+        try:
+            conn = self.get_connection()
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id FROM product_nutrition WHERE sku = %s
+                """, (sku,))
+
+                exists = cur.fetchone()
+
+                if exists:
+                    cur.execute("""
+                        UPDATE product_nutrition
+                        SET ingredients = %s,
+                            energy_kj = %s,
+                            energy_kcal = %s,
+                            fat = %s,
+                            saturated_fat = %s,
+                            carbohydrates = %s,
+                            sugars = %s,
+                            protein = %s,
+                            salt = %s,
+                            needs_review = %s,
+                            review_notes = %s,
+                            serving_size_unit = %s,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE sku = %s
+                    """, (
+                        nutrition.ingredients,
+                        nutrition.energy_kj,
+                        nutrition.energy_kcal,
+                        nutrition.fat,
+                        nutrition.saturated_fat,
+                        nutrition.carbohydrates,
+                        nutrition.sugars,
+                        nutrition.protein,
+                        nutrition.salt,
+                        nutrition.needs_review,
+                        nutrition.review_notes,
+                        nutrition.serving_size_unit,
+                        sku
+                    ))
+                else:
+                    cur.execute("""
+                        INSERT INTO product_nutrition
+                        (sku, ingredients, energy_kj, energy_kcal, fat, saturated_fat,
+                        carbohydrates, sugars, protein, salt, needs_review, review_notes,
+                        serving_size_unit)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        sku,
+                        nutrition.ingredients,
+                        nutrition.energy_kj,
+                        nutrition.energy_kcal,
+                        nutrition.fat,
+                        nutrition.saturated_fat,
+                        nutrition.carbohydrates,
+                        nutrition.sugars,
+                        nutrition.protein,
+                        nutrition.salt,
+                        nutrition.needs_review,
+                        nutrition.review_notes,
+                        nutrition.serving_size_unit
+                    ))
+
+        except Exception as e:
+            logging.error(f"Error saving nutrition data: {str(e)}")
+            raise
+        finally:
+            if conn:
+                self.return_connection(conn)
 
     def get_product_nutrition(self, sku: str) -> Optional[Dict]:
-        """Retrieve nutritional information for a specific product"""
+        conn = None
         try:
-            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT n.*, p.name as product_name, p.category
                     FROM product_nutrition n
@@ -419,11 +498,15 @@ class Database:
         except Exception as e:
             logging.error(f"Error retrieving nutrition data: {str(e)}")
             raise
+        finally:
+            if conn:
+                self.return_connection(conn)
 
     def get_products_needing_review(self):
-        """Retrieve all products that need nutrition data review"""
+        conn = None
         try:
-            with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
+            conn = self.get_connection()
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT p.name, p.sku, p.category, n.review_notes, n.serving_size_unit
                     FROM products p
@@ -435,8 +518,17 @@ class Database:
         except Exception as e:
             logging.error(f"Error retrieving products needing review: {str(e)}")
             raise
+        finally:
+            if conn:
+                self.return_connection(conn)
+
+
+    def close(self):
+        """Close all database connections"""
+        if self.pool:
+            self.pool.closeall()
+            logging.info("Closed all database connections")
 
     def __del__(self):
-        """Close database connection"""
-        if self.conn:
-            self.conn.close()
+        """Destructor to ensure connections are closed"""
+        self.close()

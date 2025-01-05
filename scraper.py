@@ -85,7 +85,7 @@ class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-17"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-16"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -151,13 +151,12 @@ class RimiScraper:
 
             # Add pagination parameters
             params['pageSize'] = str(self.page_size)
-            params['currentPage'] = str(page)  # Use currentPage and start from 1
+            params['currentPage'] = str(page)  # Use currentPage starting from 1
 
             # Construct the URL preserving the path
             base_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
             final_url = f"{base_url}?{urlencode(params)}"
 
-            logging.info(f"Generated URL for page {page}: {final_url}")
             self.status_callback(f"Generated URL for page {page}: {final_url}")
             return final_url
 
@@ -534,6 +533,7 @@ class RimiScraper:
                     self.status_callback(f"Found {category_products} products in {category_pages} pages")
 
                     # Process all pages
+                    page_products_with_nutrition = []
                     for page in range(1, category_pages + 1):
                         try:
                             self.status_callback(f"Processing page {page}/{category_pages}")
@@ -576,12 +576,31 @@ class RimiScraper:
                                         product['quantity_value'] = quantity[0]
                                         product['quantity_unit'] = quantity[1]
 
-                                    products_with_nutrition.append({
+                                    page_products_with_nutrition.append({
                                         'product': product,
                                         'nutrition': nutrition
                                     })
 
                             all_products.extend(products)
+
+                            # Save products after each page
+                            if page_products_with_nutrition:
+                                try:
+                                    from database import Database
+                                    db = Database()  # This will create a fresh connection
+                                    result = db.save_products_with_nutrition(page_products_with_nutrition)
+                                    self.status_callback(f"Saved {len(page_products_with_nutrition)} products from page {page}")
+                                    self.status_callback(f"New: {result['new_products']}, Updated: {result['updated_products']}, Reviews needed: {result['needs_review']}")
+                                    # Clear page products after successful save
+                                    page_products_with_nutrition = []
+                                except Exception as e:
+                                    logging.error(f"Error saving products from page {page}: {str(e)}")
+                                    self.status_callback(f"❌ Error saving products from page {page}: {str(e)}")
+                                    # Keep products in memory to retry later
+                                    products_with_nutrition.extend(page_products_with_nutrition)
+                                finally:
+                                    if 'db' in locals():
+                                        db.close()
 
                         except Exception as e:
                             logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
@@ -595,6 +614,20 @@ class RimiScraper:
 
             if not all_products:
                 raise ScraperError("No products found in any category")
+
+            # Try to save any remaining products that failed earlier
+            if products_with_nutrition:
+                try:
+                    db = Database()
+                    result = db.save_products_with_nutrition(products_with_nutrition)
+                    self.status_callback(f"Saved remaining {len(products_with_nutrition)} products")
+                    self.status_callback(f"New: {result['new_products']}, Updated: {result['updated_products']}, Reviews needed: {result['needs_review']}")
+                except Exception as e:
+                    logging.error(f"Error saving remaining products: {str(e)}")
+                    self.status_callback(f"❌ Error saving remaining products: {str(e)}")
+                finally:
+                    if 'db' in locals():
+                        db.close()
 
             needs_review_count = sum(1 for p in products_with_nutrition if p['nutrition'].needs_review)
             self.status_callback(f"Successfully scraped {len(all_products)} products, {needs_review_count} need review")
@@ -670,7 +703,7 @@ class RimiScraper:
                                                 except (InvalidOperation, ValueError) as e:
                                                     self.status_callback(f"Error converting price '{price}': {str(e)}")
                                         elif isinstance(offers, list) and offers:
-                                            # Handle case where offers is a list
+                                            #                                            # Handle case where offers is a list
                                             first_offer = offers[0]
                                             if isinstance(first_offer, dict):
                                                 price = first_offer.get('price')
