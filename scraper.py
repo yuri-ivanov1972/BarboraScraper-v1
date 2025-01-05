@@ -569,10 +569,12 @@ class RimiScraper:
             # Get total pages
             total_pages = self.get_total_pages(category_url)
             if not total_pages:
-                raise ScraperError("Could not determine total pages")
+                self.status_callback("Warning: Could not determine total pages")
+                return []
 
             # Create a new scraping session
             session_id = self.db.create_scraping_session(category_url, total_pages)
+            self.status_callback(f"Created new scraping session: {session_id}")
 
             # Get last successful page and already scraped products
             last_page = self.db.get_last_successful_page(category_url)
@@ -586,7 +588,12 @@ class RimiScraper:
             for page in range(start_page, total_pages + 1):
                 try:
                     url = self.generate_page_url(category_url, page)
+                    self.status_callback(f"Processing page {page}/{total_pages}")
                     product_urls = self.get_product_urls(url)
+
+                    if not product_urls:
+                        self.status_callback(f"Warning: No product URLs found on page {page}")
+                        continue
 
                     page_products = []
                     for product_url in product_urls:
@@ -598,29 +605,39 @@ class RimiScraper:
                                     self.status_callback(f"Skipping already scraped product: {product_data[0]['product'].get('sku')}")
                                     continue
                                 page_products.extend(product_data)
+                                self.status_callback(f"Successfully parsed product: {product_data[0]['product'].get('name', 'Unknown')}")
                         except Exception as e:
                             self.status_callback(f"Error scraping product {product_url}: {str(e)}")
                             continue
 
                     if page_products:
-                        # Save products for this page
-                        result = self.db.save_products_with_nutrition(page_products)
-                        products_with_nutrition.extend(page_products)
-                        total_products_scraped += len(page_products)
+                        try:
+                            # Save products for this page
+                            self.status_callback(f"Saving {len(page_products)} products to database...")
+                            result = self.db.save_products_with_nutrition(page_products)
+                            if result:
+                                products_with_nutrition.extend(page_products)
+                                total_products_scraped += len(page_products)
+                                self.status_callback(f"Successfully saved {len(page_products)} products to database")
+                            else:
+                                self.status_callback("Warning: Failed to save products to database")
 
-                        # Update session progress after each page
-                        metadata = {
-                            'page_products': len(page_products),
-                            'total_products': total_products_scraped,
-                            'skipped_products': len(product_urls) - len(page_products)
-                        }
-                        self.db.update_scraping_progress(
-                            session_id=session_id,
-                            page=page,
-                            products_count=total_products_scraped,
-                            status='in_progress',
-                            metadata=metadata
-                        )
+                            # Update session progress after each page
+                            metadata = {
+                                'page_products': len(page_products),
+                                'total_products': total_products_scraped,
+                                'skipped_products': len(product_urls) - len(page_products)
+                            }
+                            self.db.update_scraping_progress(
+                                session_id=session_id,
+                                page=page,
+                                products_count=total_products_scraped,
+                                status='in_progress',
+                                metadata=metadata
+                            )
+                        except Exception as e:
+                            self.status_callback(f"Error saving products to database: {str(e)}")
+                            continue
 
                         self.status_callback(f"Page {page}/{total_pages} completed. Products on this page: {len(page_products)}")
                         self.status_callback(f"Total products scraped: {total_products_scraped}")
@@ -685,8 +702,7 @@ class RimiScraper:
                     category_products = self.scrape_category(category_url, self.status_callback)
                     if category_products:
                         all_products_with_nutrition.extend(category_products)
-                        self.status_callback(f"Successfully processed category with {len(category_products)} products")
-                    else:
+                        self.status_callback(f"Successfully processed category with {len(category_products)} products")                    else:
                         self.status_callback("Warning: No products found in category")
                 except Exception as e:
                     error_msg = f"Error scraping category {category_url}: {str(e)}"
