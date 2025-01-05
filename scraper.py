@@ -85,7 +85,7 @@ class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-17"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-16"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
