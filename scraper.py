@@ -89,7 +89,7 @@ class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-16"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-7"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -106,18 +106,41 @@ class RimiScraper:
         self.page_size = 20  # Set page size to 20 items
 
     def _create_session(self) -> requests.Session:
-        """Create a session with retry strategy"""
+        """Create a session with retry strategy and keepalive"""
         session = requests.Session()
         retry_strategy = Retry(
-            total=3,
-            backoff_factor=1,
-            status_forcelist=[429, 500, 502, 503, 504]
+            total=5,  # Increased from 3 to 5
+            backoff_factor=2,  # Increased from 1 to 2 for exponential backoff
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["HEAD", "GET", "OPTIONS", "POST"],  # Allow retries for POST
+            respect_retry_after_header=True
         )
-        adapter = HTTPAdapter(max_retries=retry_strategy)
+        adapter = HTTPAdapter(
+            max_retries=retry_strategy,
+            pool_connections=10,  # Increased connection pool
+            pool_maxsize=10,
+            pool_block=False
+        )
         session.mount("https://", adapter)
         session.mount("http://", adapter)
         session.headers.update(self.headers)
+
+        # Add keepalive settings
+        session.headers.update({
+            'Connection': 'keep-alive',
+            'Keep-Alive': 'timeout=60, max=1000'
+        })
         return session
+
+    def _ensure_session(self):
+        """Ensure session is active, recreate if needed"""
+        try:
+            # Test the session with a simple request
+            response = self.session.get(self.base_url, timeout=10)
+            response.raise_for_status()
+        except (requests.exceptions.RequestException, Exception) as e:
+            logging.warning(f"Session test failed: {str(e)}. Recreating session...")
+            self.session = self._create_session()
 
     def get_max_page_number(self, html_content: str) -> int:
         """Extract maximum page number from pagination"""
@@ -514,7 +537,8 @@ class RimiScraper:
             self.status_callback("Initializing scraper session...")
             all_products = []
             products_with_nutrition = []
-            category_count = 0 # Initialize category_count
+            category_count = 0
+            last_successful_page = 0  # Track last successful page
 
             # Calculate total products across all categories
             total_products = 0
@@ -540,77 +564,91 @@ class RimiScraper:
                     # Process all pages
                     page_products_with_nutrition = []
                     for page in range(1, category_pages + 1):
-                        try:
-                            self.status_callback(f"Processing page {page}/{category_pages}")
+                        max_retries = 3
+                        retry_count = 0
 
-                            # Get the URL for the current page
-                            current_url = self.build_page_url(category_url, page)
-                            self.status_callback(f"Fetching URL: {current_url}")
+                        while retry_count < max_retries:
+                            try:
+                                self._ensure_session()  # Verify session before each page
+                                self.status_callback(f"Processing page {page}/{category_pages}")
 
-                            # Add delay between pages
-                            if page > 1:
-                                time.sleep(random.uniform(2, 3))
+                                # Get the URL for the current page
+                                current_url = self.build_page_url(category_url, page)
+                                self.status_callback(f"Fetching URL: {current_url}")
 
-                            response = self.session.get(current_url)
-                            if response.status_code != 200:
-                                self.status_callback(f"Failed to access page {page}. Status code: {response.status_code}")
-                                continue
+                                # Add delay between pages
+                                if page > 1:
+                                    time.sleep(random.uniform(2, 3))
 
-                            # Extract products from the page
-                            products = self.extract_product_info(response.text, current_url)
+                                response = self.session.get(current_url, timeout=30)  # Added timeout
+                                if response.status_code != 200:
+                                    raise requests.exceptions.RequestException(f"Failed with status {response.status_code}")
 
-                            if not products:
-                                self.status_callback(f"No products found on page {page}, retrying...")
-                                time.sleep(random.uniform(3, 4))
-                                response = self.session.get(current_url)
+                                # Extract products from the page
                                 products = self.extract_product_info(response.text, current_url)
 
-                            self.status_callback(f"Found {len(products)} products on page {page}")
+                                if not products:
+                                    self.status_callback(f"No products found on page {page}, retrying...")
+                                    time.sleep(random.uniform(3, 4))
+                                    self._ensure_session()  # Verify session before retry
+                                    response = self.session.get(current_url, timeout=30)
+                                    products = self.extract_product_info(response.text, current_url)
 
-                            # Process each product
-                            for product in products:
-                                if product.get('product_url'):
-                                    self.status_callback(f"Processing product: {product['name']} ({product.get('sku', 'No SKU')})")
-                                    time.sleep(random.uniform(1, 2))
+                                self.status_callback(f"Found {len(products)} products on page {page}")
 
-                                    nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
+                                # Process each product
+                                for product in products:
+                                    if product.get('product_url'):
+                                        self.status_callback(f"Processing product: {product['name']} ({product.get('sku', 'No SKU')})")
+                                        time.sleep(random.uniform(1, 2))
 
-                                    if country_code:
-                                        product['country_code'] = country_code
-                                    if quantity and quantity[0]:
-                                        product['quantity_value'] = quantity[0]
-                                        product['quantity_unit'] = quantity[1]
+                                        nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
 
-                                    page_products_with_nutrition.append({
-                                        'product': product,
-                                        'nutrition': nutrition
-                                    })
+                                        if country_code:
+                                            product['country_code'] = country_code
+                                        if quantity and quantity[0]:
+                                            product['quantity_value'] = quantity[0]
+                                            product['quantity_unit'] = quantity[1]
 
-                            all_products.extend(products)
+                                        page_products_with_nutrition.append({
+                                            'product': product,
+                                            'nutrition': nutrition
+                                        })
 
-                            # Save products after each page
-                            if page_products_with_nutrition:
-                                try:
-                                    from database import Database
-                                    db = Database()  # This will create a fresh connection
-                                    result = db.save_products_with_nutrition(page_products_with_nutrition)
-                                    self.status_callback(f"Saved {len(page_products_with_nutrition)} products from page {page}")
-                                    self.status_callback(f"New: {result['new_products']}, Updated: {result['updated_products']}, Reviews needed: {result['needs_review']}")
-                                    # Clear page products after successful save
-                                    page_products_with_nutrition = []
-                                except Exception as e:
-                                    logging.error(f"Error saving products from page {page}: {str(e)}")
-                                    self.status_callback(f"❌ Error saving products from page {page}: {str(e)}")
-                                    # Keep products in memory to retry later
-                                    products_with_nutrition.extend(page_products_with_nutrition)
-                                finally:
-                                    if 'db' in locals():
-                                        db.close()
+                                all_products.extend(products)
 
-                        except Exception as e:
-                            logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
-                            self.status_callback(f"❌ Error processing page {page}: {str(e)}")
-                            continue
+                                # Save products after each page
+                                if page_products_with_nutrition:
+                                    try:
+                                        from database import Database
+                                        db = Database()
+                                        result = db.save_products_with_nutrition(page_products_with_nutrition)
+                                        self.status_callback(f"Saved {len(page_products_with_nutrition)} products from page {page}")
+                                        self.status_callback(f"New: {result['new_products']}, Updated: {result['updated_products']}, Reviews needed: {result['needs_review']}")
+                                        last_successful_page = page  # Update last successful page
+                                        page_products_with_nutrition = []  # Clear after successful save
+                                        break  # Exit retry loop on success
+                                    except Exception as e:
+                                        logging.error(f"Error saving products from page {page}: {str(e)}")
+                                        self.status_callback(f"❌ Error saving products from page {page}: {str(e)}")
+                                        if retry_count < max_retries - 1:
+                                            retry_count += 1
+                                            time.sleep(5 * retry_count)  # Exponential backoff
+                                            continue
+                                        products_with_nutrition.extend(page_products_with_nutrition)
+                                    finally:
+                                        if 'db' in locals():
+                                            db.close()
+
+                            except Exception as e:
+                                logging.error(f"Error processing page {page}: {str(e)}")
+                                if retry_count < max_retries - 1:
+                                    retry_count += 1
+                                    self.status_callback(f"Retry {retry_count}/{max_retries} for page {page}")
+                                    time.sleep(5 * retry_count)  # Exponential backoff
+                                    continue
+                                self.status_callback(f"❌ Failed to process page {page} after {max_retries} retries: {str(e)}")
+                                break
 
                     category_count += len(all_products)
 
@@ -625,10 +663,14 @@ class RimiScraper:
 
             needs_review_count = sum(1 for p in products_with_nutrition if p['nutrition'].needs_review)
             self.status_callback(f"Successfully scraped {category_count} products, {needs_review_count} need review")
+            if last_successful_page > 0:
+                self.status_callback(f"Last successfully processed page: {last_successful_page}")
             return products_with_nutrition
 
         except Exception as e:
             logging.error(f"Scraping error: {str(e)}")
+            if last_successful_page > 0:
+                self.status_callback(f"Scraping interrupted at page {last_successful_page}")
             raise ScraperError(str(e))
 
     def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
@@ -661,7 +703,7 @@ class RimiScraper:
                         'name': '',
                         'price': '0',
                         'sku': '',
-                        'category': 'SH-gala-zivis-un-gatava-kulinarija',  # Default category
+                        'category': 'SH-gala-zivisun-gatava-kulinarija',  # Default category
                         'product_url': url,
                         'image_url': None,
                     }
