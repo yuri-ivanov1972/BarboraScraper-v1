@@ -668,6 +668,16 @@ class RimiScraper:
             self.status_callback("Initializing scraper session...")
             all_products_with_nutrition = []
 
+            # Calculate total products and pages first
+            total_products = 0
+            total_pages = 0
+            for category_url in self.category_urls:
+                products_count, pages_count = self.get_total_products(category_url)
+                total_products += products_count
+                total_pages += pages_count
+
+            self.status_callback(f"Total products to process: {total_products} across {total_pages} pages")
+
             # Process each category
             for category_url in self.category_urls:
                 try:
@@ -675,23 +685,31 @@ class RimiScraper:
                     category_products = self.scrape_category(category_url, self.status_callback)
                     if category_products:
                         all_products_with_nutrition.extend(category_products)
+                        self.status_callback(f"Successfully processed category with {len(category_products)} products")
+                    else:
+                        self.status_callback("Warning: No products found in category")
                 except Exception as e:
-                    logging.error(f"Error scraping category {category_url}: {str(e)}")
-                    self.status_callback(f"Error scraping category {category_url}: {str(e)}")
+                    error_msg = f"Error scraping category {category_url}: {str(e)}"
+                    logging.error(error_msg)
+                    self.status_callback(error_msg)
                     continue
 
             if not all_products_with_nutrition:
-                raise ScraperError("No products found in any category")
+                error_msg = "No products found in any category"
+                self.status_callback(error_msg)
+                raise ScraperError(error_msg)
 
             needs_review_count = sum(1 for p in all_products_with_nutrition if p['nutrition'].needs_review)
-            self.status_callback(f"Successfully scraped {len(all_products_with_nutrition)} products, {needs_review_count} need review")
+            success_msg = f"Successfully scraped {len(all_products_with_nutrition)} products, {needs_review_count} need review"
+            self.status_callback(success_msg)
 
             return all_products_with_nutrition
 
         except Exception as e:
-            logging.error(f"Scraping error: {str(e)}")
-            self.status_callback(f"Scraping error: {str(e)}")
-            raise ScraperError(str(e))
+            error_msg = f"Scraping error: {str(e)}"
+            logging.error(error_msg)
+            self.status_callback(error_msg)
+            raise ScraperError(error_msg)
 
     def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
         """Scrape specific product URLs"""

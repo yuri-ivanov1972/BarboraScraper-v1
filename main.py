@@ -201,6 +201,9 @@ def main():
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     st.session_state.current_scraping_logs.append(f"[{timestamp}] {msg}")
 
+                    # Always update the status text with the latest message
+                    status_text.text(msg)
+
                     if "Total products to process:" in msg:
                         match = re.search(r"Total products to process: (\d+) across (\d+) pages", msg)
                         if match:
@@ -212,13 +215,24 @@ def main():
                         match = re.search(r"Processing page (\d+)/(\d+)", msg)
                         if match:
                             st.session_state.current_page = int(match.group(1))
-                            progress_text.text(f"Processing page {st.session_state.current_page}/{st.session_state.total_pages}")
+                            current_page = st.session_state.current_page
+                            total_pages = st.session_state.total_pages
+                            progress_text.text(f"Processing page {current_page}/{total_pages}")
+                            if st.session_state.total_pages > 0:
+                                progress = current_page / total_pages
+                                progress_bar.progress(min(progress, 1.0))
                     elif "Successfully parsed product" in msg:
                         st.session_state.processed_products += 1
                         if st.session_state.total_products > 0:
                             progress = st.session_state.processed_products / st.session_state.total_products
                             progress_bar.progress(min(progress, 1.0))
                             status_text.text(f"Processed {st.session_state.processed_products}/{st.session_state.total_products} products")
+                    elif "Error" in msg:
+                        status_text.error(msg)
+                    elif "Warning" in msg:
+                        status_text.warning(msg)
+                    elif "Success" in msg:
+                        status_text.success(msg)
 
                 with st.spinner("Scraping product data..."):
                     try:
