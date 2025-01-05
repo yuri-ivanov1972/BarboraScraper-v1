@@ -209,15 +209,26 @@ class RimiScraper:
             logger.debug(f"Raw HTML content length: {len(html_content)}")
             logger.debug(f"Parsing URL: {url}")
 
-            # Try to find product price in multiple ways
-            products = soup.find_all(attrs={'data-gtm-eec-product': True})
-            logger.debug(f"Found {len(products)} products with GTM attribute")
+            # Try multiple selectors for products
+            products = []
 
-            if not products:
-                self.status_callback("No products found with GTM attribute, trying alternative selectors...")
-                logger.debug("Trying alternative product selectors")
-                products = soup.select('.product-grid-item, .card--product')
-                logger.debug(f"Found {len(products)} products with alternative selectors")
+            # Try GTM products first
+            gtm_products = soup.find_all(attrs={'data-gtm-eec-product': True})
+            if gtm_products:
+                logger.debug(f"Found {len(gtm_products)} products with GTM attribute")
+                products = gtm_products
+            else:
+                # Try card products
+                card_products = soup.select('.card.card--product')
+                if card_products:
+                    logger.debug(f"Found {len(card_products)} products with card--product class")
+                    products = card_products
+                else:
+                    # Try grid items
+                    grid_products = soup.select('.product-grid__item')
+                    if grid_products:
+                        logger.debug(f"Found {len(grid_products)} products with product-grid__item class")
+                        products = grid_products
 
             if not products:
                 self.status_callback(f"No products found in {url}")
@@ -679,8 +690,7 @@ class RimiScraper:
                                 error_message=str(e),
                                 metadata=metadata
                             )
-                            raise
-
+                                                        raise
                 except Exception as e:
                     error_msg = f"Error processing page {page}: {str(e)}"
                     self.status_callback(error_msg)
