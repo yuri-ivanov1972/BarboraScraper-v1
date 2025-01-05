@@ -82,7 +82,7 @@ class NutritionalInfo:
     serving_size_unit: Optional[str] = None
 
 class RimiScraper:
-    def __init__(self, db, page_size=20):
+    def __init__(self, db, status_callback: Optional[Callable[[str], None]] = None, page_size=20):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
             "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-16"
@@ -106,7 +106,7 @@ class RimiScraper:
         self.session.mount('https://', HTTPAdapter(max_retries=self.retries))
         self.db = db
         self.page_size = page_size
-        self.status_callback = print  # Default status callback
+        self.status_callback = status_callback or print  # Use provided callback or print as default
 
     def _create_session(self) -> requests.Session:
         """Create a session with retry strategy"""
