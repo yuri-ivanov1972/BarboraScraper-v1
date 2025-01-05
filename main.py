@@ -96,7 +96,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-def debug_product_url(url: str) -> list:
+def debug_product_url(url: str, db: Database) -> list:
     """Debug scraping process for a specific URL"""
     debug_logs = []
 
@@ -105,7 +105,7 @@ def debug_product_url(url: str) -> list:
         print(f"Debug: {msg}")  # Print to console for additional debugging
 
     try:
-        scraper = RimiScraper(status_callback=debug_callback)
+        scraper = RimiScraper(db=db, status_callback=debug_callback)
         debug_logs.append(f"Starting debug for URL: {url}")
 
         debug_logs.append("\n=== Starting Nutritional Info Scraping ===")
@@ -222,7 +222,7 @@ def main():
 
                 with st.spinner("Scraping product data..."):
                     try:
-                        scraper = RimiScraper(status_callback=update_progress)
+                        scraper = RimiScraper(db=db, status_callback=update_progress)
                         products_with_nutrition = scraper.scrape_products()
 
                         # Store current run's logs in history with timestamp
@@ -273,7 +273,7 @@ def main():
                             progress_text.text(msg)
                             scraping_logs.append(msg)
 
-                        scraper = RimiScraper(status_callback=log_callback)
+                        scraper = RimiScraper(db=db, status_callback=log_callback)
                         products_with_nutrition = scraper.scrape_specific_products(SPECIFIC_PRODUCTS)
 
                         # Store logs in session state with timestamp
@@ -395,7 +395,7 @@ def main():
         )
 
         if st.button("Start Debug", key="start_debug"):
-            st.session_state.debug_logs = debug_product_url(debug_url)
+            st.session_state.debug_logs = debug_product_url(debug_url, db)
 
         # Always show debug logs if they exist
         if st.session_state.debug_logs:
