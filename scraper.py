@@ -20,6 +20,10 @@ COUNTRY_MAPPING = {
     'Lietuva': 'LT',
     'Polija': 'PL',
     'Vācija': 'DE',
+    'Itālija': 'IT',
+    'Beļģija': 'BE',
+    'Grieķija': 'GR',
+    'Slovākija': 'SK',
     # Add more mappings as needed
 }
 
