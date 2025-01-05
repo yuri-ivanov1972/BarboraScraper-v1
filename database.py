@@ -9,6 +9,7 @@ from scraper import NutritionalInfo
 from typing import Optional, Dict
 import time
 from contextlib import contextmanager
+import json
 
 class Database:
     def __init__(self):
@@ -103,6 +104,21 @@ class Database:
                             needs_review BOOLEAN DEFAULT FALSE,
                             review_notes TEXT,
                             serving_size_unit VARCHAR(50),
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS scraping_sessions (
+                            id SERIAL PRIMARY KEY,
+                            category_url TEXT NOT NULL,
+                            total_pages INT NOT NULL,
+                            status VARCHAR(50) NOT NULL,
+                            products_scraped INT NOT NULL DEFAULT 0,
+                            last_page_scraped INT NOT NULL DEFAULT 0,
+                            start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            end_time TIMESTAMP,
+                            error_message TEXT,
+                            session_metadata JSONB,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         )
                     """)
@@ -465,6 +481,91 @@ class Database:
         except Exception as e:
             logging.error(f"Error retrieving products needing review: {str(e)}")
             raise
+
+    def create_scraping_session(self, category_url: str, total_pages: int) -> int:
+        """Create a new scraping session and return its ID"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO scraping_sessions
+                        (category_url, total_pages, status, products_scraped, last_page_scraped)
+                        VALUES (%s, %s, 'started', 0, 0)
+                        RETURNING id
+                    """, (category_url, total_pages))
+                    session_id = cur.fetchone()[0]
+                    return session_id
+        except Exception as e:
+            logging.error(f"Error creating scraping session: {str(e)}")
+            raise
+
+    def update_scraping_progress(self, session_id: int, page: int, products_count: int, 
+                               status: str = 'in_progress', error_message: str = None,
+                               metadata: dict = None) -> None:
+        """Update the progress of a scraping session"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    end_time = 'CURRENT_TIMESTAMP' if status in ['completed', 'failed'] else 'NULL'
+                    cur.execute(f"""
+                        UPDATE scraping_sessions
+                        SET last_page_scraped = %s,
+                            products_scraped = %s,
+                            status = %s,
+                            error_message = %s,
+                            session_metadata = %s,
+                            end_time = {end_time},
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = %s
+                    """, (page, products_count, status, error_message, 
+                          json.dumps(metadata) if metadata else None, session_id))
+        except Exception as e:
+            logging.error(f"Error updating scraping progress: {str(e)}")
+            raise
+
+    def get_last_successful_page(self, category_url: str) -> int:
+        """Get the last successfully scraped page for a category"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT last_page_scraped
+                        FROM scraping_sessions
+                        WHERE category_url = %s
+                        AND status IN ('completed', 'in_progress')
+                        ORDER BY updated_at DESC
+                        LIMIT 1
+                    """, (category_url,))
+                    result = cur.fetchone()
+                    return result[0] if result else 0
+        except Exception as e:
+            logging.error(f"Error getting last successful page: {str(e)}")
+            return 0
+
+    def get_scraped_products_skus(self, category_url: str) -> set:
+        """Get SKUs of products that were already scraped in the last successful session"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT p.sku
+                        FROM products p
+                        JOIN scraping_sessions s ON s.category_url = %s
+                        WHERE s.status IN ('completed', 'in_progress')
+                        AND p.created_at >= s.start_time
+                        AND s.id = (
+                            SELECT id
+                            FROM scraping_sessions
+                            WHERE category_url = %s
+                            AND status IN ('completed', 'in_progress')
+                            ORDER BY updated_at DESC
+                            LIMIT 1
+                        )
+                    """, (category_url, category_url))
+                    return {row[0] for row in cur.fetchall()}
+        except Exception as e:
+            logging.error(f"Error getting scraped products: {str(e)}")
+            return set()
 
     def __del__(self):
         """Close all database connections"""
