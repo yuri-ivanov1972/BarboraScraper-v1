@@ -32,39 +32,54 @@ class Database:
                     password=os.getenv('PGPASSWORD'),
                     port=os.getenv('PGPORT')
                 )
-                logging.info("Database connection pool established successfully")
+                if self.pool:
+                    logging.info("Database connection pool established successfully")
+                else:
+                    raise Exception("Failed to create connection pool")
         except Exception as e:
             logging.error(f"Database connection error: {str(e)}")
+            self.pool = None
             raise
 
     @contextmanager
     def get_connection(self):
         """Get a connection from the pool with retry logic"""
         conn = None
-        for attempt in range(self.max_retries):
-            try:
-                if self.pool is None:
-                    self.connect()
-                conn = self.pool.getconn()
-                conn.autocommit = True
-                yield conn
-                break
-            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-                if conn:
+        try:
+            for attempt in range(self.max_retries):
+                try:
+                    if self.pool is None:
+                        self.connect()
+                    if self.pool:
+                        conn = self.pool.getconn()
+                        if conn:
+                            conn.autocommit = True
+                            yield conn
+                            return
+                    raise psycopg2.OperationalError("Could not get connection from pool")
+                except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                    if attempt < self.max_retries - 1:
+                        logging.warning(f"Database connection attempt {attempt + 1} failed: {str(e)}")
+                        time.sleep(self.retry_delay)
+                        # Force reconnection
+                        if self.pool:
+                            try:
+                                self.pool.closeall()
+                            except Exception:
+                                pass
+                        self.pool = None
+                    else:
+                        raise
+            raise Exception(f"Failed to get database connection after {self.max_retries} attempts")
+        except Exception as e:
+            logging.error(f"Database connection error: {str(e)}")
+            raise
+        finally:
+            if conn and self.pool:
+                try:
                     self.pool.putconn(conn)
-                logging.warning(f"Database connection attempt {attempt + 1} failed: {str(e)}")
-                if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay)
-                    self.pool = None  # Force reconnection
-                else:
-                    raise
-            except Exception as e:
-                if conn:
-                    self.pool.putconn(conn)
-                raise
-            finally:
-                if conn:
-                    self.pool.putconn(conn)
+                except Exception as e:
+                    logging.error(f"Error returning connection to pool: {str(e)}")
 
     def create_tables(self):
         """Create the required tables if they don't exist"""
@@ -570,5 +585,8 @@ class Database:
     def __del__(self):
         """Close all database connections"""
         if self.pool:
-            self.pool.closeall()
-            logging.info("Database connections closed")
+            try:
+                self.pool.closeall()
+                logging.info("Database connections closed")
+            except Exception as e:
+                logging.error(f"Error closing database connections: {str(e)}")
