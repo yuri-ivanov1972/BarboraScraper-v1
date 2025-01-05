@@ -702,7 +702,8 @@ class RimiScraper:
                     category_products = self.scrape_category(category_url, self.status_callback)
                     if category_products:
                         all_products_with_nutrition.extend(category_products)
-                        self.status_callback(f"Successfully processed category with {len(category_products)} products")                    else:
+                        self.status_callback(f"Successfully processed category with {len(category_products)} products")
+                    else:
                         self.status_callback("Warning: No products found in category")
                 except Exception as e:
                     error_msg = f"Error scraping category {category_url}: {str(e)}"
