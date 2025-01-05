@@ -13,7 +13,7 @@ from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 from dataclasses import dataclass
 from bs4 import BeautifulSoup
 
-# Add country code mapping
+# Update country mappings
 COUNTRY_MAPPING = {
     'Latvija': 'LV',
     'Igaunija': 'EE',
@@ -24,6 +24,9 @@ COUNTRY_MAPPING = {
     'Beļģija': 'BE',
     'Grieķija': 'GR',
     'Slovākija': 'SK',
+    'Zviedrija': 'SE',
+    'Francija': 'FR',
+    'Ukraina': 'UA',
     # Add more mappings as needed
 }
 
@@ -659,7 +662,7 @@ class RimiScraper:
 
             if category_count == 0:
                 self.status_callback("⚠️ No products found during scraping. Please try again later.")
-                raise ScraperError("No products found in any category")
+                return []  # Return empty list instead of raising error
 
             needs_review_count = sum(1 for p in products_with_nutrition if p['nutrition'].needs_review)
             self.status_callback(f"Successfully scraped {category_count} products, {needs_review_count} need review")
@@ -703,7 +706,7 @@ class RimiScraper:
                         'name': '',
                         'price': '0',
                         'sku': '',
-                        'category': 'SH-gala-zivisun-gatava-kulinarija',  # Default category
+                        'category': 'SH-gala-zivisun-gatava-kkulinarija',  # Default category
                         'product_url': url,
                         'image_url': None,
                     }
