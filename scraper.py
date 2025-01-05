@@ -510,6 +510,7 @@ class RimiScraper:
             self.status_callback("Initializing scraper session...")
             all_products = []
             products_with_nutrition = []
+            category_count = 0 # Initialize category_count
 
             # Calculate total products across all categories
             total_products = 0
@@ -604,34 +605,22 @@ class RimiScraper:
 
                         except Exception as e:
                             logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
-                            self.status_callback(f"Error processing page {page}: {str(e)}")
+                            self.status_callback(f"❌ Error processing page {page}: {str(e)}")
                             continue
+
+                    category_count += len(all_products)
 
                 except Exception as e:
                     logging.error(f"Error scraping category {category_url}: {str(e)}")
                     self.status_callback(f"Error scraping category {category_url}: {str(e)}")
                     continue
 
-            if not all_products:
+            if category_count == 0:
+                self.status_callback("⚠️ No products found during scraping. Please try again later.")
                 raise ScraperError("No products found in any category")
 
-            # Try to save any remaining products that failed earlier
-            if products_with_nutrition:
-                try:
-                    db = Database()
-                    result = db.save_products_with_nutrition(products_with_nutrition)
-                    self.status_callback(f"Saved remaining {len(products_with_nutrition)} products")
-                    self.status_callback(f"New: {result['new_products']}, Updated: {result['updated_products']}, Reviews needed: {result['needs_review']}")
-                except Exception as e:
-                    logging.error(f"Error saving remaining products: {str(e)}")
-                    self.status_callback(f"❌ Error saving remaining products: {str(e)}")
-                finally:
-                    if 'db' in locals():
-                        db.close()
-
             needs_review_count = sum(1 for p in products_with_nutrition if p['nutrition'].needs_review)
-            self.status_callback(f"Successfully scraped {len(all_products)} products, {needs_review_count} need review")
-
+            self.status_callback(f"Successfully scraped {category_count} products, {needs_review_count} need review")
             return products_with_nutrition
 
         except Exception as e:
