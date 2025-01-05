@@ -558,10 +558,12 @@ class RimiScraper:
             self.status_callback(f"Error scraping product details: {e}")
             return []
 
-    def scrape_category(self, category_url: str, status_callback=None) -> None:
+    def scrape_category(self, category_url: str, status_callback=None) -> List[Dict[str, Union[Dict, NutritionalInfo]]]:
         """Scrape products from a category page with progress tracking"""
         if status_callback:
             self.status_callback = status_callback
+
+        products_with_nutrition = []
 
         try:
             # Get total pages
@@ -586,7 +588,7 @@ class RimiScraper:
                     url = self.generate_page_url(category_url, page)
                     product_urls = self.get_product_urls(url)
 
-                    products_with_nutrition = []
+                    page_products = []
                     for product_url in product_urls:
                         try:
                             product_data = self.scrape_product(product_url)
@@ -595,21 +597,22 @@ class RimiScraper:
                                 if product_data[0]['product'].get('sku') in scraped_skus:
                                     self.status_callback(f"Skipping already scraped product: {product_data[0]['product'].get('sku')}")
                                     continue
-                                products_with_nutrition.extend(product_data)
+                                page_products.extend(product_data)
                         except Exception as e:
                             self.status_callback(f"Error scraping product {product_url}: {str(e)}")
                             continue
 
-                    if products_with_nutrition:
+                    if page_products:
                         # Save products for this page
-                        result = self.db.save_products_with_nutrition(products_with_nutrition)
-                        total_products_scraped += len(products_with_nutrition)
+                        result = self.db.save_products_with_nutrition(page_products)
+                        products_with_nutrition.extend(page_products)
+                        total_products_scraped += len(page_products)
 
                         # Update session progress after each page
                         metadata = {
-                            'page_products': len(products_with_nutrition),
+                            'page_products': len(page_products),
                             'total_products': total_products_scraped,
-                            'skipped_products': len(product_urls) - len(products_with_nutrition)
+                            'skipped_products': len(product_urls) - len(page_products)
                         }
                         self.db.update_scraping_progress(
                             session_id=session_id,
@@ -619,7 +622,7 @@ class RimiScraper:
                             metadata=metadata
                         )
 
-                        self.status_callback(f"Page {page}/{total_pages} completed. Products on this page: {len(products_with_nutrition)}")
+                        self.status_callback(f"Page {page}/{total_pages} completed. Products on this page: {len(page_products)}")
                         self.status_callback(f"Total products scraped: {total_products_scraped}")
 
                 except Exception as e:
@@ -644,6 +647,7 @@ class RimiScraper:
             )
 
             self.status_callback(f"Category scraping completed. Total products: {total_products_scraped}")
+            return products_with_nutrition
 
         except Exception as e:
             error_msg = f"Fatal scraping error: {str(e)}"
@@ -658,42 +662,35 @@ class RimiScraper:
                 )
             raise ScraperError(error_msg)
 
-    def scrape_products(self) -> List[Dict[str, Union[str, Decimal]]]:
+    def scrape_products(self) -> List[Dict[str, Union[Dict, NutritionalInfo]]]:
         """Scrape product information from multiple Rimi categories"""
         try:
             self.status_callback("Initializing scraper session...")
-            all_products = []
-            products_with_nutrition = []
+            all_products_with_nutrition = []
 
-            # Calculate total products across all categories
-            total_products = 0
-            total_pages = 0
-            for category_url in self.category_urls:
-                products_in_category, pages_in_category = self.get_total_products(category_url)
-                total_products += products_in_category
-                total_pages += pages_in_category
-
-            self.status_callback(f"Total products to process: {total_products} across {total_pages} pages")
-
+            # Process each category
             for category_url in self.category_urls:
                 try:
                     self.status_callback(f"\nProcessing category: {category_url}")
-                    self.scrape_category(category_url, self.status_callback)
+                    category_products = self.scrape_category(category_url, self.status_callback)
+                    if category_products:
+                        all_products_with_nutrition.extend(category_products)
                 except Exception as e:
                     logging.error(f"Error scraping category {category_url}: {str(e)}")
                     self.status_callback(f"Error scraping category {category_url}: {str(e)}")
                     continue
 
-            if not all_products:
+            if not all_products_with_nutrition:
                 raise ScraperError("No products found in any category")
 
-            needs_review_count = 0 #sum(1 for p in products_with_nutrition if p['nutrition'].needs_review)
-            self.status_callback(f"Successfully scraped {len(all_products)} products, {needs_review_count} need review")
+            needs_review_count = sum(1 for p in all_products_with_nutrition if p['nutrition'].needs_review)
+            self.status_callback(f"Successfully scraped {len(all_products_with_nutrition)} products, {needs_review_count} need review")
 
-            return products_with_nutrition
+            return all_products_with_nutrition
 
         except Exception as e:
             logging.error(f"Scraping error: {str(e)}")
+            self.status_callback(f"Scraping error: {str(e)}")
             raise ScraperError(str(e))
 
     def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
