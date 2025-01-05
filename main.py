@@ -11,7 +11,7 @@ import re
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -178,7 +178,9 @@ def main():
         db = Database()
         logger.info("Database connection established successfully")
     except Exception as e:
-        st.error(f"Database Connection Error: {str(e)}")
+        error_msg = f"Database Connection Error: {str(e)}"
+        logger.error(error_msg)
+        st.error(error_msg)
         st.stop()
 
     # Add tabs for different sections
@@ -192,6 +194,7 @@ def main():
                 progress_bar = st.progress(0)
                 progress_text = st.empty()
                 status_text = st.empty()
+                debug_log = st.empty()  # New element for debug logs
 
                 # Clear previous logs for this run
                 st.session_state.current_scraping_logs = []
@@ -199,7 +202,12 @@ def main():
                 def update_progress(msg: str):
                     # Add log with timestamp
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    st.session_state.current_scraping_logs.append(f"[{timestamp}] {msg}")
+                    log_msg = f"[{timestamp}] {msg}"
+                    st.session_state.current_scraping_logs.append(log_msg)
+                    logger.debug(log_msg)
+
+                    # Display debug logs
+                    debug_log.code('\n'.join(st.session_state.current_scraping_logs[-10:]))
 
                     # Always update the status text with the latest message
                     status_text.text(msg)
@@ -237,6 +245,7 @@ def main():
                 with st.spinner("Scraping product data..."):
                     try:
                         scraper = RimiScraper(db=db, status_callback=update_progress)
+                        logger.info("Starting product scraping")
                         products_with_nutrition = scraper.scrape_products()
 
                         # Store current run's logs in history with timestamp
@@ -246,26 +255,32 @@ def main():
 
                         if products_with_nutrition:
                             try:
+                                logger.info(f"Saving {len(products_with_nutrition)} products to database")
                                 result = db.save_products_with_nutrition(products_with_nutrition)
-                                success_msg = f"""Successfully processed {len(products_with_nutrition)} products!
-                                            New: {result['new_products']}, 
-                                            Updated: {result['updated_products']}, 
-                                            Reviews needed: {result['needs_review']}"""
-                                st.success(success_msg)
-                                # Add final result to logs
-                                update_progress(success_msg)
-                                st.rerun()
+                                if result:
+                                    success_msg = f"""Successfully processed {len(products_with_nutrition)} products!
+                                                New: {result['new_products']}, 
+                                                Updated: {result['updated_products']}, 
+                                                Reviews needed: {result['needs_review']}"""
+                                    logger.info(success_msg)
+                                    st.success(success_msg)
+                                    # Add final result to logs
+                                    update_progress(success_msg)
+                                    st.rerun()
                             except Exception as e:
                                 error_msg = f"Error saving products: {str(e)}"
+                                logger.error(error_msg)
                                 st.error(error_msg)
                                 update_progress(f"❌ {error_msg}")
                         else:
                             warning_msg = "No products found during scraping. Please try again later."
+                            logger.warning(warning_msg)
                             st.warning(warning_msg)
                             update_progress(f"⚠️ {warning_msg}")
 
                     except Exception as e:
                         error_msg = f"Error during data refresh: {str(e)}"
+                        logger.error(error_msg)
                         st.error(error_msg)
                         update_progress(f"❌ {error_msg}")
 

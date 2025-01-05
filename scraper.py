@@ -13,6 +13,13 @@ from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 from dataclasses import dataclass
 from bs4 import BeautifulSoup
 
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Add country code mapping
 COUNTRY_MAPPING = {
     'Latvija': 'LV',
@@ -199,20 +206,28 @@ class RimiScraper:
             products_list = []
 
             self.status_callback("Analyzing page structure...")
-            logging.debug(f"Raw HTML content length: {len(html_content)}")
+            logger.debug(f"Raw HTML content length: {len(html_content)}")
+            logger.debug(f"Parsing URL: {url}")
 
             # Try to find product price in multiple ways
             products = soup.find_all(attrs={'data-gtm-eec-product': True})
+            logger.debug(f"Found {len(products)} products with GTM attribute")
 
             if not products:
                 self.status_callback("No products found with GTM attribute, trying alternative selectors...")
+                logger.debug("Trying alternative product selectors")
                 products = soup.select('.product-grid-item, .card--product')
+                logger.debug(f"Found {len(products)} products with alternative selectors")
 
             if not products:
                 self.status_callback(f"No products found in {url}")
+                logger.warning(f"No products found in URL: {url}")
+                # Log a sample of the HTML for debugging
+                logger.debug(f"Sample HTML content: {html_content[:500]}...")
                 return []
 
             self.status_callback(f"Found {len(products)} potential product elements")
+            logger.info(f"Beginning to process {len(products)} products")
 
             for index, product in enumerate(products, 1):
                 try:
@@ -222,10 +237,12 @@ class RimiScraper:
                     if gtm_data:
                         try:
                             product_data = json.loads(gtm_data)
+                            logger.debug(f"Processing product {index} GTM data: {gtm_data[:200]}...")
 
                             # Extract price from GTM data
                             raw_price = product_data.get('price', 0)
                             self.status_callback(f"Raw price from GTM data: {raw_price}")
+                            logger.debug(f"Raw price from GTM data: {raw_price}")
                             price = self.clean_price(raw_price)
 
                             # If price is 0, try to find it in the HTML
@@ -233,7 +250,7 @@ class RimiScraper:
                                 price_elem = product.select_one('.price-wrapper .price, .card-price')
                                 if price_elem:
                                     raw_price = price_elem.get_text(strip=True)
-                                    self.status_callback(f"Raw price from HTML: {raw_price}")
+                                    logger.debug(f"Raw price from HTML: {raw_price}")
                                     price = self.clean_price(raw_price)
 
                             product_info = {
@@ -243,14 +260,19 @@ class RimiScraper:
                                 'category': product_data.get('category'),
                             }
 
+                            # Log product details
+                            logger.debug(f"Extracted product info: {product_info}")
+
                             # Get additional information
                             url_elem = product.select_one('a.card__url.js-gtm-eec-product-click')
                             if url_elem:
                                 product_info['product_url'] = f"{self.base_url}{url_elem.get('href')}"
+                                logger.debug(f"Product URL: {product_info['product_url']}")
 
                             img_elem = product.select_one('.card__image-wrapper img')
                             if img_elem:
                                 product_info['image_url'] = img_elem.get('data-src') or img_elem.get('src')
+                                logger.debug(f"Image URL: {product_info['image_url']}")
 
                             # Extract quantity and unit if available
                             quantity_elem = product.select_one('.quantity, .amount')
@@ -259,26 +281,36 @@ class RimiScraper:
                                 quantity_value, quantity_unit = extract_quantity(quantity_text)
                                 product_info['quantity_value'] = quantity_value
                                 product_info['quantity_unit'] = quantity_unit
+                                logger.debug(f"Quantity: {quantity_value} {quantity_unit}")
 
                             if product_info.get('name') and product_info['price'] > 0:
                                 products_list.append(product_info)
-                                self.status_callback(f"Successfully parsed product {index}: {product_info['name']} - €{product_info['price']}")
+                                success_msg = f"Successfully parsed product {index}: {product_info['name']} - €{product_info['price']}"
+                                self.status_callback(success_msg)
+                                logger.info(success_msg)
                             else:
-                                self.status_callback(f"Skipping product {index}: Invalid name or price")
+                                skip_msg = f"Skipping product {index}: Invalid name or price"
+                                self.status_callback(skip_msg)
+                                logger.warning(skip_msg)
 
                         except json.JSONDecodeError as e:
-                            self.status_callback(f"Error parsing GTM data for product {index}: {str(e)}")
+                            error_msg = f"Error parsing GTM data for product {index}: {str(e)}"
+                            self.status_callback(error_msg)
+                            logger.error(error_msg)
                             continue
 
                 except Exception as e:
-                    logging.error(f"Error processing product {index}: {str(e)}")
-                    self.status_callback(f"Error processing product {index}: {str(e)}")
+                    error_msg = f"Error processing product {index}: {str(e)}"
+                    logger.error(error_msg)
+                    self.status_callback(error_msg)
                     continue
 
+            logger.info(f"Completed processing {len(products)} products, found {len(products_list)} valid products")
             return products_list
 
         except Exception as e:
-            logging.error(f"Error parsing HTML content: {str(e)}")
+            error_msg = f"Error parsing HTML content: {str(e)}"
+            logger.error(error_msg)
             return []
 
     def _extract_decimal(self, text: str) -> Optional[Decimal]:
