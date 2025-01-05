@@ -11,7 +11,7 @@ import re
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -96,7 +96,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-def debug_product_url(url: str, db: Database) -> list:
+def debug_product_url(url: str) -> list:
     """Debug scraping process for a specific URL"""
     debug_logs = []
 
@@ -105,7 +105,7 @@ def debug_product_url(url: str, db: Database) -> list:
         print(f"Debug: {msg}")  # Print to console for additional debugging
 
     try:
-        scraper = RimiScraper(db=db, status_callback=debug_callback)
+        scraper = RimiScraper(status_callback=debug_callback)
         debug_logs.append(f"Starting debug for URL: {url}")
 
         debug_logs.append("\n=== Starting Nutritional Info Scraping ===")
@@ -178,9 +178,7 @@ def main():
         db = Database()
         logger.info("Database connection established successfully")
     except Exception as e:
-        error_msg = f"Database Connection Error: {str(e)}"
-        logger.error(error_msg)
-        st.error(error_msg)
+        st.error(f"Database Connection Error: {str(e)}")
         st.stop()
 
     # Add tabs for different sections
@@ -194,7 +192,6 @@ def main():
                 progress_bar = st.progress(0)
                 progress_text = st.empty()
                 status_text = st.empty()
-                debug_log = st.empty()  # New element for debug logs
 
                 # Clear previous logs for this run
                 st.session_state.current_scraping_logs = []
@@ -202,15 +199,7 @@ def main():
                 def update_progress(msg: str):
                     # Add log with timestamp
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    log_msg = f"[{timestamp}] {msg}"
-                    st.session_state.current_scraping_logs.append(log_msg)
-                    logger.debug(log_msg)
-
-                    # Display debug logs
-                    debug_log.code('\n'.join(st.session_state.current_scraping_logs[-10:]))
-
-                    # Always update the status text with the latest message
-                    status_text.text(msg)
+                    st.session_state.current_scraping_logs.append(f"[{timestamp}] {msg}")
 
                     if "Total products to process:" in msg:
                         match = re.search(r"Total products to process: (\d+) across (\d+) pages", msg)
@@ -223,29 +212,17 @@ def main():
                         match = re.search(r"Processing page (\d+)/(\d+)", msg)
                         if match:
                             st.session_state.current_page = int(match.group(1))
-                            current_page = st.session_state.current_page
-                            total_pages = st.session_state.total_pages
-                            progress_text.text(f"Processing page {current_page}/{total_pages}")
-                            if st.session_state.total_pages > 0:
-                                progress = current_page / total_pages
-                                progress_bar.progress(min(progress, 1.0))
+                            progress_text.text(f"Processing page {st.session_state.current_page}/{st.session_state.total_pages}")
                     elif "Successfully parsed product" in msg:
                         st.session_state.processed_products += 1
                         if st.session_state.total_products > 0:
                             progress = st.session_state.processed_products / st.session_state.total_products
                             progress_bar.progress(min(progress, 1.0))
                             status_text.text(f"Processed {st.session_state.processed_products}/{st.session_state.total_products} products")
-                    elif "Error" in msg:
-                        status_text.error(msg)
-                    elif "Warning" in msg:
-                        status_text.warning(msg)
-                    elif "Success" in msg:
-                        status_text.success(msg)
 
                 with st.spinner("Scraping product data..."):
                     try:
-                        scraper = RimiScraper(db=db, status_callback=update_progress)
-                        logger.info("Starting product scraping")
+                        scraper = RimiScraper(status_callback=update_progress)
                         products_with_nutrition = scraper.scrape_products()
 
                         # Store current run's logs in history with timestamp
@@ -255,32 +232,26 @@ def main():
 
                         if products_with_nutrition:
                             try:
-                                logger.info(f"Saving {len(products_with_nutrition)} products to database")
                                 result = db.save_products_with_nutrition(products_with_nutrition)
-                                if result:
-                                    success_msg = f"""Successfully processed {len(products_with_nutrition)} products!
-                                                New: {result['new_products']}, 
-                                                Updated: {result['updated_products']}, 
-                                                Reviews needed: {result['needs_review']}"""
-                                    logger.info(success_msg)
-                                    st.success(success_msg)
-                                    # Add final result to logs
-                                    update_progress(success_msg)
-                                    st.rerun()
+                                success_msg = f"""Successfully processed {len(products_with_nutrition)} products!
+                                            New: {result['new_products']}, 
+                                            Updated: {result['updated_products']}, 
+                                            Reviews needed: {result['needs_review']}"""
+                                st.success(success_msg)
+                                # Add final result to logs
+                                update_progress(success_msg)
+                                st.rerun()
                             except Exception as e:
                                 error_msg = f"Error saving products: {str(e)}"
-                                logger.error(error_msg)
                                 st.error(error_msg)
                                 update_progress(f"❌ {error_msg}")
                         else:
                             warning_msg = "No products found during scraping. Please try again later."
-                            logger.warning(warning_msg)
                             st.warning(warning_msg)
                             update_progress(f"⚠️ {warning_msg}")
 
                     except Exception as e:
                         error_msg = f"Error during data refresh: {str(e)}"
-                        logger.error(error_msg)
                         st.error(error_msg)
                         update_progress(f"❌ {error_msg}")
 
@@ -302,7 +273,7 @@ def main():
                             progress_text.text(msg)
                             scraping_logs.append(msg)
 
-                        scraper = RimiScraper(db=db, status_callback=log_callback)
+                        scraper = RimiScraper(status_callback=log_callback)
                         products_with_nutrition = scraper.scrape_specific_products(SPECIFIC_PRODUCTS)
 
                         # Store logs in session state with timestamp
@@ -424,7 +395,7 @@ def main():
         )
 
         if st.button("Start Debug", key="start_debug"):
-            st.session_state.debug_logs = debug_product_url(debug_url, db)
+            st.session_state.debug_logs = debug_product_url(debug_url)
 
         # Always show debug logs if they exist
         if st.session_state.debug_logs:

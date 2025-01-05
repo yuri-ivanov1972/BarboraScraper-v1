@@ -13,13 +13,6 @@ from urllib.parse import urljoin, urlparse, parse_qs, urlencode
 from dataclasses import dataclass
 from bs4 import BeautifulSoup
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
 # Add country code mapping
 COUNTRY_MAPPING = {
     'Latvija': 'LV',
@@ -89,10 +82,10 @@ class NutritionalInfo:
     serving_size_unit: Optional[str] = None
 
 class RimiScraper:
-    def __init__(self, db, status_callback: Optional[Callable[[str], None]] = None, page_size=20):
+    def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-16"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-17"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -104,16 +97,9 @@ class RimiScraper:
             'Pragma': 'no-cache',
             'Cookie': 'region=LV'
         }
-        self.session = requests.Session()
-        self.retries = Retry(
-            total=5,
-            backoff_factor=0.1,
-            status_forcelist=[500, 502, 503, 504]
-        )
-        self.session.mount('https://', HTTPAdapter(max_retries=self.retries))
-        self.db = db
-        self.page_size = page_size
-        self.status_callback = status_callback or print  # Use provided callback or print as default
+        self.session = self._create_session()
+        self.status_callback = status_callback or (lambda x: None)
+        self.page_size = 20  # Set page size to 20 items
 
     def _create_session(self) -> requests.Session:
         """Create a session with retry strategy"""
@@ -128,7 +114,6 @@ class RimiScraper:
         session.mount("http://", adapter)
         session.headers.update(self.headers)
         return session
-
 
     def get_max_page_number(self, html_content: str) -> int:
         """Extract maximum page number from pagination"""
@@ -206,39 +191,20 @@ class RimiScraper:
             products_list = []
 
             self.status_callback("Analyzing page structure...")
-            logger.debug(f"Raw HTML content length: {len(html_content)}")
-            logger.debug(f"Parsing URL: {url}")
+            logging.debug(f"Raw HTML content length: {len(html_content)}")
 
-            # Try multiple selectors for products
-            products = []
+            # Try to find product price in multiple ways
+            products = soup.find_all(attrs={'data-gtm-eec-product': True})
 
-            # Try GTM products first
-            gtm_products = soup.find_all(attrs={'data-gtm-eec-product': True})
-            if gtm_products:
-                logger.debug(f"Found {len(gtm_products)} products with GTM attribute")
-                products = gtm_products
-            else:
-                # Try card products
-                card_products = soup.select('.card.card--product')
-                if card_products:
-                    logger.debug(f"Found {len(card_products)} products with card--product class")
-                    products = card_products
-                else:
-                    # Try grid items
-                    grid_products = soup.select('.product-grid__item')
-                    if grid_products:
-                        logger.debug(f"Found {len(grid_products)} products with product-grid__item class")
-                        products = grid_products
+            if not products:
+                self.status_callback("No products found with GTM attribute, trying alternative selectors...")
+                products = soup.select('.product-grid-item, .card--product')
 
             if not products:
                 self.status_callback(f"No products found in {url}")
-                logger.warning(f"No products found in URL: {url}")
-                # Log a sample of the HTML for debugging
-                logger.debug(f"Sample HTML content: {html_content[:500]}...")
                 return []
 
             self.status_callback(f"Found {len(products)} potential product elements")
-            logger.info(f"Beginning to process {len(products)} products")
 
             for index, product in enumerate(products, 1):
                 try:
@@ -248,12 +214,10 @@ class RimiScraper:
                     if gtm_data:
                         try:
                             product_data = json.loads(gtm_data)
-                            logger.debug(f"Processing product {index} GTM data: {gtm_data[:200]}...")
 
                             # Extract price from GTM data
                             raw_price = product_data.get('price', 0)
                             self.status_callback(f"Raw price from GTM data: {raw_price}")
-                            logger.debug(f"Raw price from GTM data: {raw_price}")
                             price = self.clean_price(raw_price)
 
                             # If price is 0, try to find it in the HTML
@@ -261,7 +225,7 @@ class RimiScraper:
                                 price_elem = product.select_one('.price-wrapper .price, .card-price')
                                 if price_elem:
                                     raw_price = price_elem.get_text(strip=True)
-                                    logger.debug(f"Raw price from HTML: {raw_price}")
+                                    self.status_callback(f"Raw price from HTML: {raw_price}")
                                     price = self.clean_price(raw_price)
 
                             product_info = {
@@ -271,19 +235,14 @@ class RimiScraper:
                                 'category': product_data.get('category'),
                             }
 
-                            # Log product details
-                            logger.debug(f"Extracted product info: {product_info}")
-
                             # Get additional information
                             url_elem = product.select_one('a.card__url.js-gtm-eec-product-click')
                             if url_elem:
                                 product_info['product_url'] = f"{self.base_url}{url_elem.get('href')}"
-                                logger.debug(f"Product URL: {product_info['product_url']}")
 
                             img_elem = product.select_one('.card__image-wrapper img')
                             if img_elem:
                                 product_info['image_url'] = img_elem.get('data-src') or img_elem.get('src')
-                                logger.debug(f"Image URL: {product_info['image_url']}")
 
                             # Extract quantity and unit if available
                             quantity_elem = product.select_one('.quantity, .amount')
@@ -292,36 +251,26 @@ class RimiScraper:
                                 quantity_value, quantity_unit = extract_quantity(quantity_text)
                                 product_info['quantity_value'] = quantity_value
                                 product_info['quantity_unit'] = quantity_unit
-                                logger.debug(f"Quantity: {quantity_value} {quantity_unit}")
 
                             if product_info.get('name') and product_info['price'] > 0:
                                 products_list.append(product_info)
-                                success_msg = f"Successfully parsed product {index}: {product_info['name']} - €{product_info['price']}"
-                                self.status_callback(success_msg)
-                                logger.info(success_msg)
+                                self.status_callback(f"Successfully parsed product {index}: {product_info['name']} - €{product_info['price']}")
                             else:
-                                skip_msg = f"Skipping product {index}: Invalid name or price"
-                                self.status_callback(skip_msg)
-                                logger.warning(skip_msg)
+                                self.status_callback(f"Skipping product {index}: Invalid name or price")
 
                         except json.JSONDecodeError as e:
-                            error_msg = f"Error parsing GTM data for product {index}: {str(e)}"
-                            self.status_callback(error_msg)
-                            logger.error(error_msg)
+                            self.status_callback(f"Error parsing GTM data for product {index}: {str(e)}")
                             continue
 
                 except Exception as e:
-                    error_msg = f"Error processing product {index}: {str(e)}"
-                    logger.error(error_msg)
-                    self.status_callback(error_msg)
+                    logging.error(f"Error processing product {index}: {str(e)}")
+                    self.status_callback(f"Error processing product {index}: {str(e)}")
                     continue
 
-            logger.info(f"Completed processing {len(products)} products, found {len(products_list)} valid products")
             return products_list
 
         except Exception as e:
-            error_msg = f"Error parsing HTML content: {str(e)}"
-            logger.error(error_msg)
+            logging.error(f"Error parsing HTML content: {str(e)}")
             return []
 
     def _extract_decimal(self, text: str) -> Optional[Decimal]:
@@ -556,239 +505,105 @@ class RimiScraper:
             self.status_callback(f"Error determining total products: {str(e)}")
             return 0, 0
 
-    def get_total_pages(self, category_url: str) -> int:
-        """Get total number of pages for a category"""
-        try:
-            response = self.session.get(category_url)
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-            return self.get_max_page_number(response.text)
-        except requests.exceptions.RequestException as e:
-            self.status_callback(f"Error fetching category URL: {e}")
-            return 0
-        except Exception as e:
-            self.status_callback(f"Error determining total pages: {e}")
-            return 0
-
-    def generate_page_url(self, category_url: str, page: int) -> str:
-        return self.build_page_url(category_url, page)
-
-    def get_product_urls(self, url: str) -> List[str]:
-        try:
-            response = self.session.get(url)
-            response.raise_for_status()
-            products = self.extract_product_info(response.text, url)
-            return [p['product_url'] for p in products if 'product_url' in p]
-        except requests.exceptions.RequestException as e:
-            self.status_callback(f"Error fetching page URL: {e}")
-            return []
-        except Exception as e:
-            self.status_callback(f"Error extracting product URLs: {e}")
-            return []
-
-
-    def scrape_product(self, product_url: str) -> List[Dict[str, Union[str, Decimal]]]:
-        try:
-            nutrition, country_code, quantity = self.scrape_nutritional_info(product_url)
-            product_data = self.extract_product_info(self.session.get(product_url).text, product_url)
-            for product in product_data:
-                if country_code:
-                    product['country_code'] = country_code
-                if quantity and quantity[0]:
-                    product['quantity_value'] = quantity[0]
-                    product['quantity_unit'] = quantity[1]
-            return [{'product': p, 'nutrition': nutrition} for p in product_data]
-        except Exception as e:
-            self.status_callback(f"Error scraping product details: {e}")
-            return []
-
-    def scrape_category(self, category_url: str, status_callback=None) -> List[Dict[str, Union[Dict, NutritionalInfo]]]:
-        """Scrape products from a category page with progress tracking"""
-        if status_callback:
-            self.status_callback = status_callback
-
-        products_with_nutrition = []
-        total_products_scraped = 0
-
-        try:
-            # Get total pages
-            total_pages = self.get_total_pages(category_url)
-            if not total_pages:
-                self.status_callback("Warning: Could not determine total pages")
-                return []
-
-            # Create a new scraping session
-            session_id = self.db.create_scraping_session(category_url, total_pages)
-            self.status_callback(f"Created new scraping session: {session_id}")
-
-            # Get last successful page and already scraped products
-            last_page = self.db.get_last_successful_page(category_url)
-            scraped_skus = self.db.get_scraped_products_skus(category_url)
-
-            # Start from the next page after last successful one
-            start_page = last_page + 1 if last_page > 0 else 1
-
-            for page in range(start_page, total_pages + 1):
-                try:
-                    url = self.generate_page_url(category_url, page)
-                    self.status_callback(f"Processing page {page}/{total_pages}")
-                    product_urls = self.get_product_urls(url)
-
-                    if not product_urls:
-                        self.status_callback(f"Warning: No product URLs found on page {page}")
-                        continue
-
-                    page_products = []
-                    for product_url in product_urls:
-                        try:
-                            product_data = self.scrape_product(product_url)
-                            if product_data:
-                                # Skip if product was already scraped in this session
-                                if product_data[0]['product'].get('sku') in scraped_skus:
-                                    self.status_callback(f"Skipping already scraped product: {product_data[0]['product'].get('sku')}")
-                                    continue
-                                page_products.extend(product_data)
-                                self.status_callback(f"Successfully parsed product: {product_data[0]['product'].get('name', 'Unknown')}")
-                        except Exception as e:
-                            self.status_callback(f"Error scraping product {product_url}: {str(e)}")
-                            continue
-
-                    if page_products:
-                        try:
-                            # Save products for this page
-                            self.status_callback(f"Saving {len(page_products)} products from page {page} to database...")
-                            result = self.db.save_products_with_nutrition(page_products)
-                            if result:
-                                products_with_nutrition.extend(page_products)
-                                total_products_scraped += len(page_products)
-                                self.status_callback(f"Successfully saved {len(page_products)} products from page {page}")
-
-                                # Update session progress after each page
-                                metadata = {
-                                    'page_products': len(page_products),
-                                    'total_products': total_products_scraped,
-                                    'skipped_products': len(product_urls) - len(page_products)
-                                }
-                                self.db.update_scraping_progress(
-                                    session_id=session_id,
-                                    page=page,
-                                    products_count=total_products_scraped,
-                                    status='in_progress',
-                                    metadata=metadata
-                                )
-                            else:
-                                self.status_callback(f"Warning: Failed to save products from page {page}")
-                        except Exception as e:
-                            error_msg = f"Error saving products from page {page}: {str(e)}"
-                            self.status_callback(error_msg)
-                            logger.error(error_msg)
-                            # Update session with error
-                            self.db.update_scraping_progress(
-                                session_id=session_id,
-                                page=page,
-                                products_count=total_products_scraped,
-                                status='failed',
-                                error_message=str(e),
-                                metadata=metadata
-                            )
-                                                        raise
-                except Exception as e:
-                    error_msg = f"Error processing page {page}: {str(e)}"
-                    self.status_callback(error_msg)
-                    logger.error(error_msg)
-                    # Update session with error
-                    self.db.update_scraping_progress(
-                        session_id=session_id,
-                        page=page,
-                        products_count=total_products_scraped,
-                        status='failed',
-                        error_message=str(e)
-                    )
-                    raise
-
-            # Update session as completed
-            if total_products_scraped > 0:
-                self.db.update_scraping_progress(
-                    session_id=session_id,
-                    page=total_pages,
-                    products_count=total_products_scraped,
-                    status='completed'
-                )
-                self.status_callback(f"Successfully processed category with {len(products_with_nutrition)} products")
-                return products_with_nutrition
-            else:
-                self.db.update_scraping_progress(
-                    session_id=session_id,
-                    page=total_pages,
-                    products_count=0,
-                    status='failed',
-                    error_message='No products found'
-                )
-                self.status_callback("Warning: No products found in category")
-                return []
-
-        except Exception as e:
-            error_msg = f"Error scraping category {category_url}: {str(e)}"
-            self.status_callback(error_msg)
-            logger.error(error_msg)
-            # Update session with error if we have a session_id
-            if 'session_id' in locals():
-                self.db.update_scraping_progress(
-                    session_id=session_id,
-                    page=page if 'page' in locals() else 0,
-                    products_count=total_products_scraped,
-                    status='failed',
-                    error_message=str(e)
-                )
-            raise ScraperError(error_msg)
-
-    def scrape_products(self) -> List[Dict[str, Union[Dict, NutritionalInfo]]]:
+    def scrape_products(self) -> List[Dict[str, Union[str, Decimal]]]:
         """Scrape product information from multiple Rimi categories"""
         try:
             self.status_callback("Initializing scraper session...")
-            all_products_with_nutrition = []
+            all_products = []
+            products_with_nutrition = []
 
-            # Calculate total products and pages first
+            # Calculate total products across all categories
             total_products = 0
             total_pages = 0
             for category_url in self.category_urls:
-                products_count, pages_count = self.get_total_products(category_url)
-                total_products += products_count
-                total_pages += pages_count
+                products_in_category, pages_in_category = self.get_total_products(category_url)
+                total_products += products_in_category
+                total_pages += pages_in_category
 
             self.status_callback(f"Total products to process: {total_products} across {total_pages} pages")
 
-            # Process each category
             for category_url in self.category_urls:
                 try:
                     self.status_callback(f"\nProcessing category: {category_url}")
-                    category_products = self.scrape_category(category_url, self.status_callback)
-                    if category_products:
-                        all_products_with_nutrition.extend(category_products)
-                        self.status_callback(f"Successfully processed category with {len(category_products)} products")
-                    else:
-                        self.status_callback("Warning: No products found in category")
+                    category_products, category_pages = self.get_total_products(category_url)
+
+                    if category_products == 0:
+                        self.status_callback(f"No products found in category {category_url}")
+                        continue
+
+                    self.status_callback(f"Found {category_products} products in {category_pages} pages")
+
+                    # Process all pages
+                    for page in range(1, category_pages + 1):
+                        try:
+                            self.status_callback(f"Processing page {page}/{category_pages}")
+
+                            # Get the URL for the current page
+                            current_url = self.build_page_url(category_url, page)
+                            self.status_callback(f"Fetching URL: {current_url}")
+
+                            # Add delay between pages
+                            if page > 1:
+                                time.sleep(random.uniform(2, 3))
+
+                            response = self.session.get(current_url)
+                            if response.status_code != 200:
+                                self.status_callback(f"Failed to access page {page}. Status code: {response.status_code}")
+                                continue
+
+                            # Extract products from the page
+                            products = self.extract_product_info(response.text, current_url)
+
+                            if not products:
+                                self.status_callback(f"No products found on page {page}, retrying...")
+                                time.sleep(random.uniform(3, 4))
+                                response = self.session.get(current_url)
+                                products = self.extract_product_info(response.text, current_url)
+
+                            self.status_callback(f"Found {len(products)} products on page {page}")
+
+                            # Process each product
+                            for product in products:
+                                if product.get('product_url'):
+                                    self.status_callback(f"Processing product: {product['name']} ({product.get('sku', 'No SKU')})")
+                                    time.sleep(random.uniform(1, 2))
+
+                                    nutrition, country_code, quantity = self.scrape_nutritional_info(product['product_url'])
+
+                                    if country_code:
+                                        product['country_code'] = country_code
+                                    if quantity and quantity[0]:
+                                        product['quantity_value'] = quantity[0]
+                                        product['quantity_unit'] = quantity[1]
+
+                                    products_with_nutrition.append({
+                                        'product': product,
+                                        'nutrition': nutrition
+                                    })
+
+                            all_products.extend(products)
+
+                        except Exception as e:
+                            logging.error(f"Error processing page {page} of category {category_url}: {str(e)}")
+                            self.status_callback(f"Error processing page {page}: {str(e)}")
+                            continue
+
                 except Exception as e:
-                    error_msg = f"Error scraping category {category_url}: {str(e)}"
-                    logging.error(error_msg)
-                    self.status_callback(error_msg)
+                    logging.error(f"Error scraping category {category_url}: {str(e)}")
+                    self.status_callback(f"Error scraping category {category_url}: {str(e)}")
                     continue
 
-            if not all_products_with_nutrition:
-                error_msg = "No products found in any category"
-                self.status_callback(error_msg)
-                raise ScraperError(error_msg)
+            if not all_products:
+                raise ScraperError("No products found in any category")
 
-            needs_review_count = sum(1 for p in all_products_with_nutrition if p['nutrition'].needs_review)
-            success_msg = f"Successfully scraped {len(all_products_with_nutrition)} products, {needs_review_count} need review"
-            self.status_callback(success_msg)
+            needs_review_count = sum(1 for p in products_with_nutrition if p['nutrition'].needs_review)
+            self.status_callback(f"Successfully scraped {len(all_products)} products, {needs_review_count} need review")
 
-            return all_products_with_nutrition
+            return products_with_nutrition
 
         except Exception as e:
-            error_msg = f"Scraping error: {str(e)}"
-            logging.error(error_msg)
-            self.status_callback(error_msg)
-            raise ScraperError(error_msg)
+            logging.error(f"Scraping error: {str(e)}")
+            raise ScraperError(str(e))
 
     def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
         """Scrape specific product URLs"""
@@ -801,7 +616,9 @@ class RimiScraper:
                     self.status_callback(f"\nProcessing specific product: {url}")
 
                     # Clean URL
-                    url = url.strip().strip('|')                    # Fetch the product page
+                    url = url.strip().strip('|')
+
+                    # Fetch the product page
                     response = self.session.get(url)
                     if response.status_code != 200:
                         self.status_callback(f"Failed to access product {url}. Status code: {response.status_code}")
