@@ -47,6 +47,15 @@ COUNTRY_MAPPING = {
     'Vjetnama': 'VN',
     'Bulgārija': 'BG',
     'Čīle': 'CL',
+    'Ekvadora': 'EC',
+    'Kolumbija': 'CO',
+    'Portugāle': 'PT',
+    'Argentīna': 'AR',
+    'Brazīlija': 'BR',
+    'Maroka': 'MA',
+    'Dienvidāfrika': 'ZA',
+    'Kotdivuāra': 'CI',
+    'Ruanda': 'RW',
     # Add more mappings as needed
 }
 
@@ -112,7 +121,7 @@ class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-11"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-2"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
