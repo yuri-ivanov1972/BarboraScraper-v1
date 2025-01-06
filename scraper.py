@@ -43,6 +43,10 @@ COUNTRY_MAPPING = {
     'Koreja': 'KR',
     'Spānija': 'ES',
     'Šrilanka': 'LK',
+    'Peru': 'PE',
+    'Vjetnama': 'VN',
+    'Bulgārija': 'BG',
+    'Čīle': 'CL',
     # Add more mappings as needed
 }
 
