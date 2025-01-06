@@ -522,6 +522,13 @@ def main():
                     st.error("Database connection failed")
                     return
 
+                # Verify database connection
+                try:
+                    db.conn.cursor().execute("SELECT 1")
+                except Exception as e:
+                    st.error(f"Database connection test failed: {str(e)}")
+                    return
+
                 with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
                         SELECT * FROM products 
