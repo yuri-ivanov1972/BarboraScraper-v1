@@ -187,114 +187,121 @@ def main():
     with tab1:
         col1, col2 = st.columns(2)
         with col1:
-            # Add refresh button
-            if st.button("🔄 Refresh All Data"):
-                progress_bar = st.progress(0)
-                progress_text = st.empty()
-                status_text = st.empty()
+            # Add start page input
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col1:
+                start_page = st.number_input("Start from page", min_value=1, value=1, step=1, help="Set the starting page number for scraping")
 
-                # Clear previous logs for this run
-                st.session_state.current_scraping_logs = []
+            with col2:
+                # Add refresh button
+                if st.button("🔄 Refresh All Data"):
+                    progress_bar = st.progress(0)
+                    progress_text = st.empty()
+                    status_text = st.empty()
 
-                def update_progress(msg: str):
-                    # Add log with timestamp
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    st.session_state.current_scraping_logs.append(f"[{timestamp}] {msg}")
+                    # Clear previous logs for this run
+                    st.session_state.current_scraping_logs = []
 
-                    if "Total products to process:" in msg:
-                        match = re.search(r"Total products to process: (\d+) across (\d+) pages", msg)
-                        if match:
-                            st.session_state.total_products = int(match.group(1))
-                            st.session_state.total_pages = int(match.group(2))
-                            st.session_state.processed_products = 0
-                            progress_text.text(f"Found {st.session_state.total_products} products across {st.session_state.total_pages} pages")
-                    elif "Processing page" in msg:
-                        match = re.search(r"Processing page (\d+)/(\d+)", msg)
-                        if match:
-                            st.session_state.current_page = int(match.group(1))
-                            progress_text.text(f"Processing page {st.session_state.current_page}/{st.session_state.total_pages}")
-                    elif "Successfully parsed product" in msg:
-                        st.session_state.processed_products += 1
-                        if st.session_state.total_products > 0:
-                            progress = st.session_state.processed_products / st.session_state.total_products
-                            progress_bar.progress(min(progress, 1.0))
-                            status_text.text(f"Processed {st.session_state.processed_products}/{st.session_state.total_products} products")
-
-                with st.spinner("Scraping product data..."):
-                    try:
-                        scraper = RimiScraper(status_callback=update_progress)
-                        products_with_nutrition = scraper.scrape_products()
-
-                        # Store current run's logs in history with timestamp
-                        if st.session_state.current_scraping_logs:
-                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                            st.session_state.scraping_logs_history.append((timestamp, st.session_state.current_scraping_logs))
-
-                        if products_with_nutrition:
-                            try:
-                                result = db.save_products_with_nutrition(products_with_nutrition)
-                                success_msg = f"""Successfully processed {len(products_with_nutrition)} products!
-                                            New: {result['new_products']}, 
-                                            Updated: {result['updated_products']}, 
-                                            Reviews needed: {result['needs_review']}"""
-                                st.success(success_msg)
-                                # Add final result to logs
-                                update_progress(success_msg)
-                                st.rerun()
-                            except Exception as e:
-                                error_msg = f"Error saving products: {str(e)}"
-                                st.error(error_msg)
-                                update_progress(f"❌ {error_msg}")
-                        else:
-                            warning_msg = "No products found during scraping. Please try again later."
-                            st.warning(warning_msg)
-                            update_progress(f"⚠️ {warning_msg}")
-
-                    except Exception as e:
-                        error_msg = f"Error during data refresh: {str(e)}"
-                        st.error(error_msg)
-                        update_progress(f"❌ {error_msg}")
-
-                # Clean up progress indicators
-                progress_bar.empty()
-                progress_text.empty()
-                status_text.empty()
-
-        with col2:
-            # Add button for specific products
-            if st.button("🎯 Refresh Specific Products"):
-                progress_text = st.empty()
-
-                with st.spinner("Scraping specific products..."):
-                    try:
-                        # Create a list to store logs
-                        scraping_logs = []
-                        def log_callback(msg):
-                            progress_text.text(msg)
-                            scraping_logs.append(msg)
-
-                        scraper = RimiScraper(status_callback=log_callback)
-                        products_with_nutrition = scraper.scrape_specific_products(SPECIFIC_PRODUCTS)
-
-                        # Store logs in session state with timestamp
+                    def update_progress(msg: str):
+                        # Add log with timestamp
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        st.session_state.scraping_logs_history.append((timestamp, scraping_logs))
+                        st.session_state.current_scraping_logs.append(f"[{timestamp}] {msg}")
 
-                        if products_with_nutrition:
-                            try:
-                                result = db.save_products_with_nutrition(products_with_nutrition)
-                                st.success(f"""Successfully processed specific products!
+                        if "Total products to process:" in msg:
+                            match = re.search(r"Total products to process: (\d+) across (\d+) pages", msg)
+                            if match:
+                                st.session_state.total_products = int(match.group(1))
+                                st.session_state.total_pages = int(match.group(2))
+                                st.session_state.processed_products = 0
+                                progress_text.text(f"Found {st.session_state.total_products} products across {st.session_state.total_pages} pages")
+                        elif "Processing page" in msg:
+                            match = re.search(r"Processing page (\d+)/(\d+)", msg)
+                            if match:
+                                st.session_state.current_page = int(match.group(1))
+                                progress_text.text(f"Processing page {st.session_state.current_page}/{st.session_state.total_pages}")
+                        elif "Successfully parsed product" in msg:
+                            st.session_state.processed_products += 1
+                            if st.session_state.total_products > 0:
+                                progress = st.session_state.processed_products / st.session_state.total_products
+                                progress_bar.progress(min(progress, 1.0))
+                                status_text.text(f"Processed {st.session_state.processed_products}/{st.session_state.total_products} products")
+
+                    with st.spinner("Scraping product data..."):
+                        try:
+                            scraper = RimiScraper(status_callback=update_progress)
+                            scraper.set_start_page(start_page)  # Set the start page
+                            products_with_nutrition = scraper.scrape_products()
+
+                            # Store current run's logs in history with timestamp
+                            if st.session_state.current_scraping_logs:
+                                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                st.session_state.scraping_logs_history.append((timestamp, st.session_state.current_scraping_logs))
+
+                            if products_with_nutrition:
+                                try:
+                                    result = db.save_products_with_nutrition(products_with_nutrition)
+                                    success_msg = f"""Successfully processed {len(products_with_nutrition)} products!
                                                 New: {result['new_products']}, 
                                                 Updated: {result['updated_products']}, 
-                                                Reviews needed: {result['needs_review']}""")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error saving products: {str(e)}")
-                        else:
-                            st.warning("No products found during scraping. Please try again later.")
+                                                Reviews needed: {result['needs_review']}"""
+                                    st.success(success_msg)
+                                    # Add final result to logs
+                                    update_progress(success_msg)
+                                    st.rerun()
+                                except Exception as e:
+                                    error_msg = f"Error saving products: {str(e)}"
+                                    st.error(error_msg)
+                                    update_progress(f"❌ {error_msg}")
+                            else:
+                                warning_msg = "No products found during scraping. Please try again later."
+                                st.warning(warning_msg)
+                                update_progress(f"⚠️ {warning_msg}")
 
-                    except Exception as e:
-                        st.error(f"Error during data refresh: {str(e)}")
+                        except Exception as e:
+                            error_msg = f"Error during data refresh: {str(e)}"
+                            st.error(error_msg)
+                            update_progress(f"❌ {error_msg}")
+
+                    # Clean up progress indicators
+                    progress_bar.empty()
+                    progress_text.empty()
+                    status_text.empty()
+
+            with col3:
+                # Add button for specific products
+                if st.button("🎯 Refresh Specific Products"):
+                    progress_text = st.empty()
+
+                    with st.spinner("Scraping specific products..."):
+                        try:
+                            # Create a list to store logs
+                            scraping_logs = []
+                            def log_callback(msg):
+                                progress_text.text(msg)
+                                scraping_logs.append(msg)
+
+                            scraper = RimiScraper(status_callback=log_callback)
+                            products_with_nutrition = scraper.scrape_specific_products(SPECIFIC_PRODUCTS)
+
+                            # Store logs in session state with timestamp
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            st.session_state.scraping_logs_history.append((timestamp, scraping_logs))
+
+                            if products_with_nutrition:
+                                try:
+                                    result = db.save_products_with_nutrition(products_with_nutrition)
+                                    st.success(f"""Successfully processed specific products!
+                                                    New: {result['new_products']}, 
+                                                    Updated: {result['updated_products']}, 
+                                                    Reviews needed: {result['needs_review']}""")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Error saving products: {str(e)}")
+                            else:
+                                st.warning("No products found during scraping. Please try again later.")
+
+                        except Exception as e:
+                            st.error(f"Error during data refresh: {str(e)}")
 
 
         # Display existing data

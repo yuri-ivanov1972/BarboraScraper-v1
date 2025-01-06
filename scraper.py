@@ -27,6 +27,9 @@ COUNTRY_MAPPING = {
     'Zviedrija': 'SE',
     'Francija': 'FR',
     'Ukraina': 'UA',
+    'Indija': 'IN',
+    'Taizeme': 'TH',
+    'Turcija': 'TR',
     # Add more mappings as needed
 }
 
@@ -92,7 +95,7 @@ class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-7"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-4"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -107,6 +110,14 @@ class RimiScraper:
         self.session = self._create_session()
         self.status_callback = status_callback or (lambda x: None)
         self.page_size = 20  # Set page size to 20 items
+        self.start_page = 1  # Default starting page
+
+    def set_start_page(self, page: int):
+        """Set the starting page number for scraping"""
+        if page < 1:
+            raise ValueError("Start page must be greater than 0")
+        self.start_page = page
+        self.status_callback(f"Set starting page to: {page}")
 
     def _create_session(self) -> requests.Session:
         """Create a session with retry strategy and keepalive"""
@@ -552,6 +563,8 @@ class RimiScraper:
                 total_pages += pages_in_category
 
             self.status_callback(f"Total products to process: {total_products} across {total_pages} pages")
+            if self.start_page > 1:
+                self.status_callback(f"Starting from page {self.start_page}")
 
             for category_url in self.category_urls:
                 try:
@@ -564,9 +577,9 @@ class RimiScraper:
 
                     self.status_callback(f"Found {category_products} products in {category_pages} pages")
 
-                    # Process all pages
+                    # Process all pages starting from start_page
                     page_products_with_nutrition = []
-                    for page in range(1, category_pages + 1):
+                    for page in range(self.start_page, category_pages + 1):
                         max_retries = 3
                         retry_count = 0
 
@@ -580,7 +593,7 @@ class RimiScraper:
                                 self.status_callback(f"Fetching URL: {current_url}")
 
                                 # Add delay between pages
-                                if page > 1:
+                                if page > self.start_page:
                                     time.sleep(random.uniform(2, 3))
 
                                 response = self.session.get(current_url, timeout=30)  # Added timeout
@@ -681,7 +694,6 @@ class RimiScraper:
         try:
             self.status_callback("Initializing specific products scraper session...")
             products_with_nutrition = []
-
             for url in urls:
                 try:
                     self.status_callback(f"\nProcessing specific product: {url}")
