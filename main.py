@@ -6,7 +6,7 @@ import logging
 import traceback
 from datetime import datetime
 import psycopg2
-from psycopg2.extras import RealDictCursor # Added for RealDictCursor
+from psycopg2.extras import RealDictCursor  # Added for RealDictCursor
 import re
 
 # Configure logging
@@ -16,13 +16,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize database connection
-db = None
-try:
-    db = Database()
-    logger.info("Database connection established successfully")
-except Exception as e:
-    logger.error(f"Error initializing database: {str(e)}")
+def ensure_database_connection():
+    """Ensure database connection is active and working"""
+    try:
+        if 'db' not in st.session_state or not st.session_state.db:
+            st.session_state.db = Database()
+            logger.info("Database connection established successfully")
+        return st.session_state.db
+    except Exception as e:
+        logger.error(f"Error initializing database: {str(e)}")
+        st.error("Failed to connect to database. Please try again.")
+        return None
 
 # Page configuration
 st.set_page_config(
@@ -158,9 +162,6 @@ SPECIFIC_PRODUCTS = [
 ]
 
 def main():
-    st.title("🛒 Rimi Product Scraper")
-    st.markdown("### A tool for monitoring Rimi supermarket products and prices")
-
     # Initialize session state
     if 'show_debug' not in st.session_state:
         st.session_state.show_debug = False
@@ -186,11 +187,9 @@ def main():
         st.session_state.current_batch_progress = 0
 
     # Initialize database
-    try:
-        db = Database()
-        logger.info("Database connection established successfully")
-    except Exception as e:
-        st.error(f"Database Connection Error: {str(e)}")
+    db = ensure_database_connection()
+    if not db:
+        st.error("Database Connection Error")
         st.stop()
 
     # Add tabs for different sections
@@ -518,10 +517,11 @@ def main():
             status_text = st.empty()
 
             try:
+                db = ensure_database_connection()
                 if not db:
-                    db = Database()
+                    st.error("Database connection failed")
+                    return
 
-                # Get products without country codes
                 with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
                         SELECT * FROM products 
@@ -538,7 +538,8 @@ def main():
                     for idx, product in enumerate(products_to_reparse):
                         try:
                             # Re-parse the product
-                            nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(product['product_url'])
+                            nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(
+                                product['product_url'])
 
                             if country_code:
                                 # Update the country code
@@ -554,13 +555,17 @@ def main():
                             # Update progress
                             progress = (idx + 1) / total
                             progress_bar.progress(progress)
-                            status_text.text(f"Processed {idx + 1}/{total} products. Updated {updated_count} country codes.")
+                            status_text.text(
+                                f"Processed {idx + 1}/{total} products. Updated {updated_count} country codes."
+                            )
 
                         except Exception as e:
                             st.error(f"Error processing product {product['sku']}: {str(e)}")
                             continue
 
-                    st.success(f"Completed re-parsing {total} products. Updated {updated_count} country codes.")
+                    st.success(
+                        f"Completed re-parsing {total} products. Updated {updated_count} country codes."
+                    )
                     if st.button("View Updated Products"):
                         st.rerun()
                 else:
@@ -568,11 +573,14 @@ def main():
 
             except Exception as e:
                 st.error(f"Error during re-parsing: {str(e)}")
+                logger.error(f"Re-parsing error: {traceback.format_exc()}")
 
         # Display current statistics
         try:
+            db = ensure_database_connection()
             if not db:
-                db = Database()
+                st.error("Database connection failed")
+                return
 
             with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
