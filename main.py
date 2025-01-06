@@ -16,6 +16,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Initialize database connection
+db = None
+try:
+    db = Database()
+    logger.info("Database connection established successfully")
+except Exception as e:
+    logger.error(f"Error initializing database: {str(e)}")
+
 # Page configuration
 st.set_page_config(
     page_title="Rimi Product Scraper",
@@ -510,8 +518,8 @@ def main():
             status_text = st.empty()
 
             try:
-                # Create a new connection for this operation
-                db = Database()
+                if not db:
+                    db = Database()
 
                 # Get products without country codes
                 with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -540,6 +548,7 @@ def main():
                                         SET country_code = %s, updated_at = NOW()
                                         WHERE sku = %s
                                     """, (country_code, product['sku']))
+                                    db.conn.commit()  # Add explicit commit
                                 updated_count += 1
 
                             # Update progress
@@ -562,8 +571,8 @@ def main():
 
         # Display current statistics
         try:
-            # Create a new connection for statistics
-            db = Database()
+            if not db:
+                db = Database()
 
             with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
@@ -574,15 +583,19 @@ def main():
                 """)
                 stats = cur.fetchone()
 
-                st.markdown("### Statistics")
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Total Products", stats['total_products'])
-                with col2:
-                    st.metric("Missing Country Codes", stats['missing_country_code'])
+                if stats:
+                    st.markdown("### Statistics")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric("Total Products", stats['total_products'])
+                    with col2:
+                        st.metric("Missing Country Codes", stats['missing_country_code'])
+                else:
+                    st.warning("Could not fetch statistics")
 
         except Exception as e:
             st.error(f"Error fetching statistics: {str(e)}")
+            logger.error(f"Database error: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     main()
