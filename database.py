@@ -19,31 +19,45 @@ class Database:
         self.create_tables()
 
     def setup_connection_pool(self):
-        """Setup a connection pool"""
-        try:
-            self.pool = pool.SimpleConnectionPool(
-                1, 5,  # min and max connections
-                host=os.getenv('PGHOST'),
-                database=os.getenv('PGDATABASE'),
-                user=os.getenv('PGUSER'),
-                password=os.getenv('PGPASSWORD'),
-                port=os.getenv('PGPORT')
-            )
-            logging.info("Database connection pool created successfully")
-        except Exception as e:
-            logging.error(f"Error creating connection pool: {str(e)}")
-            raise
+        """Setup a connection pool with explicit error handling"""
+        for attempt in range(self.max_retries):
+            try:
+                if not self.pool:
+                    self.pool = pool.SimpleConnectionPool(
+                        1, 5,  # min and max connections
+                        host=os.getenv('PGHOST'),
+                        database=os.getenv('PGDATABASE'),
+                        user=os.getenv('PGUSER'),
+                        password=os.getenv('PGPASSWORD'),
+                        port=os.getenv('PGPORT')
+                    )
+                    # Test the connection
+                    conn = self.pool.getconn()
+                    if conn:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT 1')
+                        self.pool.putconn(conn)
+                        logging.info("Database connection pool created and tested successfully")
+                        return
+            except Exception as e:
+                if attempt < self.max_retries - 1:
+                    logging.warning(f"Connection attempt {attempt + 1} failed: {str(e)}")
+                    time.sleep(self.retry_delay)
+                else:
+                    logging.error(f"All connection attempts failed: {str(e)}")
+                    raise Exception(f"Failed to establish database connection after {self.max_retries} attempts: {str(e)}")
 
     def get_connection(self):
         """Get a connection from the pool with retry logic"""
         for attempt in range(self.max_retries):
             try:
-                if self.pool:
-                    conn = self.pool.getconn()
-                    if conn:
-                        conn.autocommit = True
-                        return conn
-                raise Exception("Connection pool is not initialized")
+                if not self.pool:
+                    self.setup_connection_pool()
+                conn = self.pool.getconn()
+                if conn:
+                    conn.autocommit = True
+                    return conn
+                raise Exception("Could not get connection from pool")
             except Exception as e:
                 if attempt < self.max_retries - 1:
                     logging.warning(f"Connection attempt {attempt + 1} failed: {str(e)}")
@@ -55,7 +69,10 @@ class Database:
     def return_connection(self, conn):
         """Return a connection to the pool"""
         if self.pool and conn:
-            self.pool.putconn(conn)
+            try:
+                self.pool.putconn(conn)
+            except Exception as e:
+                logging.error(f"Error returning connection to pool: {str(e)}")
 
     def create_tables(self):
         """Create the required tables if they don't exist"""
@@ -244,9 +261,9 @@ class Database:
                         }
 
                         should_update = (current_values != db_values or 
-                                      db_values['quantity_value'] is None or 
-                                      db_values['quantity_unit'] is None or 
-                                      db_values['country_code'] is None)
+                                          db_values['quantity_value'] is None or 
+                                          db_values['quantity_unit'] is None or 
+                                          db_values['country_code'] is None)
 
                         if is_problematic:
                             logging.info(f"Database values: {db_values}")

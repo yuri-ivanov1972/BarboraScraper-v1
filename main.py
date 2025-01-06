@@ -19,13 +19,20 @@ logger = logging.getLogger(__name__)
 def ensure_database_connection():
     """Ensure database connection is active and working"""
     try:
-        if 'db' not in st.session_state or not st.session_state.db:
+        if 'db' not in st.session_state:
             st.session_state.db = Database()
             logger.info("Database connection established successfully")
+
+        # Verify connection is working
+        conn = st.session_state.db.get_connection()
+        with conn.cursor() as cur:
+            cur.execute('SELECT 1')
+        st.session_state.db.return_connection(conn)
+
         return st.session_state.db
     except Exception as e:
         logger.error(f"Error initializing database: {str(e)}")
-        st.error("Failed to connect to database. Please try again.")
+        st.error(f"Failed to connect to database: {str(e)}")
         return None
 
 # Page configuration
@@ -522,61 +529,58 @@ def main():
                     st.error("Database connection failed")
                     return
 
-                # Verify database connection
+                conn = db.get_connection()
                 try:
-                    db.conn.cursor().execute("SELECT 1")
-                except Exception as e:
-                    st.error(f"Database connection test failed: {str(e)}")
-                    return
+                    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                        cur.execute("""
+                            SELECT * FROM products 
+                            WHERE country_code IS NULL 
+                            LIMIT %s
+                        """, (st.session_state.reparse_batch_size,))
+                        products_to_reparse = cur.fetchall()
 
-                with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                    cur.execute("""
-                        SELECT * FROM products 
-                        WHERE country_code IS NULL 
-                        LIMIT %s
-                    """, (st.session_state.reparse_batch_size,))
-                    products_to_reparse = cur.fetchall()
+                    if products_to_reparse:
+                        scraper = RimiScraper()
+                        total = len(products_to_reparse)
+                        updated_count = 0
 
-                if products_to_reparse:
-                    scraper = RimiScraper()
-                    total = len(products_to_reparse)
-                    updated_count = 0
+                        for idx, product in enumerate(products_to_reparse):
+                            try:
+                                nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(
+                                    product['product_url'])
 
-                    for idx, product in enumerate(products_to_reparse):
-                        try:
-                            # Re-parse the product
-                            nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(
-                                product['product_url'])
+                                if country_code:
+                                    # Update the country code
+                                    with conn.cursor() as cur:
+                                        cur.execute("""
+                                            UPDATE products 
+                                            SET country_code = %s, updated_at = NOW()
+                                            WHERE sku = %s
+                                        """, (country_code, product['sku']))
+                                        conn.commit()
+                                    updated_count += 1
 
-                            if country_code:
-                                # Update the country code
-                                with db.conn.cursor() as cur:
-                                    cur.execute("""
-                                        UPDATE products 
-                                        SET country_code = %s, updated_at = NOW()
-                                        WHERE sku = %s
-                                    """, (country_code, product['sku']))
-                                    db.conn.commit()  # Add explicit commit
-                                updated_count += 1
+                                # Update progress
+                                progress = (idx + 1) / total
+                                progress_bar.progress(progress)
+                                status_text.text(
+                                    f"Processed {idx + 1}/{total} products. Updated {updated_count} country codes."
+                                )
 
-                            # Update progress
-                            progress = (idx + 1) / total
-                            progress_bar.progress(progress)
-                            status_text.text(
-                                f"Processed {idx + 1}/{total} products. Updated {updated_count} country codes."
-                            )
+                            except Exception as e:
+                                st.error(f"Error processing product {product['sku']}: {str(e)}")
+                                continue
 
-                        except Exception as e:
-                            st.error(f"Error processing product {product['sku']}: {str(e)}")
-                            continue
+                        st.success(
+                            f"Completed re-parsing {total} products. Updated {updated_count} country codes."
+                        )
+                        if st.button("View Updated Products"):
+                            st.rerun()
+                    else:
+                        st.info("No products found without country codes.")
 
-                    st.success(
-                        f"Completed re-parsing {total} products. Updated {updated_count} country codes."
-                    )
-                    if st.button("View Updated Products"):
-                        st.rerun()
-                else:
-                    st.info("No products found without country codes.")
+                finally:
+                    db.return_connection(conn)
 
             except Exception as e:
                 st.error(f"Error during re-parsing: {str(e)}")
