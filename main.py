@@ -575,35 +575,6 @@ def main():
                 st.error(f"Error during re-parsing: {str(e)}")
                 logger.error(f"Re-parsing error: {traceback.format_exc()}")
 
-        # Display current statistics
-        try:
-            db = ensure_database_connection()
-            if not db:
-                st.error("Database connection failed")
-                return
-
-            with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT 
-                        COUNT(*) as total_products,
-                        COUNT(CASE WHEN country_code IS NULL THEN 1 END) as missing_country_code
-                    FROM products
-                """)
-                stats = cur.fetchone()
-
-                if stats:
-                    st.markdown("### Statistics")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.metric("Total Products", stats['total_products'])
-                    with col2:
-                        st.metric("Missing Country Codes", stats['missing_country_code'])
-                else:
-                    st.warning("Could not fetch statistics")
-
-        except Exception as e:
-            st.error(f"Error fetching statistics: {str(e)}")
-            logger.error(f"Database error: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     main()
