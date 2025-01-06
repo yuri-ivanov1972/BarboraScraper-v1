@@ -172,6 +172,10 @@ def main():
         st.session_state.scraping_logs_history = []
     if 'current_scraping_logs' not in st.session_state:
         st.session_state.current_scraping_logs = []
+    if 'reparse_batch_size' not in st.session_state:
+        st.session_state.reparse_batch_size = 50
+    if 'current_batch_progress' not in st.session_state:
+        st.session_state.current_batch_progress = 0
 
     # Initialize database
     try:
@@ -182,7 +186,10 @@ def main():
         st.stop()
 
     # Add tabs for different sections
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Products Overview", "Product Details", "Debug", "Specific Products Debug", "Scraping Logs"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "Products Overview", "Product Details", "Debug", "Specific Products Debug",
+        "Scraping Logs", "Fix Country Codes"
+    ])
 
     with tab1:
         col1, col2 = st.columns(2)
@@ -493,6 +500,83 @@ def main():
         else:
             st.info("No scraping logs available. Try running the scraper to see the logs.")
 
+    with tab6:
+        st.markdown("### 🌍 Fix Missing Country Codes")
+        st.markdown("Re-parse products without country codes in batches of 50.")
+
+        # Add button to start re-parsing
+        if st.button("🔄 Re-parse Missing Country Codes"):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            try:
+                # Get products without country codes
+                with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM products 
+                        WHERE country_code IS NULL 
+                        LIMIT %s
+                    """, (st.session_state.reparse_batch_size,))
+                    products_to_reparse = cur.fetchall()
+
+                if products_to_reparse:
+                    scraper = RimiScraper()
+                    total = len(products_to_reparse)
+                    updated_count = 0
+
+                    for idx, product in enumerate(products_to_reparse):
+                        try:
+                            # Re-parse the product
+                            nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(product['product_url'])
+
+                            if country_code:
+                                # Update the country code
+                                with db.conn.cursor() as cur:
+                                    cur.execute("""
+                                        UPDATE products 
+                                        SET country_code = %s, updated_at = NOW()
+                                        WHERE sku = %s
+                                    """, (country_code, product['sku']))
+                                updated_count += 1
+
+                            # Update progress
+                            progress = (idx + 1) / total
+                            progress_bar.progress(progress)
+                            status_text.text(f"Processed {idx + 1}/{total} products. Updated {updated_count} country codes.")
+
+                        except Exception as e:
+                            st.error(f"Error processing product {product['sku']}: {str(e)}")
+                            continue
+
+                    st.success(f"Completed re-parsing {total} products. Updated {updated_count} country codes.")
+                    if st.button("View Updated Products"):
+                        st.rerun()
+                else:
+                    st.info("No products found without country codes.")
+
+            except Exception as e:
+                st.error(f"Error during re-parsing: {str(e)}")
+
+        # Display current statistics
+        try:
+            with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        COUNT(*) as total_products,
+                        COUNT(CASE WHEN country_code IS NULL THEN 1 END) as missing_country_code
+                    FROM products
+                """)
+                stats = cur.fetchone()
+
+                st.markdown("### Statistics")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Products", stats['total_products'])
+                with col2:
+                    st.metric("Missing Country Codes", stats['missing_country_code'])
+
+        except Exception as e:
+            st.error(f"Error fetching statistics: {str(e)}")
 
 if __name__ == "__main__":
     main()
