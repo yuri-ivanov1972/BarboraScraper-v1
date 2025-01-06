@@ -30,6 +30,19 @@ COUNTRY_MAPPING = {
     'Indija': 'IN',
     'Taizeme': 'TH',
     'Turcija': 'TR',
+    'Serbija': 'RS',
+    'Nīderlande': 'NL',
+    'Dānija': 'DK',
+    'Čehija': 'CZ',
+    'Apvienotā karaliste': 'GB',
+    'Maurīcija': 'MU',
+    'Indonēzija': 'ID',
+    'Šveice': 'CH',
+    'Austrija': 'AT',
+    'Taivana': 'TW',
+    'Koreja': 'KR',
+    'Spānija': 'ES',
+    'Šrilanka': 'LK',
     # Add more mappings as needed
 }
 
@@ -95,7 +108,7 @@ class RimiScraper:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-4"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-11"
         ]
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -394,12 +407,12 @@ class RimiScraper:
                 # Extract the tabs section using a more reliable method
                 try:
                     # First, try to find the details tab in the script content
-                    details_match = re.search(r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']', 
+                    details_match = re.search(r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']',
                                            script_content, re.DOTALL)
 
                     if not details_match:
                         # Try alternative pattern
-                        details_match = re.search(r'html:\s*["\']([^"\']+)["\'].*?identifier:\s*["\']details["\']', 
+                        details_match = re.search(r'html:\s*["\']([^"\']+)["\'].*?identifier:\s*["\']details["\']',
                                                script_content, re.DOTALL)
 
                     if details_match:
@@ -684,13 +697,13 @@ class RimiScraper:
             return products_with_nutrition
 
         except Exception as e:
-            logging.error(f"Scraping error: {str(e)}")
+            logging.error(f"Scraping error:{str(e)}")
             if last_successful_page > 0:
                 self.status_callback(f"Scraping interrupted at page {last_successful_page}")
             raise ScraperError(str(e))
 
     def scrape_specific_products(self, urls: List[str]) -> List[Dict[str, Union[str, Decimal]]]:
-        """Scrape specific product URLs"""
+        """Scrape information for specific product URLs"""
         try:
             self.status_callback("Initializing specific products scraper session...")
             products_with_nutrition = []
@@ -753,7 +766,7 @@ class RimiScraper:
                                                 except (InvalidOperation, ValueError) as e:
                                                     self.status_callback(f"Error converting price '{price}': {str(e)}")
                                         elif isinstance(offers, list) and offers:
-                                            #                                            # Handle case where offers is a list
+                                            # Handle case where offers is a list
                                             first_offer = offers[0]
                                             if isinstance(first_offer, dict):
                                                 price = first_offer.get('price')
@@ -789,7 +802,8 @@ class RimiScraper:
                                     if impressions and isinstance(impressions, list) and len(impressions) > 0:
                                         category = impressions[0].get('category', '')
                                         if category:
-                                            # Take the first part of the category path (most specific)                                            product['category'] = category.split('/')[0]
+                                            # Take the first part of the category path (most specific)
+                                            product['category'] = category.split('/')[0]
                                             self.status_callback(f"Found category in dataLayer: {product['category']}")
                         except (json.JSONDecodeError, AttributeError) as e:
                             self.status_callback(f"Error parsing dataLayer: {str(e)}")
