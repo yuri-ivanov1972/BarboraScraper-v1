@@ -510,6 +510,9 @@ def main():
             status_text = st.empty()
 
             try:
+                # Create a new connection for this operation
+                db = Database()
+
                 # Get products without country codes
                 with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
                     cur.execute("""
@@ -559,6 +562,9 @@ def main():
 
         # Display current statistics
         try:
+            # Create a new connection for statistics
+            db = Database()
+
             with db.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
                     SELECT 
