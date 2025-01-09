@@ -1,3 +1,4 @@
+python
 import streamlit as st
 import pandas as pd
 from scraper import RimiScraper, ScraperError
@@ -200,9 +201,9 @@ def main():
         st.stop()
 
     # Add tabs for different sections
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "Products Overview", "Product Details", "Debug", "Specific Products Debug",
-        "Scraping Logs", "Fix Country Codes"
+        "Scraping Logs", "Fix Country Codes", "Export Data"
     ])
 
     with tab1:
@@ -586,6 +587,64 @@ def main():
                 st.error(f"Error during re-parsing: {str(e)}")
                 logger.error(f"Re-parsing error: {traceback.format_exc()}")
 
+
+    with tab7:
+        st.markdown("### 📥 Export Products Data")
+        st.markdown("Export all products with their nutritional information to a CSV file.")
+
+        if st.button("Export to CSV"):
+            progress_text = st.empty()
+            progress_text.text("Preparing data for export...")
+
+            try:
+                db = ensure_database_connection()
+                if not db:
+                    st.error("Database connection failed")
+                    return
+
+                conn = db.get_connection()
+                try:
+                    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                        cur.execute("""
+                            SELECT 
+                                p.name, p.price, p.price_per_unit, p.sku, 
+                                p.category, p.quantity_value, p.quantity_unit, 
+                                p.country_code, p.product_url, p.image_url,
+                                n.ingredients, n.energy_kj, n.energy_kcal,
+                                n.fat, n.saturated_fat, n.carbohydrates,
+                                n.sugars, n.protein, n.salt,
+                                n.serving_size_unit, n.needs_review,
+                                n.review_notes
+                            FROM products p
+                            LEFT JOIN product_nutrition n ON p.sku = n.sku
+                            ORDER BY p.name
+                        """)
+                        data = cur.fetchall()
+
+                        if data:
+                            df = pd.DataFrame(data)
+
+                            # Convert DataFrame to CSV
+                            csv = df.to_csv(index=False)
+
+                            # Create download button
+                            st.download_button(
+                                label="Download CSV",
+                                data=csv,
+                                file_name="rimi_products_export.csv",
+                                mime="text/csv"
+                            )
+
+                            progress_text.text(f"✅ Exported {len(data)} products successfully!")
+                        else:
+                            st.warning("No products found in the database.")
+
+                finally:
+                    db.return_connection(conn)
+
+            except Exception as e:
+                st.error(f"Error exporting data: {str(e)}")
+                logger.error(f"Export error: {traceback.format_exc()}")
 
 if __name__ == "__main__":
     main()
