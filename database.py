@@ -55,13 +55,24 @@ class Database:
                     self.setup_connection_pool()
                 conn = self.pool.getconn()
                 if conn:
-                    conn.autocommit = True
-                    return conn
+                    # Test the connection before returning
+                    try:
+                        with conn.cursor() as cur:
+                            cur.execute('SELECT 1')
+                        conn.autocommit = True
+                        return conn
+                    except Exception:
+                        # If test fails, close and retry
+                        self.pool.putconn(conn)
+                        raise
                 raise Exception("Could not get connection from pool")
             except Exception as e:
                 if attempt < self.max_retries - 1:
                     logging.warning(f"Connection attempt {attempt + 1} failed: {str(e)}")
                     time.sleep(self.retry_delay)
+                    # Reset pool if necessary
+                    if "connection has been closed" in str(e).lower():
+                        self.pool = None
                 else:
                     logging.error(f"All connection attempts failed: {str(e)}")
                     raise
@@ -73,6 +84,11 @@ class Database:
                 self.pool.putconn(conn)
             except Exception as e:
                 logging.error(f"Error returning connection to pool: {str(e)}")
+                # If putting connection back fails, try to close it
+                try:
+                    conn.close()
+                except:
+                    pass
 
     def create_tables(self):
         """Create the required tables if they don't exist"""
@@ -80,6 +96,26 @@ class Database:
         try:
             conn = self.get_connection()
             with conn.cursor() as cur:
+                # Create additives table if it doesn't exist
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS additives (
+                        id SERIAL PRIMARY KEY,
+                        e_number VARCHAR(10) UNIQUE NOT NULL,
+                        name VARCHAR(255),
+                        description TEXT,
+                        safety_rating VARCHAR(50),
+                        source_url TEXT
+                    )
+                """)
+
+                # Create product_additives relationship table if it doesn't exist
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS product_additives (
+                        product_sku VARCHAR(50),
+                        additive_id INTEGER REFERENCES additives(id),
+                        PRIMARY KEY (product_sku, additive_id)
+                    )
+                """)
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS products (
                         id SERIAL PRIMARY KEY,
@@ -116,13 +152,13 @@ class Database:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                conn.commit()
         except Exception as e:
             logging.error(f"Table creation error: {str(e)}")
             raise
         finally:
             if conn:
                 self.return_connection(conn)
-
     def save_products(self, products):
         """Save product data to database, updating existing records if needed"""
         conn = None
