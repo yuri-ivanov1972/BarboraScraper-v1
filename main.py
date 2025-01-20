@@ -400,7 +400,7 @@ def main():
                             st.markdown(f"- Salt: {nutrition['salt']}g")
 
                         st.markdown('</div>', unsafe_allow_html=True)
-                        
+
                         if nutrition['ingredients']:
                             display_product_additives(selected_product, nutrition['ingredients'])
 
@@ -663,10 +663,28 @@ def display_product_additives(sku: str, ingredients: str):
         additive_manager = st.session_state.additive_manager
         logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
 
-        # Force reprocess ingredients to ensure additives are stored
-        stats = additive_manager.process_product_ingredients(sku, ingredients)
-        logger.info(f"Processing results for {sku}: {stats}")
+        # Add debug expander
+        with st.expander("🔍 Debug Information"):
+            st.markdown("### Ingredient Processing Debug")
+            st.text(f"Processing ingredients for SKU: {sku}")
+            st.text(f"Raw ingredients text:\n{ingredients}")
 
+            # Process ingredients and show results
+            stats = additive_manager.process_product_ingredients(sku, ingredients)
+            st.text(f"\nProcessing results:\n{stats}")
+
+            if stats['processed']:
+                st.text(f"Found {stats['additives_found']} additives: {stats['additives']}")
+
+                # Show database query results
+                additives = additive_manager.get_product_additives(sku)
+                st.text(f"\nRetrieved {len(additives)} additives from database:")
+                for additive in additives:
+                    st.text(f"- {additive.e_number}: {additive.name or 'Unknown'}")
+            else:
+                st.error(f"Processing failed: {stats.get('error')}")
+
+        # Regular additive display logic
         if stats['processed']:
             if stats['additives_found'] > 0:
                 st.markdown("#### 🧪 Food Additives")
