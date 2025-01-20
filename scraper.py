@@ -131,7 +131,7 @@ class RimiScraper:
                  status_callback: Optional[Callable[[str], None]] = None):
         self.base_url = "https://www.rimi.lv"
         self.category_urls = [
-            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-13"
+            "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/c/SH-17"
         ]
         self.headers = {
             'User-Agent':
