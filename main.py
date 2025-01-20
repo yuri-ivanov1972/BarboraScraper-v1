@@ -663,21 +663,19 @@ def display_product_additives(sku: str, ingredients: str):
         additive_manager = st.session_state.additive_manager
         logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
 
+        # Process ingredients once and store results
+        stats = additive_manager.process_product_ingredients(sku, ingredients)
+        additives = additive_manager.get_product_additives(sku) if stats['processed'] else []
+
         # Add debug expander
         with st.expander("🔍 Debug Information"):
             st.markdown("### Ingredient Processing Debug")
             st.text(f"Processing ingredients for SKU: {sku}")
             st.text(f"Raw ingredients text:\n{ingredients}")
-
-            # Process ingredients and show results
-            stats = additive_manager.process_product_ingredients(sku, ingredients)
             st.text(f"\nProcessing results:\n{stats}")
 
             if stats['processed']:
                 st.text(f"Found {stats['additives_found']} additives: {stats['additives']}")
-
-                # Show database query results
-                additives = additive_manager.get_product_additives(sku)
                 st.text(f"\nRetrieved {len(additives)} additives from database:")
                 for additive in additives:
                     st.text(f"- {additive.e_number}: {additive.name or 'Unknown'}")
@@ -685,16 +683,16 @@ def display_product_additives(sku: str, ingredients: str):
                 st.error(f"Processing failed: {stats.get('error')}")
 
         # Regular additive display logic
-        if stats['processed']:
-            if stats['additives_found'] > 0:
-                st.markdown("#### 🧪 Food Additives")
-                st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+        if stats['processed'] and stats['additives_found'] > 0:
+            st.markdown("#### 🧪 Food Additives")
+            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
 
-                additives = additive_manager.get_product_additives(sku)
-                logger.info(f"Found {len(additives)} additives for product {sku}")
-
-                if additives:
-                    for additive in additives:
+            if additives:
+                # Create columns for better layout
+                cols = st.columns(2)
+                for idx, additive in enumerate(additives):
+                    col = cols[idx % 2]
+                    with col:
                         with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
                             if additive.description:
                                 st.markdown(f"**Description:** {additive.description}")
@@ -702,20 +700,17 @@ def display_product_additives(sku: str, ingredients: str):
                                 st.markdown(f"**Safety Rating:** {additive.safety_rating}")
                             if additive.source_url:
                                 st.markdown(f"[More Information]({additive.source_url})")
-                else:
-                    st.info("No additive information available in the database.")
-
-                st.markdown('</div>', unsafe_allow_html=True)
             else:
-                logger.info(f"No additives found in ingredients for product {sku}")
-                st.info("No food additives (E-numbers) found in this product.")
+                st.info("No additive information available in the database.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
-            logger.error(f"Failed to process additives for {sku}: {stats.get('error')}")
-            st.error("Failed to process additive information")
+            logger.info(f"No additives found in ingredients for product {sku}")
+            st.info("No food additives (E-numbers) found in this product.")
 
     except Exception as e:
         logger.error(f"Error displaying additives for {sku}: {str(e)}")
-        st.error("Failed to load additive information")
+        st.error("Failed to process additive information")
 
 
 if __name__ == "__main__":
