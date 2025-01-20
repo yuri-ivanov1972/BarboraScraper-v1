@@ -342,7 +342,8 @@ def main():
     with tab2:
         st.markdown("### 🔍 Product Details")
         try:
-            products = db.get_products()
+            # Use cached products
+            products = get_cached_products(db)
             if products:
                 # Convert to DataFrame for easier handling
                 df = pd.DataFrame(products)
@@ -355,8 +356,8 @@ def main():
                 )
 
                 if selected_product:
-                    # Get nutritional info for selected product
-                    nutrition = db.get_product_nutrition(selected_product)
+                    # Get cached nutritional info for selected product
+                    nutrition = get_cached_product_nutrition(db, selected_product)
 
                     if nutrition:
                         product_info = df[df['sku'] == selected_product].iloc[0]
@@ -653,6 +654,23 @@ def main():
                 st.error(f"Error exporting data: {str(e)}")
                 logger.error(f"Export error: {traceback.format_exc()}")
 
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_products(db):
+    """Cache product list to avoid repeated database queries"""
+    return db.get_products()
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_nutrition(db, sku):
+    """Cache nutritional information to avoid repeated database queries"""
+    return db.get_product_nutrition(sku)
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_additives(additive_manager, sku, ingredients):
+    """Cache additive processing results to avoid repeated processing"""
+    stats = additive_manager.process_product_ingredients(sku, ingredients)
+    additives = additive_manager.get_product_additives(sku) if stats['processed'] else []
+    return stats, additives
+
 def display_product_additives(sku: str, ingredients: str):
     """Display additives found in the product ingredients"""
     if not ingredients:
@@ -663,9 +681,8 @@ def display_product_additives(sku: str, ingredients: str):
         additive_manager = st.session_state.additive_manager
         logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
 
-        # Process ingredients once and store results
-        stats = additive_manager.process_product_ingredients(sku, ingredients)
-        additives = additive_manager.get_product_additives(sku) if stats['processed'] else []
+        # Get cached additive information
+        stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
 
         # Add debug expander
         with st.expander("🔍 Debug Information"):
