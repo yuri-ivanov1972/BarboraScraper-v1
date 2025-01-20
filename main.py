@@ -655,20 +655,20 @@ def main():
                 logger.error(f"Export error: {traceback.format_exc()}")
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_products(db):
+def get_cached_products(_db):
     """Cache product list to avoid repeated database queries"""
-    return db.get_products()
+    return _db.get_products()
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_product_nutrition(db, sku):
+def get_cached_product_nutrition(_db, sku):
     """Cache nutritional information to avoid repeated database queries"""
-    return db.get_product_nutrition(sku)
+    return _db.get_product_nutrition(sku)
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_product_additives(additive_manager, sku, ingredients):
+def get_cached_product_additives(_additive_manager, sku, ingredients):
     """Cache additive processing results to avoid repeated processing"""
-    stats = additive_manager.process_product_ingredients(sku, ingredients)
-    additives = additive_manager.get_product_additives(sku) if stats['processed'] else []
+    stats = _additive_manager.process_product_ingredients(sku, ingredients)
+    additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
     return stats, additives
 
 def display_product_additives(sku: str, ingredients: str):
@@ -714,7 +714,7 @@ def display_product_additives(sku: str, ingredients: str):
                             if additive.description:
                                 st.markdown(f"**Description:** {additive.description}")
                             if additive.safety_rating:
-                                st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                                st.markdown(f"**SafetyRating:** {additive.safety_rating}")
                             if additive.source_url:
                                 st.markdown(f"[More Information]({additive.source_url})")
             else:
