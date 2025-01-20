@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 from scraper import RimiScraper, ScraperError
 from database import Database
+from additive_manager import AdditiveManager
 import logging
 import traceback
 from datetime import datetime
 import psycopg2
-from psycopg2.extras import RealDictCursor  # Added for RealDictCursor
+from psycopg2.extras import RealDictCursor
 import re
 
 # Configure logging
@@ -22,6 +23,9 @@ def ensure_database_connection():
         if 'db' not in st.session_state:
             st.session_state.db = Database()
             logger.info("Database connection established successfully")
+
+            # Initialize AdditiveManager
+            st.session_state.additive_manager = AdditiveManager(st.session_state.db)
 
         # Verify connection is working
         conn = st.session_state.db.get_connection()
@@ -396,6 +400,10 @@ def main():
                             st.markdown(f"- Salt: {nutrition['salt']}g")
 
                         st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        if nutrition['ingredients']:
+                            display_product_additives(selected_product, nutrition['ingredients'])
+
                     else:
                         st.warning("No nutritional information available for this product.")
             else:
@@ -644,6 +652,36 @@ def main():
             except Exception as e:
                 st.error(f"Error exporting data: {str(e)}")
                 logger.error(f"Export error: {traceback.format_exc()}")
+
+def display_product_additives(sku: str, ingredients: str):
+    """Display additives found in the product ingredients"""
+    if not ingredients:
+        return
+
+    try:
+        additive_manager = st.session_state.additive_manager
+        stats = additive_manager.process_product_ingredients(sku, ingredients)
+
+        if stats['processed'] and stats['additives_found'] > 0:
+            st.markdown("#### 🧪 Food Additives")
+            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+
+            additives = additive_manager.get_product_additives(sku)
+            for additive in additives:
+                with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
+                    if additive.description:
+                        st.markdown(f"**Description:** {additive.description}")
+                    if additive.safety_rating:
+                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                    if additive.source_url:
+                        st.markdown(f"[More Information]({additive.source_url})")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    except Exception as e:
+        logger.error(f"Error displaying additives: {str(e)}")
+        st.error("Failed to load additive information")
+
 
 if __name__ == "__main__":
     main()
