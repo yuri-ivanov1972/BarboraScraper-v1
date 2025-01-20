@@ -663,6 +663,7 @@ def display_product_additives(sku: str, ingredients: str):
         additive_manager = st.session_state.additive_manager
         logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
 
+        # Force reprocess ingredients to ensure additives are stored
         stats = additive_manager.process_product_ingredients(sku, ingredients)
         logger.info(f"Processing results for {sku}: {stats}")
 
