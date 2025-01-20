@@ -656,30 +656,46 @@ def main():
 def display_product_additives(sku: str, ingredients: str):
     """Display additives found in the product ingredients"""
     if not ingredients:
+        logger.info(f"No ingredients provided for product {sku}")
         return
 
     try:
         additive_manager = st.session_state.additive_manager
+        logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
+
         stats = additive_manager.process_product_ingredients(sku, ingredients)
+        logger.info(f"Processing results for {sku}: {stats}")
 
-        if stats['processed'] and stats['additives_found'] > 0:
-            st.markdown("#### 🧪 Food Additives")
-            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+        if stats['processed']:
+            if stats['additives_found'] > 0:
+                st.markdown("#### 🧪 Food Additives")
+                st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
 
-            additives = additive_manager.get_product_additives(sku)
-            for additive in additives:
-                with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
-                    if additive.description:
-                        st.markdown(f"**Description:** {additive.description}")
-                    if additive.safety_rating:
-                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
-                    if additive.source_url:
-                        st.markdown(f"[More Information]({additive.source_url})")
+                additives = additive_manager.get_product_additives(sku)
+                logger.info(f"Found {len(additives)} additives for product {sku}")
 
-            st.markdown('</div>', unsafe_allow_html=True)
+                if additives:
+                    for additive in additives:
+                        with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
+                            if additive.description:
+                                st.markdown(f"**Description:** {additive.description}")
+                            if additive.safety_rating:
+                                st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                            if additive.source_url:
+                                st.markdown(f"[More Information]({additive.source_url})")
+                else:
+                    st.info("No additive information available in the database.")
+
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                logger.info(f"No additives found in ingredients for product {sku}")
+                st.info("No food additives (E-numbers) found in this product.")
+        else:
+            logger.error(f"Failed to process additives for {sku}: {stats.get('error')}")
+            st.error("Failed to process additive information")
 
     except Exception as e:
-        logger.error(f"Error displaying additives: {str(e)}")
+        logger.error(f"Error displaying additives for {sku}: {str(e)}")
         st.error("Failed to load additive information")
 
 
