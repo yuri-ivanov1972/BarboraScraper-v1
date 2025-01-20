@@ -23,17 +23,20 @@ class Database:
         for attempt in range(self.max_retries):
             try:
                 if not self.pool:
+                    # Create pool with autocommit enabled by default
                     self.pool = pool.SimpleConnectionPool(
                         1, 5,  # min and max connections
                         host=os.getenv('PGHOST'),
                         database=os.getenv('PGDATABASE'),
                         user=os.getenv('PGUSER'),
                         password=os.getenv('PGPASSWORD'),
-                        port=os.getenv('PGPORT')
+                        port=os.getenv('PGPORT'),
+                        options='-c search_path=public'
                     )
                     # Test the connection
                     conn = self.pool.getconn()
                     if conn:
+                        conn.autocommit = True
                         with conn.cursor() as cur:
                             cur.execute('SELECT 1')
                         self.pool.putconn(conn)
@@ -55,16 +58,11 @@ class Database:
                     self.setup_connection_pool()
                 conn = self.pool.getconn()
                 if conn:
-                    # Test the connection before returning
-                    try:
-                        with conn.cursor() as cur:
-                            cur.execute('SELECT 1')
-                        conn.autocommit = True
-                        return conn
-                    except Exception:
-                        # If test fails, close and retry
-                        self.pool.putconn(conn)
-                        raise
+                    conn.autocommit = True
+                    # Test the connection
+                    with conn.cursor() as cur:
+                        cur.execute('SELECT 1')
+                    return conn
                 raise Exception("Could not get connection from pool")
             except Exception as e:
                 if attempt < self.max_retries - 1:
@@ -116,6 +114,8 @@ class Database:
                         PRIMARY KEY (product_sku, additive_id)
                     )
                 """)
+
+                # Create products table if it doesn't exist
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS products (
                         id SERIAL PRIMARY KEY,
@@ -133,6 +133,8 @@ class Database:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+
+                # Create product_nutrition table if it doesn't exist
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS product_nutrition (
                         id SERIAL PRIMARY KEY,
