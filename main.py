@@ -11,6 +11,7 @@ from psycopg2.extras import RealDictCursor
 import re
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -663,11 +664,11 @@ def main():
         # Add refresh button
         col1, col2 = st.columns([1, 3])
         with col1:
-            if st.button("🔄 Refresh Analysis"):
-                with st.spinner("Refreshing ingredient analysis..."):
+            if st.button("🔄 Refresh Analysis", key="refresh_ingredients"):
+                with st.spinner("Analyzing ingredients..."):
                     if refresh_ingredient_analysis(db):
                         st.success("Successfully refreshed ingredient analysis!")
-                        st.rerun()
+                        st.experimental_rerun()
                     else:
                         st.error("Failed to refresh ingredient analysis")
 
@@ -815,8 +816,15 @@ def refresh_ingredient_analysis(db: Database) -> bool:
                 """)
                 products = cur.fetchall()
 
+                # Create progress bar and status
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                total_products = len(products)
+                status_text.text(f"Found {total_products} products to process")
+
                 # Process ingredients
                 ingredient_data = defaultdict(lambda: {'count': 0, 'products': set()})
+                processed = 0
 
                 # First pass: collect data
                 for product in products:
@@ -834,7 +842,18 @@ def refresh_ingredient_analysis(db: Database) -> bool:
                             ingredient_data[normalized]['count'] += 1
                             ingredient_data[normalized]['products'].add(product['sku'])
 
+                    # Update progress
+                    processed += 1
+                    progress = processed / total_products
+                    progress_bar.progress(progress)
+                    status_text.text(f"Processing products: {processed}/{total_products} ({progress:.1%})")
+
+                status_text.text(f"Analyzed {processed} products. Saving to database...")
+
                 # Second pass: insert data
+                saved_ingredients = 0
+                total_ingredients = len(ingredient_data)
+
                 for ingredient, data in ingredient_data.items():
                     try:
                         # Insert ingredient
@@ -853,17 +872,26 @@ def refresh_ingredient_analysis(db: Database) -> bool:
                                 ON CONFLICT DO NOTHING
                             """, (ingredient_id, sku))
 
+                        # Update progress for saving
+                        saved_ingredients += 1
+                        progress = saved_ingredients / total_ingredients
+                        status_text.text(f"Saving ingredients to database: {saved_ingredients}/{total_ingredients} ({progress:.1%})")
+
                     except Exception as e:
                         logger.error(f"Error processing ingredient {ingredient}: {str(e)}")
                         continue
 
                 conn.commit()
+                status_text.text("✅ Analysis completed successfully!")
+                time.sleep(1)  # Give user time to see completion message
                 return True
 
         finally:
             db.return_connection(conn)
     except Exception as e:
         logger.error(f"Error refreshing ingredient analysis: {str(e)}")
+        if 'status_text' in locals():
+            status_text.text(f"❌ Error during analysis: {str(e)}")
         return False
 
 def normalize_ingredient(ingredient: str) -> str:
@@ -981,11 +1009,11 @@ def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]
         # Add refresh button
         col1, col2 = st.columns([1, 3])
         with col1:
-            if st.button("🔄 Refresh Analysis"):
+            if st.button("🔄 Refresh Analysis", key="refresh_ingredients"):
                 with st.spinner("Refreshing ingredient analysis..."):
                     if refresh_ingredient_analysis(db):
                         st.success("Successfully refreshed ingredient analysis!")
-                        st.rerun()
+                        st.experimental_rerun()
                     else:
                         st.error("Failed to refresh ingredient analysis")
 
