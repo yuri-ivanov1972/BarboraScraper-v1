@@ -660,6 +660,17 @@ def main():
         st.markdown("### 📊 Ingredient Analysis")
         st.markdown("Analysis of ingredient frequencies across all products")
 
+        # Add refresh button
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("🔄 Refresh Analysis"):
+                with st.spinner("Refreshing ingredient analysis..."):
+                    if refresh_ingredient_analysis(db):
+                        st.success("Successfully refreshed ingredient analysis!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to refresh ingredient analysis")
+
         try:
             ingredients_data = get_ingredient_frequencies(db)
 
@@ -720,7 +731,6 @@ def display_product_additives(sku: str, ingredients: str):
     if not ingredients:
         logger.info(f"No ingredients provided for product {sku}")
         return
-
     try:
         additive_manager = st.session_state.additive_manager
         logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
@@ -793,13 +803,184 @@ def normalize_ingredient(ingredient: str) -> str:
 
 def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
     """
-    Get ingredient frequencies and related products from the database
-    Returns: List of tuples (ingredient, frequency, related_products)
+    Get ingredient frequencies and related products from the cached analysis
     """
     try:
         conn = db.get_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        ia.ingredient,
+                        ia.frequency,
+                        array_agg(json_build_object(
+                            'sku', p.sku,
+                            'name', p.name
+                        )) as products
+                    FROM ingredient_analysis ia
+                    JOIN ingredient_product_mapping ipm ON ia.id = ipm.ingredient_id
+                    JOIN products p ON p.sku = ipm.product_sku
+                    GROUP BY ia.id, ia.ingredient, ia.frequency
+                    ORDER BY ia.frequency DESC, ia.ingredient
+                """)
+                results = cur.fetchall()
+
+                return [(row['ingredient'], row['frequency'], row['products']) for row in results]
+
+        finally:
+            db.return_connection(conn)
+    except Exception as e:
+        logger.error(f"Error getting ingredient frequencies: {str(e)}")
+        return []
+
+# In the main() function, modify the tab8 section:
+    with tab8:
+        st.markdown("### 📊 Ingredient Analysis")
+        st.markdown("Analysis of ingredient frequencies across all products")
+
+        # Add refresh button
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("🔄 Refresh Analysis"):
+                with st.spinner("Refreshing ingredient analysis..."):
+                    if refresh_ingredient_analysis(db):
+                        st.success("Successfully refreshed ingredient analysis!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to refresh ingredient analysis")
+
+        try:
+            ingredients_data = get_ingredient_frequencies(db)
+
+            if ingredients_data:
+                # Display total unique ingredients
+                st.info(f"Found {len(ingredients_data)} unique ingredients across all products")
+
+                # Create a search box
+                search_term = st.text_input("🔍 Search ingredients", "")
+
+                # Filter ingredients based on search
+                if search_term:
+                    filtered_data = [
+                        (ing, freq, prods) 
+                        for ing, freq, prods in ingredients_data 
+                        if search_term.lower() in ing.lower()
+                    ]
+                else:
+                    filtered_data = ingredients_data
+
+                # Display ingredients table
+                for ingredient, frequency, products in filtered_data:
+                    with st.expander(f"{ingredient} (Found in {frequency} products)"):
+                        st.markdown("#### Products containing this ingredient:")
+                        # Create two columns
+                        cols = st.columns(2)
+                        for idx, product in enumerate(products):
+                            col = cols[idx % 2]
+                            with col:
+                                st.markdown(f"- {product['name']}")
+            else:
+                st.warning("No ingredient data available. Try refreshing the product data.")
+
+        except Exception as e:
+            logger.error(f"Error in ingredient analysis: {str(e)}")
+            st.error("Failed to analyze ingredients")
+
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_products(_db):
+    """Cache product list to avoid repeated database queries"""
+    return _db.get_products()
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_nutrition(_db, sku):
+    """Cache nutritional information to avoid repeated database queries"""
+    return _db.get_product_nutrition(sku)
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_additives(_additive_manager, sku, ingredients):
+    """Cache additive processing results to avoid repeated processing"""
+    stats = _additive_manager.process_product_ingredients(sku, ingredients)
+    additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
+    return stats, additives
+
+def display_product_additives(sku: str, ingredients: str):
+    """Display additives found in the product ingredients"""
+    if not ingredients:
+        logger.info(f"No ingredients provided for product {sku}")
+        return
+    try:
+        additive_manager = st.session_state.additive_manager
+        logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
+
+        # Get cached additive information
+        stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
+
+        #Add debug expander
+        with st.expander("🔍 Debug Information"):
+            st.markdown("### Ingredient Processing Debug")
+            st.text(f"Processing ingredients for SKU: {sku}")
+            st.text(f"Raw ingredients text:\n{ingredients}")
+            st.text(f"\nProcessing results:\n{stats}")
+
+            if stats['processed']:
+                st.markdown("### Found Additives")
+                for additive in additives:
+                    st.markdown(f"#### {additive.e_number}")
+                    if additive.name:
+                        st.markdown(f"**Name:** {additive.name}")
+                    if additive.description:
+                        st.markdown(f"**Description:** {additive.description}")
+                    if additive.safety_rating:
+                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                    if additive.source_url:
+                        st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.warning("No additives found or processing failed")
+        # Regular additive display logic
+        if stats['processed'] and stats['additives_found'] > 0:
+            st.markdown("#### 🧪 Food Additives")
+            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+
+            if additives:
+                # Create columns for better layout
+                cols = st.columns(2)
+                for idx, additive in enumerate(additives):
+                    col = cols[idx % 2]
+                    with col:
+                        with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
+                            if additive.description:
+                                st.markdown(f"**Description:** {additive.description}")
+                            if additive.safety_rating:
+                                st.markdown(f"**SafetyRating:** {additive.safety_rating}")
+                            if additive.source_url:
+                                st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.info("No additive information available in the database.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            logger.info(f"No additives found in ingredients for product {sku}")
+            st.info("No food additives (E-numbers) found in this product.")
+
+    except Exception as e:
+        logger.error(f"Error displaying additives for {sku}: {str(e)}")
+        st.error("Failed to process additive information")
+
+
+
+def refresh_ingredient_analysis(db: Database) -> bool:
+    """
+    Refresh the ingredient analysis tables with current data
+    Returns: True if successful, False otherwise
+    """
+    try:
+        conn = db.get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # First, clear existing analysis
+                cur.execute("TRUNCATE ingredient_analysis CASCADE")
+
                 # Get all products with ingredients
                 cur.execute("""
                     SELECT p.sku, p.name, n.ingredients
@@ -812,35 +993,267 @@ def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]
                 # Process ingredients
                 ingredient_data = defaultdict(lambda: {'count': 0, 'products': []})
 
+                # First pass: collect data
                 for product in products:
-                    # Split ingredients by common separators
                     ingredients_text = product['ingredients']
                     ingredients = re.split(r'[,;.]', ingredients_text)
 
-                    # Process each ingredient
                     for ingredient in ingredients:
                         normalized = normalize_ingredient(ingredient)
-                        if normalized:  # Skip empty strings
+                        if normalized:
                             ingredient_data[normalized]['count'] += 1
-                            ingredient_data[normalized]['products'].append({
-                                'sku': product['sku'],
-                                'name': product['name']
-                            })
+                            ingredient_data[normalized]['products'].append(product)
 
-                # Convert to sorted list
-                result = [
-                    (ingredient, data['count'], data['products'])
-                    for ingredient, data in ingredient_data.items()
-                ]
-                # Sort by frequency (descending) and then alphabetically
-                result.sort(key=lambda x: (-x[1], x[0]))
+                # Second pass: insert data
+                for ingredient, data in ingredient_data.items():
+                    # Insert ingredient
+                    cur.execute("""
+                        INSERT INTO ingredient_analysis (ingredient, frequency)
+                        VALUES (%s, %s)
+                        RETURNING id
+                    """, (ingredient, data['count']))
+                    ingredient_id = cur.fetchone()['id']
 
-                return result
+                    # Insert product mappings
+                    for product in data['products']:
+                        cur.execute("""
+                            INSERT INTO ingredient_product_mapping (ingredient_id, product_sku)
+                            VALUES (%s, %s)
+                        """, (ingredient_id, product['sku']))
+
+                conn.commit()
+                return True
+
+        finally:
+            db.return_connection(conn)
+    except Exception as e:
+        logger.error(f"Error refreshing ingredient analysis: {str(e)}")
+        return False
+
+def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
+    """
+    Get ingredient frequencies and related products from the cached analysis
+    """
+    try:
+        conn = db.get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        ia.ingredient,
+                        ia.frequency,
+                        array_agg(json_build_object(
+                            'sku', p.sku,
+                            'name', p.name
+                        )) as products
+                    FROM ingredient_analysis ia
+                    JOIN ingredient_product_mapping ipm ON ia.id = ipm.ingredient_id
+                    JOIN products p ON p.sku = ipm.product_sku
+                    GROUP BY ia.id, ia.ingredient, ia.frequency
+                    ORDER BY ia.frequency DESC, ia.ingredient
+                """)
+                results = cur.fetchall()
+
+                return [(row['ingredient'], row['frequency'], row['products']) for row in results]
+
         finally:
             db.return_connection(conn)
     except Exception as e:
         logger.error(f"Error getting ingredient frequencies: {str(e)}")
         return []
+
+    with tab7:
+        st.markdown("### 📥 Export Products Data")
+        st.markdown("Export all products with their nutritional information to a CSV file.")
+
+        if st.button("Export to CSV"):
+            progress_text = st.empty()
+            progress_text.text("Preparing data for export...")
+
+            try:
+                db = ensure_database_connection()
+                if not db:
+                    st.error("Database connection failed")
+                    return
+
+                conn = db.get_connection()
+                try:
+                    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                        cur.execute("""
+                            SELECT 
+                                p.name, p.price, p.price_per_unit, p.sku, 
+                                p.category, p.quantity_value, p.quantity_unit, 
+                                p.country_code, p.product_url, p.image_url,
+                                n.ingredients, n.energy_kj, n.energy_kcal,
+                                n.fat, n.saturated_fat, n.carbohydrates,
+                                n.sugars, n.protein, n.salt,
+                                n.serving_size_unit, n.needs_review,
+                                n.review_notes
+                            FROM products p
+                            LEFT JOIN product_nutrition n ON p.sku = n.sku
+                            ORDER BY p.name
+                        """)
+                        data = cur.fetchall()
+
+                        if data:
+                            df = pd.DataFrame(data)
+
+                            # Convert DataFrame to CSV
+                            csv = df.to_csv(index=False)
+
+                            # Create download button
+                            st.download_button(
+                                label="Download CSV",
+                                data=csv,
+                                file_name="rimi_products_export.csv",
+                                mime="text/csv"
+                            )
+
+                            progress_text.text(f"✅ Exported {len(data)} products successfully!")
+                        else:
+                            st.warning("No products found in the database.")
+
+                finally:
+                    db.return_connection(conn)
+
+            except Exception as e:
+                st.error(f"Error exporting data: {str(e)}")
+                logger.error(f"Export error: {traceback.format_exc()}")
+
+    with tab8:
+        st.markdown("### 📊 Ingredient Analysis")
+        st.markdown("Analysis of ingredient frequencies across all products")
+
+        # Add refresh button
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("🔄 Refresh Analysis"):
+                with st.spinner("Refreshing ingredient analysis..."):
+                    if refresh_ingredient_analysis(db):
+                        st.success("Successfully refreshed ingredient analysis!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to refresh ingredient analysis")
+
+        try:
+            ingredients_data = get_ingredient_frequencies(db)
+
+            if ingredients_data:
+                # Display total unique ingredients
+                st.info(f"Found {len(ingredients_data)} unique ingredients across all products")
+
+                # Create a search box
+                search_term = st.text_input("🔍 Search ingredients", "")
+
+                # Filter ingredients based on search
+                if search_term:
+                    filtered_data = [
+                        (ing, freq, prods) 
+                        for ing, freq, prods in ingredients_data 
+                        if search_term.lower() in ing.lower()
+                    ]
+                else:
+                    filtered_data = ingredients_data
+
+                # Display ingredients table
+                for ingredient, frequency, products in filtered_data:
+                    with st.expander(f"{ingredient} (Found in {frequency} products)"):
+                        st.markdown("#### Products containing this ingredient:")
+                        # Create two columns
+                        cols = st.columns(2)
+                        for idx, product in enumerate(products):
+                            col = cols[idx % 2]
+                            with col:
+                                st.markdown(f"- {product['name']}")
+            else:
+                st.warning("No ingredient data available. Try refreshing the product data.")
+
+        except Exception as e:
+            logger.error(f"Error in ingredient analysis: {str(e)}")
+            st.error("Failed to analyze ingredients")
+
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_products(_db):
+    """Cache product list to avoid repeated database queries"""
+    return _db.get_products()
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_nutrition(_db, sku):
+    """Cache nutritional information to avoid repeated database queries"""
+    return _db.get_product_nutrition(sku)
+
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_additives(_additive_manager, sku, ingredients):
+    """Cache additive processing results to avoid repeated processing"""
+    stats = _additive_manager.process_product_ingredients(sku, ingredients)
+    additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
+    return stats, additives
+
+def display_product_additives(sku: str, ingredients: str):
+    """Display additives found in the product ingredients"""
+    if not ingredients:
+        logger.info(f"No ingredients provided for product {sku}")
+        return
+    try:
+        additive_manager = st.session_state.additive_manager
+        logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
+
+        # Get cached additive information
+        stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
+
+        #Add debug expander
+        with st.expander("🔍 Debug Information"):
+            st.markdown("### Ingredient Processing Debug")
+            st.text(f"Processing ingredients for SKU: {sku}")
+            st.text(f"Raw ingredients text:\n{ingredients}")
+            st.text(f"\nProcessing results:\n{stats}")
+
+            if stats['processed']:
+                st.markdown("### Found Additives")
+                for additive in additives:
+                    st.markdown(f"#### {additive.e_number}")
+                    if additive.name:
+                        st.markdown(f"**Name:** {additive.name}")
+                    if additive.description:
+                        st.markdown(f"**Description:** {additive.description}")
+                    if additive.safety_rating:
+                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                    if additive.source_url:
+                        st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.warning("No additives found or processing failed")
+        # Regular additive display logic
+        if stats['processed'] and stats['additives_found'] > 0:
+            st.markdown("#### 🧪 Food Additives")
+            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+
+            if additives:
+                # Create columns for better layout
+                cols = st.columns(2)
+                for idx, additive in enumerate(additives):
+                    col = cols[idx % 2]
+                    with col:
+                        with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
+                            if additive.description:
+                                st.markdown(f"**Description:** {additive.description}")
+                            if additive.safety_rating:
+                                st.markdown(f"**SafetyRating:** {additive.safety_rating}")
+                            if additive.source_url:
+                                st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.info("No additive information available in the database.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            logger.info(f"No additives found in ingredients for product {sku}")
+            st.info("No food additives (E-numbers) found in this product.")
+
+    except Exception as e:
+        logger.error(f"Error displaying additives for {sku}: {str(e)}")
+        st.error("Failed to process additive information")
+
+
 
 if __name__ == "__main__":
     main()
