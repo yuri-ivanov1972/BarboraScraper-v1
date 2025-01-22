@@ -381,10 +381,10 @@ def handle_products_overview(products, db):
         st.error(f"Error loading products: {str(e)}")
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_ingredient_analysis(db: Database):
+def get_cached_ingredient_analysis(_db: Database):
     """Cache ingredient analysis data to improve performance"""
     try:
-        conn = db.get_connection()
+        conn = _db.get_connection()
         try:
             with conn.cursor() as cur:
                 logger.info("Querying cached ingredient analysis data...")
@@ -397,7 +397,7 @@ def get_cached_ingredient_analysis(db: Database):
                 logger.info(f"Found {len(ingredients_data) if ingredients_data else 0} ingredients in cache")
                 return ingredients_data
         finally:
-            db.return_connection(conn)
+            _db.return_connection(conn)
     except Exception as e:
         logger.error(f"Error getting cached ingredient analysis: {str(e)}")
         return []
