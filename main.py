@@ -606,7 +606,7 @@ def display_product_additives(sku: str, ingredients: str):
                             if additive.description:
                                 st.markdown(f"**Description:** {additive.description}")
                             if additive.safety_rating:
-                                st.markdown(f"**SafetyRating:** {additive.safety_rating}")
+                                st.markdown(f"**Safety Rating:** {additive.safety_rating}")
                             if additive.source_url:
                                 st.markdown(f"[More Information]({additive.source_url})")
             else:
