@@ -590,6 +590,7 @@ def display_product_additives(sku: str, ingredients: str):
                         st.markdown(f"[More Information]({additive.source_url})")
             else:
                 st.warning("No additives found or processing failed")
+
         # Regular additive display logic
         if stats['processed'] and stats['additives_found'] > 0:
             st.markdown("#### 🧪 Food Additives")
