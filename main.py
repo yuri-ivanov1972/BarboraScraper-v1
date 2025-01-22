@@ -152,6 +152,66 @@ def refresh_ingredient_analysis(db: Database) -> bool:
             status_text.text(f"❌ Error during analysis: {str(e)}")
         return False
 
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_by_name(_db, product_name: str) -> Optional[List[Dict]]:
+    """Cache product search results to avoid repeated database queries"""
+    try:
+        conn = _db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT * FROM products 
+                    WHERE LOWER(name) LIKE LOWER(%s)
+                    LIMIT 10
+                """, (f"%{product_name}%",))
+                products = cur.fetchall()
+                if products:
+                    return [dict(zip([col[0] for col in cur.description], row)) for row in products]
+                return None
+        finally:
+            _db.return_connection(conn)
+    except Exception as e:
+        logger.error(f"Error searching for product: {str(e)}")
+        return None
+
+def debug_product_url(url: str) -> list:
+    """Debug scraping process for a specific URL"""
+    debug_logs = []
+    try:
+        scraper = RimiScraper(status_callback=lambda msg: debug_logs.append(msg))
+        debug_logs.append(f"Starting debug for URL: {url}")
+
+        debug_logs.append("\n=== Starting Nutritional Info Scraping ===")
+        # Remove any parentheses and extra whitespace from URL
+        cleaned_url = url.strip().strip('()')
+        nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(cleaned_url)
+
+        debug_logs.append("\n=== Product Details ===")
+        debug_logs.append(f"Country of Origin: {country_code if country_code else 'Not found'}")
+        if quantity and quantity[0]:
+            debug_logs.append(f"Quantity: {quantity[0]} {quantity[1]}")
+        else:
+            debug_logs.append("Quantity: Not found")
+
+        debug_logs.append("\n=== Final Nutrition Info ===")
+        debug_logs.append(f"Ingredients: {nutrition_info.ingredients[:100]}..." if nutrition_info.ingredients else "No ingredients found")
+        debug_logs.append(f"Energy: {nutrition_info.energy_kj}kJ / {nutrition_info.energy_kcal}kcal")
+        debug_logs.append(f"Fat: {nutrition_info.fat}g")
+        debug_logs.append(f"Saturated Fat: {nutrition_info.saturated_fat}g")
+        debug_logs.append(f"Carbohydrates: {nutrition_info.carbohydrates}g")
+        debug_logs.append(f"Sugars: {nutrition_info.sugars}g")
+        debug_logs.append(f"Protein: {nutrition_info.protein}g")
+        debug_logs.append(f"Salt: {nutrition_info.salt}g")
+
+        if nutrition_info.needs_review:
+            debug_logs.append(f"\n⚠️ Needs Review: {nutrition_info.review_notes}")
+
+    except Exception as e:
+        debug_logs.append(f"❌ Error during scraping: {str(e)}")
+        debug_logs.append(traceback.format_exc())
+
+    return debug_logs
+
 def main():
     # Initialize database connection
     db = ensure_database_connection()
@@ -215,7 +275,65 @@ def main():
         except Exception as e:
             st.error(f"Error loading products: {str(e)}")
 
-    # Tab 8: Ingredient Analysis
+    # Tab 2: Product Details
+    with tabs[1]:
+        st.title("Product Details")
+        product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
+        if product_name:
+            try:
+                products = get_cached_product_by_name(db, product_name)
+                if products:
+                    # Create a dropdown to select from matching products
+                    product_options = {f"{p['name']} (SKU: {p['sku']})": p for p in products}
+                    selected_product_name = st.selectbox("Select a product:", list(product_options.keys()))
+
+                    if selected_product_name:
+                        product = product_options[selected_product_name]
+                        st.write("### Product Information")
+                        st.json(product)
+
+                        # Display additives and nutrition info
+                        if 'ingredients' in product:
+                            display_product_additives(product['sku'], product['ingredients'])
+
+                        nutrition = get_cached_product_nutrition(db, product['sku'])
+                        if nutrition:
+                            st.write("### Nutrition Information")
+                            st.json(nutrition)
+                else:
+                    st.warning("No products found matching your search.")
+            except Exception as e:
+                st.error(f"Error loading product details: {str(e)}")
+                logger.error(f"Product details error: {str(e)}")
+
+    # Remaining tabs with their content
+    with tabs[2]:
+        st.title("Debug")
+        # Your debug code here
+
+    with tabs[3]:
+        st.title("Specific Products Debug")
+        if SPECIFIC_PRODUCTS:
+            selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
+            if selected_product_url:
+                debug_logs = debug_product_url(selected_product_url)
+                for log in debug_logs:
+                    st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
+        else:
+            st.info("No specific products defined for debugging.")
+
+    with tabs[4]:
+        st.title("Scraping Logs")
+        # Your scraping log display code here
+
+    with tabs[5]:
+        st.title("Fix Country Codes")
+        # Your country code fixing code here
+
+    with tabs[6]:
+        st.title("Export Data")
+        # Your data export code here
+
     with tabs[7]:
         st.title("Ingredient Analysis")
         st.markdown("### 📊 Ingredient Analysis")
@@ -283,46 +401,6 @@ def main():
             st.error(f"Failed to analyze ingredients: {str(e)}")
 
     # Remaining tabs with their content
-    with tabs[1]:
-        st.title("Product Details")
-        selected_sku = st.text_input("Enter product SKU:", "")
-        if selected_sku:
-            try:
-                product = db.get_product_by_sku(selected_sku)
-                if product:
-                    st.write(product)
-                    display_product_additives(selected_sku, product.get('ingredients'))
-                    nutrition = db.get_product_nutrition(selected_sku)
-                    if nutrition:
-                        st.json(nutrition)
-                else:
-                    st.warning("Product not found.")
-            except Exception as e:
-                st.error(f"Error loading product details: {str(e)}")
-
-    with tabs[2]:
-        st.title("Debug")
-        # Your debug code here
-
-    with tabs[3]:
-        st.title("Specific Products Debug")
-        selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
-        if selected_product_url:
-            debug_logs = debug_product_url(selected_product_url)
-            for log in debug_logs:
-                st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
-
-    with tabs[4]:
-        st.title("Scraping Logs")
-        # Your scraping log display code here
-
-    with tabs[5]:
-        st.title("Fix Country Codes")
-        # Your country code fixing code here
-
-    with tabs[6]:
-        st.title("Export Data")
-        # Your data export code here
 
 if __name__ == "__main__":
     main()
@@ -399,49 +477,6 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
-def debug_product_url(url: str) -> list:
-    """Debug scraping process for a specific URL"""
-    debug_logs = []
-
-    def debug_callback(msg: str):
-        debug_logs.append(msg)
-        print(f"Debug: {msg}")  # Print to console for additional debugging
-
-    try:
-        scraper = RimiScraper(status_callback=debug_callback)
-        debug_logs.append(f"Starting debug for URL: {url}")
-
-        debug_logs.append("\n=== Starting Nutritional Info Scraping ===")
-        # Remove any parentheses and extra whitespace from URL
-        cleaned_url = url.strip().strip('()')
-        nutrition_info, country_code, quantity = scraper.scrape_nutritional_info(cleaned_url)
-
-        debug_logs.append("\n=== Product Details ===")
-        debug_logs.append(f"Country of Origin: {country_code if country_code else 'Not found'}")
-        if quantity and quantity[0]:
-            debug_logs.append(f"Quantity: {quantity[0]} {quantity[1]}")
-        else:
-            debug_logs.append("Quantity: Not found")
-
-        debug_logs.append("\n=== Final Nutrition Info ===")
-        debug_logs.append(f"Ingredients: {nutrition_info.ingredients[:100]}..." if nutrition_info.ingredients else "No ingredients found")
-        debug_logs.append(f"Energy: {nutrition_info.energy_kj}kJ / {nutrition_info.energy_kcal}kcal")
-        debug_logs.append(f"Fat: {nutrition_info.fat}g")
-        debug_logs.append(f"Saturated Fat: {nutrition_info.saturated_fat}g")
-        debug_logs.append(f"Carbohydrates: {nutrition_info.carbohydrates}g")
-        debug_logs.append(f"Sugars: {nutrition_info.sugars}g")
-        debug_logs.append(f"Protein: {nutrition_info.protein}g")
-        debug_logs.append(f"Salt: {nutrition_info.salt}g")
-
-        if nutrition_info.needs_review:
-            debug_logs.append(f"\n⚠️ Needs Review: {nutrition_info.review_notes}")
-
-    except Exception as e:
-        debug_logs.append(f"❌ Error during scraping: {str(e)}")
-        debug_logs.append(traceback.format_exc())
-
-    return debug_logs
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_product_additives(_additive_manager, sku, ingredients):
