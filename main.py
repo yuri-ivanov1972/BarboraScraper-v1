@@ -120,18 +120,8 @@ def display_product_additives(sku: str, ingredients: str):
 def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
     logger.info(f"Selecting ingredient: {ingredient}")
-    logger.info(f"Previous active tab: {st.session_state.active_tab}")
-    logger.info(f"Previous selected ingredient: {st.session_state.selected_ingredient}")
+    handle_tab_switch(ingredient)
 
-    # Update session state
-    st.session_state.selected_ingredient = ingredient
-    st.session_state.active_tab = 0
-
-    logger.info(f"Updated session state - active_tab: {st.session_state.active_tab}")
-    logger.info(f"Updated session state - selected_ingredient: {st.session_state.selected_ingredient}")
-
-    # Force UI refresh
-    st.rerun()
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -413,7 +403,7 @@ def handle_ingredient_analysis(db: Database):
         with st.spinner("Refreshing ingredient analysis..."):
             if refresh_ingredient_analysis(db):
                 st.success("Successfully refreshed ingredient analysis!")
-                switch_to_products_tab()
+                handle_tab_switch() # Changed to use the new function
             else:
                 st.error("Failed to refresh ingredient analysis")
                 return
@@ -446,7 +436,8 @@ def handle_ingredient_analysis(db: Database):
                             help="Click to view products containing this ingredient",
                             use_container_width=True
                         ):
-                            switch_to_products_tab(ingredient)
+                            handle_tab_switch(ingredient)
+                            st.rerun()
             else:
                 if search_term:
                     st.warning("No ingredients found matching your search.")
@@ -459,12 +450,17 @@ def handle_ingredient_analysis(db: Database):
         logger.error(f"Error in ingredient analysis: {str(e)}")
         st.error(f"Failed to analyze ingredients: {str(e)}")
 
-def switch_to_products_tab(ingredient: Optional[str] = None):
-    """Helper function to handle tab switching and ingredient selection"""
+def handle_tab_switch(ingredient: Optional[str] = None):
+    """Single unified function to handle tab switching and ingredient selection"""
     if ingredient is not None:
         st.session_state.selected_ingredient = ingredient
+        logger.info(f"Setting selected ingredient to: {ingredient}")
+
+    # Update tab index
     st.session_state.active_tab = 0
+    logger.info(f"Setting active tab to: {st.session_state.active_tab}")
     st.rerun()
+
 
 def main():
     # Initialize database connection
@@ -494,9 +490,23 @@ def main():
     logger.info(f"Current active tab index: {st.session_state.active_tab}")
     logger.info(f"Selected ingredient: {st.session_state.get('selected_ingredient')}")
 
-    # Create tabs and handle tab switching
+    # Create tabs and handle tab selection
     tabs = st.tabs(tab_titles)
-    current_tab = st.session_state.active_tab
+
+    # Add tab selector above the tabs
+    selected_tab = st.selectbox(
+        "Select Tab",
+        range(len(tab_titles)),
+        format_func=lambda x: tab_titles[x],
+        index=st.session_state.active_tab,
+        label_visibility="hidden"
+    )
+
+    # Update session state if tab changed
+    if selected_tab != st.session_state.active_tab:
+        logger.info(f"Tab changed from {st.session_state.active_tab} to {selected_tab}")
+        st.session_state.active_tab = selected_tab
+        st.rerun()
 
     # Process tabs
     for i, tab in enumerate(tabs):
