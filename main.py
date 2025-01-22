@@ -674,15 +674,21 @@ def main():
 
         try:
             # Query ingredient analysis data directly from the database
+            ingredients_data = None
             conn = db.get_connection()
             try:
                 with conn.cursor() as cur:
+                    logger.info("Querying ingredient analysis data...")
                     cur.execute("""
                         SELECT ingredient, frequency 
                         FROM ingredient_analysis 
                         ORDER BY frequency DESC
                     """)
                     ingredients_data = cur.fetchall()
+                    logger.info(f"Found {len(ingredients_data) if ingredients_data else 0} ingredients")
+            except Exception as e:
+                logger.error(f"Database error: {str(e)}")
+                st.error(f"Error querying database: {str(e)}")
             finally:
                 db.return_connection(conn)
 
@@ -694,6 +700,7 @@ def main():
                 search_term = st.text_input("🔍 Search ingredients", "")
 
                 # Filter ingredients based on search
+                filtered_data = []
                 if search_term:
                     filtered_data = [
                         (ing, freq) 
@@ -704,22 +711,28 @@ def main():
                     filtered_data = ingredients_data
 
                 # Display ingredients in a more compact format
-                col1, col2 = st.columns(2)
-                for idx, (ingredient, frequency) in enumerate(filtered_data):
-                    col = col1 if idx % 2 == 0 else col2
-                    with col:
-                        st.markdown(f"**{ingredient}** ({frequency} products)")
+                if filtered_data:
+                    col1, col2 = st.columns(2)
+                    for idx, (ingredient, frequency) in enumerate(filtered_data):
+                        col = col1 if idx % 2 == 0 else col2
+                        with col:
+                            st.markdown(f"**{ingredient}** ({frequency} products)")
+                else:
+                    if search_term:
+                        st.warning("No ingredients found matching your search.")
+                    else:
+                        st.warning("No ingredients found in the database.")
             else:
                 st.warning("No ingredient data available. Try refreshing the analysis.")
 
         except Exception as e:
             logger.error(f"Error in ingredient analysis: {str(e)}")
-            st.error("Failed to analyze ingredients")
+            st.error(f"Failed to analyze ingredients: {str(e)}")
 
     @st.cache_data(ttl=300)  # Cache data for 5 minutes
     def get_cached_products(_db):
         """Cache product list to avoid repeated database queries"""
-        return _db.get_products()
+        return _db.getproducts()
 
     @st.cache_data(ttl=300)  # Cache data for 5 minutes
     def get_cached_product_nutrition(_db, sku):
