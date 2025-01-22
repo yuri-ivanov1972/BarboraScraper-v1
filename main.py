@@ -31,7 +31,7 @@ SPECIFIC_PRODUCTS = [
 
 # Page configuration must be the first Streamlit command
 st.set_page_config(
-    page_title="Rimi Product Scraper",
+    page_title="Product Analysis",
     page_icon="🛒",
     layout="wide"
 )
@@ -113,7 +113,6 @@ def display_product_additives(sku: str, ingredients: str):
     except Exception as e:
         logger.error(f"Error displaying additives for {sku}: {str(e)}")
         st.error("Failed to process additive information")
-
 
 def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
@@ -462,6 +461,7 @@ def handle_ingredient_analysis(db: Database):
         st.error(f"Failed to analyze ingredients: {str(e)}")
 
 def main():
+    """Main application function"""
     # Initialize database connection
     db = ensure_database_connection()
     if not db:
@@ -486,14 +486,19 @@ def main():
     # Create tabs
     tabs = st.tabs(tab_titles)
 
-    # Process active tab
+    # Get current active tab
     active_tab = st.session_state.get('active_tab', 0)
+    logger.info(f"Current active tab index: {active_tab}")
 
     # Process tabs
-    with tabs[active_tab]:
-        if active_tab == 0:  # Products Overview
+    # Products Overview
+    with tabs[0]:
+        if active_tab == 0:
             handle_products_overview(all_products, db)
-        elif active_tab == 1:  # Product Details
+
+    # Product Details
+    with tabs[1]:
+        if active_tab == 1:
             st.title("Product Details")
             product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
             if product_name:
@@ -517,10 +522,16 @@ def main():
                 except Exception as e:
                     st.error(f"Error loading product details: {str(e)}")
                     logger.error(f"Product details error: {str(e)}")
-        elif active_tab == 2:  # Debug
+
+    # Debug
+    with tabs[2]:
+        if active_tab == 2:
             st.title("Debug")
             st.write("Debug information will be displayed here.")
-        elif active_tab == 3:  # Specific Products Debug
+
+    # Specific Products Debug
+    with tabs[3]:
+        if active_tab == 3:
             st.title("Specific Products Debug")
             if SPECIFIC_PRODUCTS:
                 selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
@@ -530,25 +541,38 @@ def main():
                         st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
             else:
                 st.info("No specific products defined for debugging.")
-        elif active_tab == 4:  # Scraping Logs
+
+    # Scraping Logs
+    with tabs[4]:
+        if active_tab == 4:
             st.title("Scraping Logs")
             st.write("Scraping logs will be displayed here.")
-        elif active_tab == 5:  # Fix Country Codes
+
+    # Fix Country Codes
+    with tabs[5]:
+        if active_tab == 5:
             st.title("Fix Country Codes")
             st.write("Country code fixing interface will be shown here.")
-        elif active_tab == 6:  # Export Data
+
+    # Export Data
+    with tabs[6]:
+        if active_tab == 6:
             st.title("Export Data")
             st.write("Data export options will be available here.")
-        elif active_tab == 7:  # Ingredient Analysis
+
+    # Ingredient Analysis
+    with tabs[7]:
+        if active_tab == 7:
             handle_ingredient_analysis(db)
 
-    # Tab selector with callback
+    # Add tab selector at the bottom
     selected_tab = st.selectbox(
         "Select Tab",
         range(len(tab_titles)),
         format_func=lambda x: tab_titles[x],
         index=active_tab,
-        key='tab_selector'
+        key='tab_selector',
+        on_change=lambda: setattr(st.session_state, 'active_tab', st.session_state.tab_selector)
     )
 
     # Update session state if tab changed
