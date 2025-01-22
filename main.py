@@ -130,6 +130,31 @@ def ensure_database_connection():
         st.error(f"Failed to connect to database: {str(e)}")
         return None
 
+def get_products_with_ingredient(db: Database, ingredient_filter: str = None) -> List[Dict]:
+    """Get products, optionally filtered by ingredient"""
+    try:
+        conn = db.get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                if ingredient_filter:
+                    # Query products containing the specified ingredient
+                    cur.execute("""
+                        SELECT DISTINCT p.* 
+                        FROM products p
+                        JOIN product_nutrition n ON p.sku = n.sku
+                        WHERE LOWER(n.ingredients) LIKE LOWER(%s)
+                        ORDER BY p.name
+                    """, (f'%{ingredient_filter}%',))
+                else:
+                    # Get all products if no filter
+                    cur.execute("SELECT * FROM products ORDER BY name")
+                return cur.fetchall()
+        finally:
+            db.return_connection(conn)
+    except Exception as e:
+        logger.error(f"Error getting products with ingredient filter: {str(e)}")
+        return []
+
 def main():
     # Initialize database connection
     db = ensure_database_connection()
@@ -152,13 +177,38 @@ def main():
     # Tab 1: Products Overview
     with tabs[0]:
         st.title("Products Overview")
+
+        # Add ingredient filter
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            ingredient_filter = st.text_input(
+                "🔍 Filter by ingredient (copy from Ingredient Analysis tab)",
+                key="product_ingredient_filter"
+            )
+        with col2:
+            if st.button("Clear Filter", key="clear_ingredient_filter"):
+                ingredient_filter = ""
+                st.session_state.product_ingredient_filter = ""
+
         try:
-            products = db.get_products()
+            # Get filtered products
+            products = get_products_with_ingredient(db, ingredient_filter)
+
             if products:
                 df = pd.DataFrame(products)
+
+                # Display filter status
+                if ingredient_filter:
+                    st.info(f"Showing products containing: {ingredient_filter}")
+                    st.text(f"Found {len(products)} products")
+
+                # Display products table
                 st.dataframe(df)
             else:
-                st.info("No products available. Please refresh the data.")
+                if ingredient_filter:
+                    st.warning(f"No products found containing '{ingredient_filter}'")
+                else:
+                    st.info("No products available. Please refresh the data.")
         except Exception as e:
             st.error(f"Error loading products: {str(e)}")
 
