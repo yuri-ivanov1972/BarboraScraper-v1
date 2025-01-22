@@ -92,7 +92,7 @@ def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
     st.session_state.selected_ingredient = ingredient
     st.session_state.active_tab = 0  # Switch to products tab
-    st.rerun()  # Using rerun instead of experimental_rerun
+    st.experimental_rerun()  # Force a rerun to update the UI
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -288,6 +288,19 @@ def debug_product_url(url: str) -> list:
 
     return debug_logs
 
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def filter_products_by_ingredient(products, ingredient):
+    """Filter products containing a specific ingredient"""
+    if not ingredient:
+        return products
+
+    filtered_products = []
+    for product in products:
+        if product.get('ingredients') and ingredient.lower() in product['ingredients'].lower():
+            filtered_products.append(product)
+    return filtered_products
+
+
 def main():
     # Initialize database connection
     db = ensure_database_connection()
@@ -324,18 +337,14 @@ def main():
                 # Filter products if ingredient is selected
                 if st.session_state.selected_ingredient:
                     st.info(f"Showing products containing: {st.session_state.selected_ingredient}")
+
                     # Clear filter button
                     if st.button("Clear Filter"):
                         st.session_state.selected_ingredient = None
-                        st.rerun()
+                        st.experimental_rerun()
 
                     # Filter products containing the selected ingredient
-                    filtered_products = []
-                    for product in products:
-                        nutrition = get_cached_product_nutrition(db, product['sku'])
-                        if nutrition and nutrition.get('ingredients'):
-                            if st.session_state.selected_ingredient.lower() in nutrition['ingredients'].lower():
-                                filtered_products.append(product)
+                    filtered_products = filter_products_by_ingredient(products, st.session_state.selected_ingredient)
 
                     if filtered_products:
                         df = pd.DataFrame(filtered_products)
@@ -419,7 +428,7 @@ def main():
             with st.spinner("Refreshing ingredient analysis..."):
                 if refresh_ingredient_analysis(db):
                     st.success("Successfully refreshed ingredient analysis!")
-                    st.rerun()
+                    st.experimental_rerun()
                 else:
                     st.error("Failed to refresh ingredient analysis")
 
