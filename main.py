@@ -160,14 +160,15 @@ def get_cached_product_by_name(_db, product_name: str) -> Optional[List[Dict]]:
         try:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT * FROM products 
-                    WHERE LOWER(name) LIKE LOWER(%s)
+                    SELECT p.*, n.ingredients 
+                    FROM products p
+                    LEFT JOIN product_nutrition n ON p.sku = n.sku
+                    WHERE LOWER(p.name) LIKE LOWER(%s)
                     LIMIT 10
                 """, (f"%{product_name}%",))
-                products = cur.fetchall()
-                if products:
-                    return [dict(zip([col[0] for col in cur.description], row)) for row in products]
-                return None
+                columns = [desc[0] for desc in cur.description]
+                products = [dict(zip(columns, row)) for row in cur.fetchall()]
+                return products if products else None
         finally:
             _db.return_connection(conn)
     except Exception as e:
@@ -245,8 +246,6 @@ def main():
         try:
             products = get_cached_products(db)
             if products:
-                df = pd.DataFrame(products)
-
                 # Filter products if ingredient is selected
                 if st.session_state.selected_ingredient:
                     st.info(f"Showing products containing: {st.session_state.selected_ingredient}")
@@ -269,11 +268,13 @@ def main():
                     else:
                         st.warning("No products found containing this ingredient.")
                 else:
+                    df = pd.DataFrame(products)
                     st.dataframe(df)
             else:
                 st.info("No products available. Please refresh the data.")
         except Exception as e:
             st.error(f"Error loading products: {str(e)}")
+            logger.error(f"Error in Products Overview: {str(e)}")
 
     # Tab 2: Product Details
     with tabs[1]:
@@ -547,6 +548,7 @@ def display_product_additives(sku: str, ingredients: str):
     except Exception as e:
         logger.error(f"Error displaying additives for {sku}: {str(e)}")
         st.error("Failed to process additive information")
+
 
 
 def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
