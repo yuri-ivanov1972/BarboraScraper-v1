@@ -19,29 +19,11 @@ st.set_page_config(
     layout="wide"
 )
 
-# Constants
-SPECIFIC_PRODUCTS = [
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/liellops-burgundijas-gaume-ar-bulguru-400g/p/2000297",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/piedevas-un-merces/merce-loku-400g/p/2000165",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/cala-galas-tikkamasala-ar-basm-ris-400g/p/2000291",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/marineta-gala/calu-pussparni-teriyaki-marinade-400g/p/2000324",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/cukas-mele-varita-kg/p/2000330",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/jaunums-gatavots-rimi-ipasi-tev-/klingeris-ar-sokoladi-kg/p/228913"
-]
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-# Initialize session state for ingredient filtering
+# Initialize session state
 if 'selected_ingredient' not in st.session_state:
-    st.session_state.selected_ingredient = None
+    st.session_state['selected_ingredient'] = None
 if 'active_tab' not in st.session_state:
-    st.session_state.active_tab = 0
+    st.session_state['active_tab'] = 0
 
 @st.cache_data(ttl=300)
 def get_cached_product_additives(_additive_manager, sku, ingredients):
@@ -116,12 +98,10 @@ def display_product_additives(sku: str, ingredients: str):
         st.error("Failed to process additive information")
 
 
-
 def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
     logger.info(f"Selecting ingredient: {ingredient}")
     handle_tab_switch(ingredient)
-
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -400,13 +380,13 @@ def handle_tab_switch(ingredient: Optional[str] = None):
         st.session_state.selected_ingredient = ingredient
         st.session_state.active_tab = 0
 
-# Function to handle ingredient selection from analysis tab
 def select_ingredient_and_switch(ingredient: str):
     """Helper function to handle ingredient selection and tab switching"""
-    logger.info(f"Selecting ingredient: {ingredient}")
-    st.session_state.selected_ingredient = ingredient
-    st.session_state.active_tab = 0
-    st.rerun()
+    if ingredient:
+        logger.info(f"Selecting ingredient: {ingredient}")
+        st.session_state['selected_ingredient'] = ingredient
+        st.session_state['active_tab'] = 0
+        st.rerun()
 
 def handle_ingredient_analysis(db: Database):
     """Handle the Ingredient Analysis tab functionality"""
@@ -566,6 +546,24 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Constants
+SPECIFIC_PRODUCTS = [
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/liellops-burgundijas-gaume-ar-bulguru-400g/p/2000297",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/piedevas-un-merces/merce-loku-400g/p/2000165",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/cala-galas-tikkamasala-ar-basm-ris-400g/p/2000291",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/marineta-gala/calu-pussparni-teriyaki-marinade-400g/p/2000324",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/cukas-mele-varita-kg/p/2000330",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/jaunums-gatavots-rimi-ipasi-tev-/klingeris-ar-sokoladi-kg/p/228913"
+]
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Custom CSS
 st.markdown("""
