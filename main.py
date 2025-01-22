@@ -27,6 +27,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Initialize session state for ingredient filtering
+if 'selected_ingredient' not in st.session_state:
+    st.session_state.selected_ingredient = None
+if 'active_tab' not in st.session_state:
+    st.session_state.active_tab = 0
+
+def select_ingredient(ingredient: str):
+    """Callback for ingredient selection"""
+    st.session_state.selected_ingredient = ingredient
+    st.session_state.active_tab = 0  # Switch to products tab
+    st.experimental_rerun()
+
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
     """Cache product list to avoid repeated database queries"""
@@ -156,7 +168,30 @@ def main():
             products = db.get_products()
             if products:
                 df = pd.DataFrame(products)
-                st.dataframe(df)
+
+                # Filter products if ingredient is selected
+                if st.session_state.selected_ingredient:
+                    st.info(f"Showing products containing: {st.session_state.selected_ingredient}")
+                    # Clear filter button
+                    if st.button("Clear Filter"):
+                        st.session_state.selected_ingredient = None
+                        st.experimental_rerun()
+
+                    # Filter products containing the selected ingredient
+                    filtered_products = []
+                    for product in products:
+                        nutrition = get_cached_product_nutrition(db, product['sku'])
+                        if nutrition and nutrition.get('ingredients'):
+                            if st.session_state.selected_ingredient.lower() in nutrition['ingredients'].lower():
+                                filtered_products.append(product)
+
+                    if filtered_products:
+                        df = pd.DataFrame(filtered_products)
+                        st.dataframe(df)
+                    else:
+                        st.warning("No products found containing this ingredient.")
+                else:
+                    st.dataframe(df)
             else:
                 st.info("No products available. Please refresh the data.")
         except Exception as e:
@@ -213,7 +248,13 @@ def main():
                     for idx, (ingredient, frequency) in enumerate(filtered_data):
                         col = col1 if idx % 2 == 0 else col2
                         with col:
-                            st.markdown(f"**{ingredient}** ({frequency} products)")
+                            # Make ingredient name clickable
+                            if st.button(
+                                f"**{ingredient}** ({frequency} products)",
+                                key=f"ing_{idx}",
+                                help="Click to view products containing this ingredient"
+                            ):
+                                select_ingredient(ingredient)
                 else:
                     if search_term:
                         st.warning("No ingredients found matching your search.")
@@ -225,6 +266,57 @@ def main():
         except Exception as e:
             logger.error(f"Error in ingredient analysis: {str(e)}")
             st.error(f"Failed to analyze ingredients: {str(e)}")
+
+    # Tab 2: Product Details
+    with tabs[1]:
+        st.title("Product Details")
+        selected_sku = st.text_input("Enter product SKU:", "")
+        if selected_sku:
+            try:
+                product = db.get_product_by_sku(selected_sku)
+                if product:
+                    st.write(product)
+                    display_product_additives(selected_sku, product.get('ingredients'))
+                    nutrition = db.get_product_nutrition(selected_sku)
+                    if nutrition:
+                        st.json(nutrition)
+                else:
+                    st.warning("Product not found.")
+            except Exception as e:
+                st.error(f"Error loading product details: {str(e)}")
+
+    # Tab 3: Debug
+    with tabs[2]:
+        st.title("Debug")
+        # Your debug code here
+
+    # Tab 4: Specific Products Debug
+    with tabs[3]:
+        st.title("Specific Products Debug")
+        selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
+        if selected_product_url:
+            debug_logs = debug_product_url(selected_product_url)
+            for log in debug_logs:
+                st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
+
+    # Tab 5: Scraping Logs
+    with tabs[4]:
+        st.title("Scraping Logs")
+        # Your scraping log display code here
+
+    # Tab 6: Fix Country Codes
+    with tabs[5]:
+        st.title("Fix Country Codes")
+        # Your country code fixing code here
+
+    # Tab 7: Export Data
+    with tabs[6]:
+        st.title("Export Data")
+        # Your data export code here
+
+
+    # Tab 8: Ingredient Analysis (already defined above)
+
 
 if __name__ == "__main__":
     main()
