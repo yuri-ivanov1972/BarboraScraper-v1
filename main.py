@@ -673,7 +673,18 @@ def main():
                         st.error("Failed to refresh ingredient analysis")
 
         try:
-            ingredients_data = get_ingredient_frequencies(db)
+            # Query ingredient analysis data directly from the database
+            conn = db.get_connection()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT ingredient, frequency 
+                        FROM ingredient_analysis 
+                        ORDER BY frequency DESC
+                    """)
+                    ingredients_data = cur.fetchall()
+            finally:
+                db.return_connection(conn)
 
             if ingredients_data:
                 # Display total unique ingredients
@@ -685,264 +696,259 @@ def main():
                 # Filter ingredients based on search
                 if search_term:
                     filtered_data = [
-                        (ing, freq, prods) 
-                        for ing, freq, prods in ingredients_data 
+                        (ing, freq) 
+                        for ing, freq in ingredients_data 
                         if search_term.lower() in ing.lower()
                     ]
                 else:
                     filtered_data = ingredients_data
 
-                # Display ingredients table
-                for ingredient, frequency, products in filtered_data:
-                    with st.expander(f"{ingredient} (Found in {frequency} products)"):
-                        st.markdown("#### Products containing this ingredient:")
-                        # Create two columns
-                        cols = st.columns(2)
-                        for idx, product in enumerate(products):
-                            col = cols[idx % 2]
-                            with col:
-                                st.markdown(f"- {product['name']}")
+                # Display ingredients in a more compact format
+                col1, col2 = st.columns(2)
+                for idx, (ingredient, frequency) in enumerate(filtered_data):
+                    col = col1 if idx % 2 == 0 else col2
+                    with col:
+                        st.markdown(f"**{ingredient}** ({frequency} products)")
             else:
-                st.warning("No ingredient data available. Try refreshing the product data.")
+                st.warning("No ingredient data available. Try refreshing the analysis.")
 
         except Exception as e:
             logger.error(f"Error in ingredient analysis: {str(e)}")
             st.error("Failed to analyze ingredients")
 
+    @st.cache_data(ttl=300)  # Cache data for 5 minutes
+    def get_cached_products(_db):
+        """Cache product list to avoid repeated database queries"""
+        return _db.get_products()
 
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_products(_db):
-    """Cache product list to avoid repeated database queries"""
-    return _db.get_products()
+    @st.cache_data(ttl=300)  # Cache data for 5 minutes
+    def get_cached_product_nutrition(_db, sku):
+        """Cache nutritional information to avoid repeated database queries"""
+        return _db.get_product_nutrition(sku)
 
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_product_nutrition(_db, sku):
-    """Cache nutritional information to avoid repeated database queries"""
-    return _db.get_product_nutrition(sku)
+    @st.cache_data(ttl=300)  # Cache data for 5 minutes
+    def get_cached_product_additives(_additive_manager, sku, ingredients):
+        """Cache additive processing results to avoid repeated processing"""
+        stats = _additive_manager.process_product_ingredients(sku, ingredients)
+        additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
+        return stats, additives
 
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_product_additives(_additive_manager, sku, ingredients):
-    """Cache additive processing results to avoid repeated processing"""
-    stats = _additive_manager.process_product_ingredients(sku, ingredients)
-    additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
-    return stats, additives
-
-def display_product_additives(sku: str, ingredients: str):
-    """Display additives found in the product ingredients"""
-    if not ingredients:
-        logger.info(f"No ingredients provided for product {sku}")
-        return
-    try:
-        additive_manager = st.session_state.additive_manager
-        logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
-
-        # Get cached additive information
-        stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
-
-        #Add debug expander
-        with st.expander("🔍 Debug Information"):
-            st.markdown("### Ingredient Processing Debug")
-            st.text(f"Processing ingredients for SKU: {sku}")
-            st.text(f"Raw ingredients text:\n{ingredients}")
-            st.text(f"\nProcessing results:\n{stats}")
-
-            if stats['processed']:
-                st.markdown("### Found Additives")
-                for additive in additives:
-                    st.markdown(f"#### {additive.e_number}")
-                    if additive.name:
-                        st.markdown(f"**Name:** {additive.name}")
-                    if additive.description:
-                        st.markdown(f"**Description:** {additive.description}")
-                    if additive.safety_rating:
-                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
-                    if additive.source_url:
-                        st.markdown(f"[More Information]({additive.source_url})")
-            else:
-                st.warning("No additives found or processing failed")
-        # Regular additive display logic
-        if stats['processed'] and stats['additives_found'] > 0:
-            st.markdown("#### 🧪 Food Additives")
-            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
-
-            if additives:
-                # Create columns for better layout
-                cols = st.columns(2)
-                for idx, additive in enumerate(additives):
-                    col = cols[idx % 2]
-                    with col:
-                        with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
-                            if additive.description:
-                                st.markdown(f"**Description:** {additive.description}")
-                            if additive.safety_rating:
-                                st.markdown(f"**SafetyRating:** {additive.safety_rating}")
-                            if additive.source_url:
-                                st.markdown(f"[More Information]({additive.source_url})")
-            else:
-                st.info("No additive information available in the database.")
-
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            logger.info(f"No additives found in ingredients for product {sku}")
-            st.info("No food additives (E-numbers) found in this product.")
-
-    except Exception as e:
-        logger.error(f"Error displaying additives for {sku}: {str(e)}")
-        st.error("Failed to process additive information")
-
-
-
-def refresh_ingredient_analysis(db: Database) -> bool:
-    """
-    Refresh the ingredient analysis tables with current data
-    Returns: True if successful, False otherwise
-    """
-    try:
-        conn = db.get_connection()
+    def display_product_additives(sku: str, ingredients: str):
+        """Display additives found in the product ingredients"""
+        if not ingredients:
+            logger.info(f"No ingredients provided for product {sku}")
+            return
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # First, clear existing analysis
-                cur.execute("""
-                    TRUNCATE ingredient_analysis RESTART IDENTITY CASCADE;
-                    TRUNCATE ingredient_product_mapping RESTART IDENTITY;
-                """)
+            additive_manager = st.session_state.additive_manager
+            logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
 
-                # Get all products with ingredients
-                cur.execute("""
-                    SELECT p.sku, p.name, n.ingredients
-                    FROM products p
-                    JOIN product_nutrition n ON p.sku = n.sku
-                    WHERE n.ingredients IS NOT NULL AND n.ingredients != ''
-                """)
-                products = cur.fetchall()
+            # Get cached additive information
+            stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
 
-                # Create progress bar and status
-                progress_bar = st.progress(0)
-                status_text = st.empty()
-                total_products = len(products)
-                status_text.text(f"Found {total_products} products to process")
+            #Add debug expander
+            with st.expander("🔍 Debug Information"):
+                st.markdown("### Ingredient Processing Debug")
+                st.text(f"Processing ingredients for SKU: {sku}")
+                st.text(f"Raw ingredients text:\n{ingredients}")
+                st.text(f"\nProcessing results:\n{stats}")
 
-                # Process ingredients
-                ingredient_data = defaultdict(lambda: {'count': 0, 'products': set()})
-                processed = 0
+                if stats['processed']:
+                    st.markdown("### Found Additives")
+                    for additive in additives:
+                        st.markdown(f"#### {additive.e_number}")
+                        if additive.name:
+                            st.markdown(f"**Name:** {additive.name}")
+                        if additive.description:
+                            st.markdown(f"**Description:** {additive.description}")
+                        if additive.safety_rating:
+                            st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                        if additive.source_url:
+                            st.markdown(f"[More Information]({additive.source_url})")
+                else:
+                    st.warning("No additives found or processing failed")
+            # Regular additive display logic
+            if stats['processed'] and stats['additives_found'] > 0:
+                st.markdown("#### 🧪 Food Additives")
+                st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
 
-                # First pass: collect data
-                for product in products:
-                    if not product['ingredients']:
-                        continue
+                if additives:
+                    # Create columns for better layout
+                    cols = st.columns(2)
+                    for idx, additive in enumerate(additives):
+                        col = cols[idx % 2]
+                        with col:
+                            with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
+                                if additive.description:
+                                    st.markdown(f"**Description:** {additive.description}")
+                                if additive.safety_rating:
+                                    st.markdown(f"**SafetyRating:** {additive.safety_rating}")
+                                if additive.source_url:
+                                    st.markdown(f"[More Information]({additive.source_url})")
+                else:
+                    st.info("No additive information available in the database.")
 
-                    ingredients_text = product['ingredients']
-                    # Split by common separators and handle parentheses
-                    ingredients = re.split(r'[,;]|\(|\)', ingredients_text)
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                logger.info(f"No additives found in ingredients for product {sku}")
+                st.info("No food additives (E-numbers) found in this product.")
 
-                    # Process each ingredient
-                    for ingredient in ingredients:
-                        normalized = normalize_ingredient(ingredient)
-                        if normalized and len(normalized) > 1:  # Skip single characters
-                            ingredient_data[normalized]['count'] += 1
-                            ingredient_data[normalized]['products'].add(product['sku'])
+        except Exception as e:
+            logger.error(f"Error displaying additives for {sku}: {str(e)}")
+            st.error("Failed to process additive information")
 
-                    # Update progress
-                    processed += 1
-                    progress = processed / total_products
-                    progress_bar.progress(progress)
-                    status_text.text(f"Processing products: {processed}/{total_products} ({progress:.1%})")
 
-                status_text.text(f"Analyzed {processed} products. Saving to database...")
 
-                # Second pass: insert data
-                saved_ingredients = 0
-                total_ingredients = len(ingredient_data)
+    def refresh_ingredient_analysis(db: Database) -> bool:
+        """
+        Refresh the ingredient analysis tables with current data
+        Returns: True if successful, False otherwise
+        """
+        try:
+            conn = db.get_connection()
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    # First, clear existing analysis
+                    cur.execute("""
+                        TRUNCATE ingredient_analysis RESTART IDENTITY CASCADE;
+                        TRUNCATE ingredient_product_mapping RESTART IDENTITY;
+                    """)
 
-                for ingredient, data in ingredient_data.items():
-                    try:
-                        # Insert ingredient
-                        cur.execute("""
-                            INSERT INTO ingredient_analysis (ingredient, frequency)
-                            VALUES (%s, %s)
-                            RETURNING id
-                        """, (ingredient, len(data['products'])))
-                        ingredient_id = cur.fetchone()['id']
+                    # Get all products with ingredients
+                    cur.execute("""
+                        SELECT p.sku, p.name, n.ingredients
+                        FROM products p
+                        JOIN product_nutrition n ON p.sku = n.sku
+                        WHERE n.ingredients IS NOT NULL AND n.ingredients != ''
+                    """)
+                    products = cur.fetchall()
 
-                        # Insert product mappings
-                        for sku in data['products']:
+                    # Create progress bar and status
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    total_products = len(products)
+                    status_text.text(f"Found {total_products} products to process")
+
+                    # Process ingredients
+                    ingredient_data = defaultdict(lambda: {'count': 0, 'products': set()})
+                    processed = 0
+
+                    # First pass: collect data
+                    for product in products:
+                        if not product['ingredients']:
+                            continue
+
+                        ingredients_text = product['ingredients']
+                        # Split by common separators and handle parentheses
+                        ingredients = re.split(r'[,;]|\(|\)', ingredients_text)
+
+                        # Process each ingredient
+                        for ingredient in ingredients:
+                            normalized = normalize_ingredient(ingredient)
+                            if normalized and len(normalized) > 1:  # Skip single characters
+                                ingredient_data[normalized]['count'] += 1
+                                ingredient_data[normalized]['products'].add(product['sku'])
+
+                        # Update progress
+                        processed += 1
+                        progress = processed / total_products
+                        progress_bar.progress(progress)
+                        status_text.text(f"Processing products: {processed}/{total_products} ({progress:.1%})")
+
+                    status_text.text(f"Analyzed {processed} products. Saving to database...")
+
+                    # Second pass: insert data
+                    saved_ingredients = 0
+                    total_ingredients = len(ingredient_data)
+
+                    for ingredient, data in ingredient_data.items():
+                        try:
+                            # Insert ingredient
                             cur.execute("""
-                                INSERT INTO ingredient_product_mapping (ingredient_id, product_sku)
+                                INSERT INTO ingredient_analysis (ingredient, frequency)
                                 VALUES (%s, %s)
-                                ON CONFLICT DO NOTHING
-                            """, (ingredient_id, sku))
+                                RETURNING id
+                            """, (ingredient, len(data['products'])))
+                            ingredient_id = cur.fetchone()['id']
 
-                        # Update progress for saving
-                        saved_ingredients += 1
-                        progress = saved_ingredients / total_ingredients
-                        status_text.text(f"Saving ingredients to database: {saved_ingredients}/{total_ingredients} ({progress:.1%})")
+                            # Insert product mappings
+                            for sku in data['products']:
+                                cur.execute("""
+                                    INSERT INTO ingredient_product_mapping (ingredient_id, product_sku)
+                                    VALUES (%s, %s)
+                                    ON CONFLICT DO NOTHING
+                                """, (ingredient_id, sku))
 
-                    except Exception as e:
-                        logger.error(f"Error processing ingredient {ingredient}: {str(e)}")
-                        continue
+                            # Update progress for saving
+                            saved_ingredients += 1
+                            progress = saved_ingredients / total_ingredients
+                            status_text.text(f"Saving ingredients to database: {saved_ingredients}/{total_ingredients} ({progress:.1%})")
 
-                conn.commit()
-                status_text.text("✅ Analysis completed successfully!")
-                time.sleep(1)  # Give user time to see completion message
-                return True
+                        except Exception as e:
+                            logger.error(f"Error processing ingredient {ingredient}: {str(e)}")
+                            continue
 
-        finally:
-            db.return_connection(conn)
-    except Exception as e:
-        logger.error(f"Error refreshing ingredient analysis: {str(e)}")
-        if 'status_text' in locals():
-            status_text.text(f"❌ Error during analysis: {str(e)}")
-        return False
+                    conn.commit()
+                    status_text.text("✅ Analysis completed successfully!")
+                    time.sleep(1)  # Give user time to see completion message
+                    return True
 
-def normalize_ingredient(ingredient: str) -> str:
-    """Normalize ingredient text for consistent analysis"""
-    if not ingredient:
-        return ""
+            finally:
+                db.return_connection(conn)
+        except Exception as e:
+            logger.error(f"Error refreshing ingredient analysis: {str(e)}")
+            if 'status_text' in locals():
+                status_text.text(f"❌ Error during analysis: {str(e)}")
+            return False
 
-    # Remove leading/trailing whitespace and convert to lowercase
-    normalized = ingredient.strip().lower()
+    def normalize_ingredient(ingredient: str) -> str:
+        """Normalize ingredient text for consistent analysis"""
+        if not ingredient:
+            return ""
 
-    # Remove percentage values and brackets
-    normalized = re.sub(r'\d+[.,]?\d*\s*%', '', normalized)
-    normalized = re.sub(r'[\[\]\(\)]', '', normalized)
+        # Remove leading/trailing whitespace and convert to lowercase
+        normalized = ingredient.strip().lower()
 
-    # Remove special characters and extra spaces
-    normalized = re.sub(r'[^\w\s]', ' ', normalized)
-    normalized = ' '.join(normalized.split())
+        # Remove percentage values and brackets
+        normalized = re.sub(r'\d+[.,]?\d*\s*%', '', normalized)
+        normalized = re.sub(r'[\[\]\(\)]', '', normalized)
 
-    return normalized
+        # Remove special characters and extra spaces
+        normalized = re.sub(r'[^\w\s]', ' ', normalized)
+        normalized = ' '.join(normalized.split())
 
-def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
-    """
-    Get ingredient frequencies and related products from the cached analysis
-    """
-    try:
-        conn = db.get_connection()
+        return normalized
+
+    def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
+        """
+        Get ingredient frequencies and related products from the cached analysis
+        """
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT 
-                        ia.ingredient,
-                        ia.frequency,
-                        array_agg(json_build_object(
-                            'sku', p.sku,
-                            'name', p.name
-                        )) as products
-                    FROM ingredient_analysis ia
-                    JOIN ingredient_product_mapping ipm ON ia.id = ipm.ingredient_id
-                    JOIN products p ON p.sku = ipm.product_sku
-                    GROUP BY ia.id, ia.ingredient, ia.frequency
-                    ORDER BY ia.frequency DESC, ia.ingredient
-                """)
-                results = cur.fetchall()
+            conn = db.get_connection()
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT 
+                            ia.ingredient,
+                            ia.frequency,
+                            array_agg(json_build_object(
+                                'sku', p.sku,
+                                'name', p.name
+                            )) as products
+                        FROM ingredient_analysis ia
+                        JOIN ingredient_product_mapping ipm ON ia.id = ipm.ingredient_id
+                        JOIN products p ON p.sku = ipm.product_sku
+                        GROUP BY ia.id, ia.ingredient, ia.frequency
+                        ORDER BY ia.frequency DESC, ia.ingredient
+                    """)
+                    results = cur.fetchall()
 
-                return [(row['ingredient'], row['frequency'], row['products']) for row in results]
+                    return [(row['ingredient'], row['frequency'], row['products']) for row in results]
 
-        finally:
-            db.return_connection(conn)
-    except Exception as e:
-        logger.error(f"Error getting ingredient frequencies: {str(e)}")
-        return []
+            finally:
+                db.return_connection(conn)
+        except Exception as e:
+            logger.error(f"Error getting ingredient frequencies: {str(e)}")
+            return []
 
-if __name__ == "__main__":
-    main()
+    if __name__ == "__main__":
+        main()
