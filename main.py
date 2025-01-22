@@ -343,6 +343,43 @@ def filter_products_by_ingredient(products, ingredient):
     return filtered_products
 
 
+def handle_products_overview(products, db):
+    """Handle the Products Overview tab functionality"""
+    st.title("Products Overview")
+    try:
+        if products:
+            # Filter products if ingredient is selected
+            if st.session_state.selected_ingredient:
+                logger.info(f"Filtering for ingredient: {st.session_state.selected_ingredient}")
+                st.info(f"Showing products containing: {st.session_state.selected_ingredient}")
+
+                # Clear filter button
+                if st.button("Clear Filter"):
+                    logger.info("Clearing ingredient filter")
+                    st.session_state.selected_ingredient = None
+                    st.rerun()
+
+                # Filter products containing the selected ingredient
+                filtered_products = filter_products_by_ingredient(products, st.session_state.selected_ingredient)
+
+                if filtered_products:
+                    logger.info(f"Displaying {len(filtered_products)} filtered products")
+                    df = pd.DataFrame(filtered_products)
+                    st.dataframe(df)
+                else:
+                    logger.warning("No products found with the selected ingredient")
+                    st.warning("No products found containing this ingredient.")
+            else:
+                logger.info("Displaying all products")
+                df = pd.DataFrame(products)
+                st.dataframe(df)
+        else:
+            logger.warning("No products available in the database")
+            st.info("No products available. Please refresh the data.")
+    except Exception as e:
+        logger.error(f"Error in Products Overview: {str(e)}")
+        st.error(f"Error loading products: {str(e)}")
+
 def main():
     # Initialize database connection
     db = ensure_database_connection()
@@ -363,57 +400,30 @@ def main():
     ]
 
     logger.info(f"Current active tab index: {st.session_state.active_tab}")
+    logger.info(f"Selected ingredient: {st.session_state.get('selected_ingredient')}")
 
-    # Create tabs and force the active tab
+    # Get products data
+    products = get_cached_products(db)
+
+    # Create tabs
     tabs = st.tabs(tab_titles)
+
+    # Process Products Overview tab (index 0) first if ingredient is selected
+    if st.session_state.get('selected_ingredient'):
+        with tabs[0]:
+            handle_products_overview(products, db)
+
+    # Process the currently active tab
     active_tab = st.session_state.active_tab
-
-    logger.info(f"Active tab before processing: {active_tab}")
-
-    # Process active tab first
-    with tabs[active_tab]:
-        if active_tab == 0:  # Products Overview
-            st.title("Products Overview")
-            try:
-                products = get_cached_products(db)
-                if products:
-                    # Filter products if ingredient is selected
-                    if st.session_state.selected_ingredient:
-                        logger.info(f"Filtering for ingredient: {st.session_state.selected_ingredient}")
-                        st.info(f"Showing products containing: {st.session_state.selected_ingredient}")
-
-                        # Clear filter button
-                        if st.button("Clear Filter"):
-                            logger.info("Clearing ingredient filter")
-                            st.session_state.selected_ingredient = None
-                            st.rerun()
-
-                        # Filter products containing the selected ingredient
-                        filtered_products = filter_products_by_ingredient(products, st.session_state.selected_ingredient)
-
-                        if filtered_products:
-                            logger.info(f"Displaying {len(filtered_products)} filtered products")
-                            df = pd.DataFrame(filtered_products)
-                            st.dataframe(df)
-                        else:
-                            logger.warning("No products found with the selected ingredient")
-                            st.warning("No products found containing this ingredient.")
-                    else:
-                        logger.info("Displaying all products")
-                        df = pd.DataFrame(products)
-                        st.dataframe(df)
-                else:
-                    logger.warning("No products available in the database")
-                    st.info("No products available. Please refresh the data.")
-            except Exception as e:
-                logger.error(f"Error in Products Overview: {str(e)}")
-                st.error(f"Error loading products: {str(e)}")
+    logger.info(f"Processing active tab: {active_tab}")
 
     # Process remaining tabs
     for i, tab in enumerate(tabs):
-        if i != active_tab:
+        if (st.session_state.get('selected_ingredient') and i != 0) or (not st.session_state.get('selected_ingredient')):
             with tab:
-                if i == 1:  # Product Details
+                if i == 0:  # Products Overview
+                    handle_products_overview(products, db)
+                elif i == 1:  # Product Details
                     st.title("Product Details")
                     product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
                     if product_name:
@@ -517,7 +527,10 @@ def main():
                                             key=f"ing_{idx}",
                                             help="Click to view products containing this ingredient"
                                         ):
-                                            select_ingredient(ingredient)
+                                            logger.info(f"Selected ingredient: {ingredient}")
+                                            st.session_state.selected_ingredient = ingredient
+                                            st.session_state.active_tab = 0
+                                            st.rerun()
                             else:
                                 if search_term:
                                     st.warning("No ingredients found matching your search.")
