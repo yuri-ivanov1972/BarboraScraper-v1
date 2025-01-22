@@ -59,13 +59,37 @@ def display_product_additives(sku: str, ingredients: str):
         return
     try:
         additive_manager = st.session_state.additive_manager
-        logger.info(f"Processing ingredients for product {sku}")
+        logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
 
         # Get cached additive information
         stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
 
-        if stats and stats['processed']:
+        #Add debug expander
+        with st.expander("🔍 Debug Information"):
+            st.markdown("### Ingredient Processing Debug")
+            st.text(f"Processing ingredients for SKU: {sku}")
+            st.text(f"Raw ingredients text:\n{ingredients}")
+            st.text(f"\nProcessing results:\n{stats}")
+
+            if stats['processed']:
+                st.markdown("### Found Additives")
+                for additive in additives:
+                    st.markdown(f"#### {additive.e_number}")
+                    if additive.name:
+                        st.markdown(f"**Name:** {additive.name}")
+                    if additive.description:
+                        st.markdown(f"**Description:** {additive.description}")
+                    if additive.safety_rating:
+                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                    if additive.source_url:
+                        st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.warning("No additives found or processing failed")
+        # Regular additive display logic
+        if stats['processed'] and stats['additives_found'] > 0:
             st.markdown("#### 🧪 Food Additives")
+            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+
             if additives:
                 # Create columns for better layout
                 cols = st.columns(2)
@@ -76,23 +100,34 @@ def display_product_additives(sku: str, ingredients: str):
                             if additive.description:
                                 st.markdown(f"**Description:** {additive.description}")
                             if additive.safety_rating:
-                                st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                                st.markdown(f"**SafetyRating:** {additive.safety_rating}")
                             if additive.source_url:
                                 st.markdown(f"[More Information]({additive.source_url})")
             else:
                 st.info("No additive information available in the database.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
+            logger.info(f"No additives found in ingredients for product {sku}")
             st.info("No food additives (E-numbers) found in this product.")
 
     except Exception as e:
         logger.error(f"Error displaying additives for {sku}: {str(e)}")
         st.error("Failed to process additive information")
 
+
 def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
+    logger.info(f"Selecting ingredient: {ingredient}")
+    logger.info(f"Previous active tab: {st.session_state.active_tab}")
+    logger.info(f"Previous selected ingredient: {st.session_state.selected_ingredient}")
+
     st.session_state.selected_ingredient = ingredient
     st.session_state.active_tab = 0  # Switch to products tab
-    st.rerun()  # Using rerun instead of experimental_rerun
+
+    logger.info(f"Updated session state - active_tab: {st.session_state.active_tab}")
+    logger.info(f"Updated session state - selected_ingredient: {st.session_state.selected_ingredient}")
+    st.rerun()
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -292,12 +327,16 @@ def debug_product_url(url: str) -> list:
 def filter_products_by_ingredient(products, ingredient):
     """Filter products containing a specific ingredient"""
     if not ingredient:
+        logger.info("No ingredient filter applied")
         return products
 
+    logger.info(f"Filtering products for ingredient: {ingredient}")
     filtered_products = []
     for product in products:
         if product.get('ingredients') and ingredient.lower() in product['ingredients'].lower():
             filtered_products.append(product)
+
+    logger.info(f"Found {len(filtered_products)} products containing {ingredient}")
     return filtered_products
 
 
@@ -320,13 +359,12 @@ def main():
         "Ingredient Analysis"
     ]
 
+    logger.info(f"Current active tab index: {st.session_state.active_tab}")
     tabs = st.tabs(tab_titles)
 
     # Select the active tab based on session state
-    if st.session_state.active_tab < len(tab_titles):
-        current_tab = st.session_state.active_tab
-    else:
-        current_tab = 0
+    current_tab = min(st.session_state.active_tab, len(tab_titles) - 1)
+    logger.info(f"Selected tab index: {current_tab}")
 
     # Tab 1: Products Overview
     with tabs[0]:
@@ -336,10 +374,12 @@ def main():
             if products:
                 # Filter products if ingredient is selected
                 if st.session_state.selected_ingredient:
+                    logger.info(f"Filtering for ingredient: {st.session_state.selected_ingredient}")
                     st.info(f"Showing products containing: {st.session_state.selected_ingredient}")
 
                     # Clear filter button
                     if st.button("Clear Filter"):
+                        logger.info("Clearing ingredient filter")
                         st.session_state.selected_ingredient = None
                         st.rerun()
 
@@ -347,18 +387,22 @@ def main():
                     filtered_products = filter_products_by_ingredient(products, st.session_state.selected_ingredient)
 
                     if filtered_products:
+                        logger.info(f"Displaying {len(filtered_products)} filtered products")
                         df = pd.DataFrame(filtered_products)
                         st.dataframe(df)
                     else:
+                        logger.warning("No products found with the selected ingredient")
                         st.warning("No products found containing this ingredient.")
                 else:
+                    logger.info("Displaying all products")
                     df = pd.DataFrame(products)
                     st.dataframe(df)
             else:
+                logger.warning("No products available in the database")
                 st.info("No products available. Please refresh the data.")
         except Exception as e:
-            st.error(f"Error loading products: {str(e)}")
             logger.error(f"Error in Products Overview: {str(e)}")
+            st.error(f"Error loading products: {str(e)}")
 
     # Tab 2: Product Details
     with tabs[1]:
@@ -633,8 +677,6 @@ def display_product_additives(sku: str, ingredients: str):
     except Exception as e:
         logger.error(f"Error displaying additives for {sku}: {str(e)}")
         st.error("Failed to process additive information")
-
-
 
 def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
     """Get ingredient frequencies and related products from the cached analysis"""
