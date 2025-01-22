@@ -155,6 +155,79 @@ def get_products_with_ingredient(db: Database, ingredient_filter: str = None) ->
         logger.error(f"Error getting products with ingredient filter: {str(e)}")
         return []
 
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_product_additives(_additive_manager, sku, ingredients):
+    """Cache additive processing results to avoid repeated processing"""
+    stats = _additive_manager.process_product_ingredients(sku, ingredients)
+    additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
+    return stats, additives
+
+def display_product_additives(sku: str, ingredients: str):
+    """Display additives found in the product ingredients"""
+    if not ingredients:
+        logger.info(f"No ingredients provided for product {sku}")
+        return
+    try:
+        additive_manager = st.session_state.additive_manager
+        logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
+
+        # Get cached additive information
+        stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
+
+        #Add debug expander
+        with st.expander("🔍 Debug Information"):
+            st.markdown("### Ingredient Processing Debug")
+            st.text(f"Processing ingredients for SKU: {sku}")
+            st.text(f"Raw ingredients text:\n{ingredients}")
+            st.text(f"\nProcessing results:\n{stats}")
+
+            if stats['processed']:
+                st.markdown("### Found Additives")
+                for additive in additives:
+                    st.markdown(f"#### {additive.e_number}")
+                    if additive.name:
+                        st.markdown(f"**Name:** {additive.name}")
+                    if additive.description:
+                        st.markdown(f"**Description:** {additive.description}")
+                    if additive.safety_rating:
+                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                    if additive.source_url:
+                        st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.warning("No additives found or processing failed")
+
+        # Regular additive display logic
+        if stats['processed'] and stats['additives_found'] > 0:
+            st.markdown("#### 🧪 Food Additives")
+            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+
+            if additives:
+                # Create columns for better layout
+                cols = st.columns(2)
+                for idx, additive in enumerate(additives):
+                    col = cols[idx % 2]
+                    with col:
+                        with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
+                            if additive.description:
+                                st.markdown(f"**Description:** {additive.description}")
+                            if additive.safety_rating:
+                                st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                            if additive.source_url:
+                                st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.info("No additive information available in the database.")
+
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            logger.info(f"No additives found in ingredients for product {sku}")
+            st.info("No food additives (E-numbers) found in this product.")
+
+    except Exception as e:
+        logger.error(f"Error displaying additives for {sku}: {str(e)}")
+        st.error("Failed to process additive information")
+
+
+
 def main():
     # Initialize database connection
     db = ensure_database_connection()
@@ -549,79 +622,6 @@ SPECIFIC_PRODUCTS = [
     "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511",
     "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/jaunums-gatavots-rimi-ipasi-tev-/klingeris-ar-sokoladi-kg/p/228913"
 ]
-
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_product_additives(_additive_manager, sku, ingredients):
-    """Cache additive processing results to avoid repeated processing"""
-    stats = _additive_manager.process_product_ingredients(sku, ingredients)
-    additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
-    return stats, additives
-
-def display_product_additives(sku: str, ingredients: str):
-    """Display additives found in the product ingredients"""
-    if not ingredients:
-        logger.info(f"No ingredients provided for product {sku}")
-        return
-    try:
-        additive_manager = st.session_state.additive_manager
-        logger.info(f"Processing ingredients for product {sku}: {ingredients[:100]}...")
-
-        # Get cached additive information
-        stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
-
-        #Add debug expander
-        with st.expander("🔍 Debug Information"):
-            st.markdown("### Ingredient Processing Debug")
-            st.text(f"Processing ingredients for SKU: {sku}")
-            st.text(f"Raw ingredients text:\n{ingredients}")
-            st.text(f"\nProcessing results:\n{stats}")
-
-            if stats['processed']:
-                st.markdown("### Found Additives")
-                for additive in additives:
-                    st.markdown(f"#### {additive.e_number}")
-                    if additive.name:
-                        st.markdown(f"**Name:** {additive.name}")
-                    if additive.description:
-                        st.markdown(f"**Description:** {additive.description}")
-                    if additive.safety_rating:
-                        st.markdown(f"**Safety Rating:** {additive.safety_rating}")
-                    if additive.source_url:
-                        st.markdown(f"[More Information]({additive.source_url})")
-            else:
-                st.warning("No additives found or processing failed")
-
-        # Regular additive display logic
-        if stats['processed'] and stats['additives_found'] > 0:
-            st.markdown("#### 🧪 Food Additives")
-            st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
-
-            if additives:
-                # Create columns for better layout
-                cols = st.columns(2)
-                for idx, additive in enumerate(additives):
-                    col = cols[idx % 2]
-                    with col:
-                        with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
-                            if additive.description:
-                                st.markdown(f"**Description:** {additive.description}")
-                            if additive.safety_rating:
-                                st.markdown(f"**Safety Rating:** {additive.safety_rating}")
-                            if additive.source_url:
-                                st.markdown(f"[More Information]({additive.source_url})")
-            else:
-                st.info("No additive information available in the database.")
-
-            st.markdown('</div>', unsafe_allow_html=True)
-        else:
-            logger.info(f"No additives found in ingredients for product {sku}")
-            st.info("No food additives (E-numbers) found in this product.")
-
-    except Exception as e:
-        logger.error(f"Error displaying additives for {sku}: {str(e)}")
-        st.error("Failed to process additive information")
-
-
 
 def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
     """Get ingredient frequencies and related products from the cached analysis"""
