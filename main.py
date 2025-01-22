@@ -312,22 +312,56 @@ def main():
     # Tab 7: Export Data
     with tabs[6]:
         st.title("Export Data")
-        if st.button("Export to CSV", key="export_csv"):
+
+        # Products export section
+        st.header("Products Export")
+        if st.button("Export Products to CSV", key="export_csv"):
             try:
                 products = db.get_products()
                 if products:
                     df = pd.DataFrame(products)
                     csv = df.to_csv(index=False)
                     st.download_button(
-                        label="Download CSV",
+                        label="Download Products CSV",
                         data=csv,
                         file_name="products_export.csv",
                         mime="text/csv"
                     )
                 else:
-                    st.warning("No data to export")
+                    st.warning("No products data to export")
             except Exception as e:
-                st.error(f"Error exporting data: {str(e)}")
+                st.error(f"Error exporting products data: {str(e)}")
+
+        # Ingredients export section
+        st.header("Ingredients Export")
+        if st.button("Export Ingredients to CSV", key="export_ingredients"):
+            try:
+                conn = db.get_connection()
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("""
+                            SELECT ingredient, frequency 
+                            FROM ingredient_analysis 
+                            ORDER BY frequency DESC, ingredient
+                        """)
+                        ingredients_data = cur.fetchall()
+
+                        if ingredients_data:
+                            # Convert to DataFrame
+                            df = pd.DataFrame(ingredients_data, columns=['Ingredient', 'Number of Products'])
+                            csv = df.to_csv(index=False)
+                            st.download_button(
+                                label="Download Ingredients CSV",
+                                data=csv,
+                                file_name="ingredients_export.csv",
+                                mime="text/csv"
+                            )
+                        else:
+                            st.warning("No ingredients data to export")
+                finally:
+                    db.return_connection(conn)
+            except Exception as e:
+                st.error(f"Error exporting ingredients data: {str(e)}")
 
     # Tab 8: Ingredient Analysis
     with tabs[7]:
