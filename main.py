@@ -11,7 +11,6 @@ from psycopg2.extras import RealDictCursor
 import re
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional
-import time
 
 # Page configuration must be the first Streamlit command
 st.set_page_config(
@@ -19,6 +18,17 @@ st.set_page_config(
     page_icon="🛒",
     layout="wide"
 )
+
+# Constants
+SPECIFIC_PRODUCTS = [
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/liellops-burgundijas-gaume-ar-bulguru-400g/p/2000297",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/piedevas-un-merces/merce-loku-400g/p/2000165",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/cala-galas-tikkamasala-ar-basm-ris-400g/p/2000291",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/marineta-gala/calu-pussparni-teriyaki-marinade-400g/p/2000324",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/cukas-mele-varita-kg/p/2000330",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511",
+    "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/jaunums-gatavots-rimi-ipasi-tev-/klingeris-ar-sokoladi-kg/p/228913"
+]
 
 # Configure logging
 logging.basicConfig(
@@ -37,7 +47,7 @@ def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
     st.session_state.selected_ingredient = ingredient
     st.session_state.active_tab = 0  # Switch to products tab
-    st.experimental_rerun()
+    st.rerun()  # Using rerun instead of experimental_rerun
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -60,6 +70,25 @@ def normalize_ingredient(ingredient: str) -> str:
     normalized = ' '.join(normalized.split())
     return normalized
 
+def ensure_database_connection():
+    """Ensure database connection is active and working"""
+    try:
+        if 'db' not in st.session_state:
+            st.session_state.db = Database()
+            logger.info("Database connection established successfully")
+            st.session_state.additive_manager = AdditiveManager(st.session_state.db)
+
+        # Verify connection
+        conn = st.session_state.db.get_connection()
+        with conn.cursor() as cur:
+            cur.execute('SELECT 1')
+        st.session_state.db.return_connection(conn)
+        return st.session_state.db
+    except Exception as e:
+        logger.error(f"Error initializing database: {str(e)}")
+        st.error(f"Failed to connect to database: {str(e)}")
+        return None
+
 def refresh_ingredient_analysis(db: Database) -> bool:
     """Refresh the ingredient analysis tables with current data"""
     try:
@@ -68,7 +97,7 @@ def refresh_ingredient_analysis(db: Database) -> bool:
         status_text = st.empty()
 
         try:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            with conn.cursor() as cur:
                 # Clear existing analysis
                 cur.execute("TRUNCATE ingredient_analysis RESTART IDENTITY CASCADE")
 
@@ -123,25 +152,6 @@ def refresh_ingredient_analysis(db: Database) -> bool:
             status_text.text(f"❌ Error during analysis: {str(e)}")
         return False
 
-def ensure_database_connection():
-    """Ensure database connection is active and working"""
-    try:
-        if 'db' not in st.session_state:
-            st.session_state.db = Database()
-            logger.info("Database connection established successfully")
-            st.session_state.additive_manager = AdditiveManager(st.session_state.db)
-
-        # Verify connection
-        conn = st.session_state.db.get_connection()
-        with conn.cursor() as cur:
-            cur.execute('SELECT 1')
-        st.session_state.db.return_connection(conn)
-        return st.session_state.db
-    except Exception as e:
-        logger.error(f"Error initializing database: {str(e)}")
-        st.error(f"Failed to connect to database: {str(e)}")
-        return None
-
 def main():
     # Initialize database connection
     db = ensure_database_connection()
@@ -150,7 +160,7 @@ def main():
         return
 
     # Create tabs
-    tabs = st.tabs([
+    tab_titles = [
         "Products Overview",
         "Product Details",
         "Debug",
@@ -159,13 +169,21 @@ def main():
         "Fix Country Codes",
         "Export Data",
         "Ingredient Analysis"
-    ])
+    ]
+
+    tabs = st.tabs(tab_titles)
+
+    # Select the active tab based on session state
+    if st.session_state.active_tab < len(tab_titles):
+        current_tab = st.session_state.active_tab
+    else:
+        current_tab = 0
 
     # Tab 1: Products Overview
     with tabs[0]:
         st.title("Products Overview")
         try:
-            products = db.get_products()
+            products = get_cached_products(db)
             if products:
                 df = pd.DataFrame(products)
 
@@ -175,7 +193,7 @@ def main():
                     # Clear filter button
                     if st.button("Clear Filter"):
                         st.session_state.selected_ingredient = None
-                        st.experimental_rerun()
+                        st.rerun()
 
                     # Filter products containing the selected ingredient
                     filtered_products = []
@@ -207,7 +225,7 @@ def main():
             with st.spinner("Refreshing ingredient analysis..."):
                 if refresh_ingredient_analysis(db):
                     st.success("Successfully refreshed ingredient analysis!")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Failed to refresh ingredient analysis")
 
@@ -225,9 +243,6 @@ def main():
                     """)
                     ingredients_data = cur.fetchall()
                     logger.info(f"Found {len(ingredients_data) if ingredients_data else 0} ingredients")
-            except Exception as e:
-                logger.error(f"Database error: {str(e)}")
-                st.error(f"Error querying database: {str(e)}")
             finally:
                 db.return_connection(conn)
 
@@ -267,7 +282,7 @@ def main():
             logger.error(f"Error in ingredient analysis: {str(e)}")
             st.error(f"Failed to analyze ingredients: {str(e)}")
 
-    # Tab 2: Product Details
+    # Remaining tabs with their content
     with tabs[1]:
         st.title("Product Details")
         selected_sku = st.text_input("Enter product SKU:", "")
@@ -285,12 +300,10 @@ def main():
             except Exception as e:
                 st.error(f"Error loading product details: {str(e)}")
 
-    # Tab 3: Debug
     with tabs[2]:
         st.title("Debug")
         # Your debug code here
 
-    # Tab 4: Specific Products Debug
     with tabs[3]:
         st.title("Specific Products Debug")
         selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
@@ -299,24 +312,17 @@ def main():
             for log in debug_logs:
                 st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
 
-    # Tab 5: Scraping Logs
     with tabs[4]:
         st.title("Scraping Logs")
         # Your scraping log display code here
 
-    # Tab 6: Fix Country Codes
     with tabs[5]:
         st.title("Fix Country Codes")
         # Your country code fixing code here
 
-    # Tab 7: Export Data
     with tabs[6]:
         st.title("Export Data")
         # Your data export code here
-
-
-    # Tab 8: Ingredient Analysis (already defined above)
-
 
 if __name__ == "__main__":
     main()
@@ -437,16 +443,6 @@ def debug_product_url(url: str) -> list:
 
     return debug_logs
 
-SPECIFIC_PRODUCTS = [
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/liellops-burgundijas-gaume-ar-bulguru-400g/p/2000297",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/piedevas-un-merces/merce-loku-400g/p/2000165",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/gatavas-maltites/cala-galas-tikkamasala-ar-basm-ris-400g/p/2000291",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/marineta-gala/calu-pussparni-teriyaki-marinade-400g/p/2000324",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/cukas-mele-varita-kg/p/2000330",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511",
-    "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/jaunums-gatavots-rimi-ipasi-tev-/klingeris-ar-sokoladi-kg/p/228913"
-]
-
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_product_additives(_additive_manager, sku, ingredients):
     """Cache additive processing results to avoid repeated processing"""
@@ -516,7 +512,6 @@ def display_product_additives(sku: str, ingredients: str):
     except Exception as e:
         logger.error(f"Error displaying additives for {sku}: {str(e)}")
         st.error("Failed to process additive information")
-
 
 
 def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
