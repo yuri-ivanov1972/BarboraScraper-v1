@@ -131,7 +131,6 @@ def ensure_database_connection():
         return None
 
 def main():
-    # Page configuration - MOVED TO TOP
     # Initialize database connection
     db = ensure_database_connection()
     if not db:
@@ -168,8 +167,8 @@ def main():
         st.title("Ingredient Analysis")
         st.markdown("### 📊 Ingredient Analysis")
 
-        # Add refresh button
-        if st.button("🔄 Refresh Analysis", key="refresh_ingredients"):
+        # Add refresh button with unique key
+        if st.button("🔄 Refresh Analysis", key="refresh_ingredients_analysis"):
             with st.spinner("Refreshing ingredient analysis..."):
                 if refresh_ingredient_analysis(db):
                     st.success("Successfully refreshed ingredient analysis!")
@@ -457,6 +456,3 @@ def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]
     except Exception as e:
         logger.error(f"Error getting ingredient frequencies: {str(e)}")
         return []
-
-if __name__ == "__main__":
-    main()
