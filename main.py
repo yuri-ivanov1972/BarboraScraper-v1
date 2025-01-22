@@ -122,15 +122,15 @@ def select_ingredient(ingredient: str):
     logger.info(f"Previous active tab: {st.session_state.active_tab}")
     logger.info(f"Previous selected ingredient: {st.session_state.selected_ingredient}")
 
-    # Force tab switch to Products Overview (index 0)
-    st.session_state.active_tab = 0
+    # Update session state
     st.session_state.selected_ingredient = ingredient
+    st.session_state.active_tab = 0
 
     logger.info(f"Updated session state - active_tab: {st.session_state.active_tab}")
     logger.info(f"Updated session state - selected_ingredient: {st.session_state.selected_ingredient}")
 
-    # Force a rerun to update the UI
-    st.rerun()
+    # Force UI refresh
+    st.experimental_rerun()
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -474,7 +474,7 @@ def main():
     if 'selected_ingredient' not in st.session_state:
         st.session_state.selected_ingredient = None
 
-    # Create tabs
+    # Tab configuration
     tab_titles = [
         "Products Overview",
         "Product Details",
@@ -489,74 +489,64 @@ def main():
     logger.info(f"Current active tab index: {st.session_state.active_tab}")
     logger.info(f"Selected ingredient: {st.session_state.get('selected_ingredient')}")
 
-    # Get products data
-    products = get_cached_products(db)
-
     # Create tabs
     tabs = st.tabs(tab_titles)
 
-    # Process the currently active tab
-    active_tab = st.session_state.active_tab
-    logger.info(f"Processing active tab: {active_tab}")
-
-    # Process each tab
+    # Process tabs based on active tab
     for i, tab in enumerate(tabs):
         with tab:
-            if i == 0:  # Products Overview
-                handle_products_overview(products, db)
-            elif i == 1:  # Product Details
-                st.title("Product Details")
-                product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
-                if product_name:
-                    try:
-                        products = get_cached_product_by_name(db, product_name)
-                        if products:
-                            # Create a dropdown to select from matching products
-                            product_options = {f"{p['name']} (SKU: {p['sku']})": p for p in products}
-                            selected_product_name = st.selectbox("Select a product:", list(product_options.keys()))
-
-                            if selected_product_name:
-                                product = product_options[selected_product_name]
-                                st.write("### Product Information")
-                                st.json(product)
-
-                                # Display additives and nutrition info
-                                if 'ingredients' in product:
-                                    display_product_additives(product['sku'], product['ingredients'])
-
-                                nutrition = get_cached_product_nutrition(db, product['sku'])
-                                if nutrition:
-                                    st.write("### Nutrition Information")
-                                    st.json(nutrition)
+            # Only show content for the active tab
+            if i == st.session_state.active_tab:
+                if i == 0:  # Products Overview
+                    handle_products_overview(get_cached_products(db), db)
+                elif i == 1:  # Product Details
+                    st.title("Product Details")
+                    product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
+                    if product_name:
+                        try:
+                            products = get_cached_product_by_name(db, product_name)
+                            if products:
+                                product_options = {f"{p['name']} (SKU: {p['sku']})": p for p in products}
+                                selected_product_name = st.selectbox("Select a product:", list(product_options.keys()))
+                                if selected_product_name:
+                                    product = product_options[selected_product_name]
+                                    st.write("### Product Information")
+                                    st.json(product)
+                                    if 'ingredients' in product:
+                                        display_product_additives(product['sku'], product['ingredients'])
+                                    nutrition = get_cached_product_nutrition(db, product['sku'])
+                                    if nutrition:
+                                        st.write("### Nutrition Information")
+                                        st.json(nutrition)
                             else:
                                 st.warning("No products found matching your search.")
-                    except Exception as e:
-                        st.error(f"Error loading product details: {str(e)}")
-                        logger.error(f"Product details error: {str(e)}")
-            elif i == 2: #Debug
-                st.title("Debug")
-                # Your debug code here
-            elif i == 3: #Specific Products Debug
-                st.title("Specific Products Debug")
-                if SPECIFIC_PRODUCTS:
-                    selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
-                    if selected_product_url:
-                        debug_logs = debug_product_url(selected_product_url)
-                        for log in debug_logs:
-                            st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
-                else:
-                    st.info("No specific products defined for debugging.")
-            elif i == 4: #Scraping Logs
-                st.title("Scraping Logs")
-                # Your scraping log display code here
-            elif i == 5: #Fix Country Codes
-                st.title("Fix Country Codes")
-                # Your country code fixing code here
-            elif i == 6: #Export Data
-                st.title("Export Data")
-                # Your data export code here
-            elif i == 7:  # Ingredient Analysis
-                handle_ingredient_analysis(db)
+                        except Exception as e:
+                            st.error(f"Error loading product details: {str(e)}")
+                            logger.error(f"Product details error: {str(e)}")
+                elif i == 2: #Debug
+                    st.title("Debug")
+                    # Your debug code here
+                elif i == 3: #Specific Products Debug
+                    st.title("Specific Products Debug")
+                    if SPECIFIC_PRODUCTS:
+                        selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
+                        if selected_product_url:
+                            debug_logs = debug_product_url(selected_product_url)
+                            for log in debug_logs:
+                                st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
+                    else:
+                        st.info("No specific products defined for debugging.")
+                elif i == 4: #Scraping Logs
+                    st.title("Scraping Logs")
+                    # Your scraping log display code here
+                elif i == 5: #Fix Country Codes
+                    st.title("Fix Country Codes")
+                    # Your country code fixing code here
+                elif i == 6: #Export Data
+                    st.title("Export Data")
+                    # Your data export code here
+                elif i == 7:  # Ingredient Analysis
+                    handle_ingredient_analysis(db)
 
 
 if __name__ == "__main__":
