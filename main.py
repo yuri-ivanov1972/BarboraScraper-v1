@@ -27,12 +27,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
+@st.cache_data(ttl=300)
 def get_cached_products(_db):
     """Cache product list to avoid repeated database queries"""
     return _db.get_products()
 
-@st.cache_data(ttl=300)  # Cache data for 5 minutes
+@st.cache_data(ttl=300)
 def get_cached_product_nutrition(_db, sku):
     """Cache nutritional information to avoid repeated database queries"""
     return _db.get_product_nutrition(sku)
