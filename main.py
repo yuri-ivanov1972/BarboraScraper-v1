@@ -437,7 +437,6 @@ def handle_ingredient_analysis(db: Database):
                             use_container_width=True
                         ):
                             handle_tab_switch(ingredient)
-                            st.rerun()
             else:
                 if search_term:
                     st.warning("No ingredients found matching your search.")
