@@ -1,9 +1,15 @@
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 import streamlit as st
 import pandas as pd
 from scraper import RimiScraper, ScraperError
 from database import Database
 from additive_manager import AdditiveManager
-import logging
 import traceback
 from datetime import datetime
 import psycopg2
@@ -19,7 +25,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Initialize session state
+# Initialize session state AFTER logger setup
 if 'selected_ingredient' not in st.session_state:
     st.session_state['selected_ingredient'] = None
 if 'active_tab' not in st.session_state:
@@ -557,13 +563,6 @@ SPECIFIC_PRODUCTS = [
     "https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/salati/rujienas-salati-200g/p/2000511",
     "https://www.rimi.lv/e-veikals/lv/produkti/gatavots-rimi/jaunums-gatavots-rimi-ipasi-tev-/klingeris-ar-sokoladi-kg/p/228913"
 ]
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # Custom CSS
 st.markdown("""
