@@ -380,12 +380,99 @@ def handle_products_overview(products, db):
         logger.error(f"Error in Products Overview: {str(e)}")
         st.error(f"Error loading products: {str(e)}")
 
+@st.cache_data(ttl=300)  # Cache data for 5 minutes
+def get_cached_ingredient_analysis(db: Database):
+    """Cache ingredient analysis data to improve performance"""
+    try:
+        conn = db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                logger.info("Querying cached ingredient analysis data...")
+                cur.execute("""
+                    SELECT ingredient, frequency 
+                    FROM ingredient_analysis 
+                    ORDER BY frequency DESC
+                """)
+                ingredients_data = cur.fetchall()
+                logger.info(f"Found {len(ingredients_data) if ingredients_data else 0} ingredients in cache")
+                return ingredients_data
+        finally:
+            db.return_connection(conn)
+    except Exception as e:
+        logger.error(f"Error getting cached ingredient analysis: {str(e)}")
+        return []
+
+def handle_ingredient_analysis(db: Database):
+    """Handle the Ingredient Analysis tab functionality"""
+    st.title("Ingredient Analysis")
+    st.markdown("### 📊 Ingredient Analysis")
+
+    # Add refresh button with unique key
+    if st.button("🔄 Refresh Analysis", key="refresh_ingredients_analysis"):
+        with st.spinner("Refreshing ingredient analysis..."):
+            if refresh_ingredient_analysis(db):
+                st.success("Successfully refreshed ingredient analysis!")
+                st.experimental_rerun()
+            else:
+                st.error("Failed to refresh ingredient analysis")
+                return
+
+    try:
+        # Use loading spinner while fetching data
+        with st.spinner("Loading ingredient analysis..."):
+            ingredients_data = get_cached_ingredient_analysis(db)
+
+        if ingredients_data:
+            st.info(f"Found {len(ingredients_data)} unique ingredients")
+
+            # Search box
+            search_term = st.text_input("🔍 Search ingredients", "")
+
+            # Filter and display ingredients
+            filtered_data = [
+                (ing, freq) for ing, freq in ingredients_data
+                if not search_term or search_term.lower() in ing.lower()
+            ]
+
+            if filtered_data:
+                col1, col2 = st.columns(2)
+                for idx, (ingredient, frequency) in enumerate(filtered_data):
+                    col = col1 if idx % 2 == 0 else col2
+                    with col:
+                        if st.button(
+                            f"**{ingredient}** ({frequency} products)",
+                            key=f"ing_{idx}",
+                            help="Click to view products containing this ingredient",
+                            use_container_width=True
+                        ):
+                            logger.info(f"Selected ingredient: {ingredient}")
+                            st.session_state.selected_ingredient = ingredient
+                            st.session_state.active_tab = 0
+                            st.rerun()
+            else:
+                if search_term:
+                    st.warning("No ingredients found matching your search.")
+                else:
+                    st.warning("No ingredients found in the database.")
+        else:
+            st.warning("No ingredient data available. Try refreshing the analysis.")
+
+    except Exception as e:
+        logger.error(f"Error in ingredient analysis: {str(e)}")
+        st.error(f"Failed to analyze ingredients: {str(e)}")
+
 def main():
     # Initialize database connection
     db = ensure_database_connection()
     if not db:
         st.error("Database Connection Error")
         return
+
+    # Initialize session state for tab management
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = 0
+    if 'selected_ingredient' not in st.session_state:
+        st.session_state.selected_ingredient = None
 
     # Create tabs
     tab_titles = [
@@ -408,140 +495,68 @@ def main():
     # Create tabs
     tabs = st.tabs(tab_titles)
 
-    # Process Products Overview tab (index 0) first if ingredient is selected
-    if st.session_state.get('selected_ingredient'):
-        with tabs[0]:
-            handle_products_overview(products, db)
-
     # Process the currently active tab
     active_tab = st.session_state.active_tab
     logger.info(f"Processing active tab: {active_tab}")
 
-    # Process remaining tabs
+    # Process each tab
     for i, tab in enumerate(tabs):
-        if (st.session_state.get('selected_ingredient') and i != 0) or (not st.session_state.get('selected_ingredient')):
-            with tab:
-                if i == 0:  # Products Overview
-                    handle_products_overview(products, db)
-                elif i == 1:  # Product Details
-                    st.title("Product Details")
-                    product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
-                    if product_name:
-                        try:
-                            products = get_cached_product_by_name(db, product_name)
-                            if products:
-                                # Create a dropdown to select from matching products
-                                product_options = {f"{p['name']} (SKU: {p['sku']})": p for p in products}
-                                selected_product_name = st.selectbox("Select a product:", list(product_options.keys()))
+        with tab:
+            if i == 0:  # Products Overview
+                handle_products_overview(products, db)
+            elif i == 1:  # Product Details
+                st.title("Product Details")
+                product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
+                if product_name:
+                    try:
+                        products = get_cached_product_by_name(db, product_name)
+                        if products:
+                            # Create a dropdown to select from matching products
+                            product_options = {f"{p['name']} (SKU: {p['sku']})": p for p in products}
+                            selected_product_name = st.selectbox("Select a product:", list(product_options.keys()))
 
-                                if selected_product_name:
-                                    product = product_options[selected_product_name]
-                                    st.write("### Product Information")
-                                    st.json(product)
+                            if selected_product_name:
+                                product = product_options[selected_product_name]
+                                st.write("### Product Information")
+                                st.json(product)
 
-                                    # Display additives and nutrition info
-                                    if 'ingredients' in product:
-                                        display_product_additives(product['sku'], product['ingredients'])
+                                # Display additives and nutrition info
+                                if 'ingredients' in product:
+                                    display_product_additives(product['sku'], product['ingredients'])
 
-                                    nutrition = get_cached_product_nutrition(db, product['sku'])
-                                    if nutrition:
-                                        st.write("### Nutrition Information")
-                                        st.json(nutrition)
+                                nutrition = get_cached_product_nutrition(db, product['sku'])
+                                if nutrition:
+                                    st.write("### Nutrition Information")
+                                    st.json(nutrition)
                             else:
                                 st.warning("No products found matching your search.")
-                        except Exception as e:
-                            st.error(f"Error loading product details: {str(e)}")
-                            logger.error(f"Product details error: {str(e)}")
-                elif i == 2: #Debug
-                    st.title("Debug")
-                    # Your debug code here
-                elif i == 3: #Specific Products Debug
-                    st.title("Specific Products Debug")
-                    if SPECIFIC_PRODUCTS:
-                        selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
-                        if selected_product_url:
-                            debug_logs = debug_product_url(selected_product_url)
-                            for log in debug_logs:
-                                st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
-                    else:
-                        st.info("No specific products defined for debugging.")
-                elif i == 4: #Scraping Logs
-                    st.title("Scraping Logs")
-                    # Your scraping log display code here
-                elif i == 5: #Fix Country Codes
-                    st.title("Fix Country Codes")
-                    # Your country code fixing code here
-                elif i == 6: #Export Data
-                    st.title("Export Data")
-                    # Your data export code here
-                elif i == 7:  # Ingredient Analysis
-                    st.title("Ingredient Analysis")
-                    st.markdown("### 📊 Ingredient Analysis")
-
-                    # Add refresh button with unique key
-                    if st.button("🔄 Refresh Analysis", key="refresh_ingredients_analysis"):
-                        with st.spinner("Refreshing ingredient analysis..."):
-                            if refresh_ingredient_analysis(db):
-                                st.success("Successfully refreshed ingredient analysis!")
-                                st.rerun()
-                            else:
-                                st.error("Failed to refresh ingredient analysis")
-
-                    try:
-                        # Query ingredient analysis data
-                        ingredients_data = None
-                        conn = db.get_connection()
-                        try:
-                            with conn.cursor() as cur:
-                                logger.info("Querying ingredient analysis data...")
-                                cur.execute("""
-                                    SELECT ingredient, frequency 
-                                    FROM ingredient_analysis 
-                                    ORDER BY frequency DESC
-                                """)
-                                ingredients_data = cur.fetchall()
-                                logger.info(f"Found {len(ingredients_data) if ingredients_data else 0} ingredients")
-                        finally:
-                            db.return_connection(conn)
-
-                        if ingredients_data:
-                            st.info(f"Found {len(ingredients_data)} unique ingredients")
-
-                            # Search box
-                            search_term = st.text_input("🔍 Search ingredients", "")
-
-                            # Filter and display ingredients
-                            filtered_data = [
-                                (ing, freq) for ing, freq in ingredients_data
-                                if not search_term or search_term.lower() in ing.lower()
-                            ]
-
-                            if filtered_data:
-                                col1, col2 = st.columns(2)
-                                for idx, (ingredient, frequency) in enumerate(filtered_data):
-                                    col = col1 if idx % 2 == 0 else col2
-                                    with col:
-                                        # Make ingredient name clickable
-                                        if st.button(
-                                            f"**{ingredient}** ({frequency} products)",
-                                            key=f"ing_{idx}",
-                                            help="Click to view products containing this ingredient"
-                                        ):
-                                            logger.info(f"Selected ingredient: {ingredient}")
-                                            st.session_state.selected_ingredient = ingredient
-                                            st.session_state.active_tab = 0
-                                            st.rerun()
-                            else:
-                                if search_term:
-                                    st.warning("No ingredients found matching your search.")
-                                else:
-                                    st.warning("No ingredients found in the database.")
-                        else:
-                            st.warning("No ingredient data available. Try refreshing the analysis.")
-
                     except Exception as e:
-                        logger.error(f"Error in ingredient analysis: {str(e)}")
-                        st.error(f"Failed to analyze ingredients: {str(e)}")
+                        st.error(f"Error loading product details: {str(e)}")
+                        logger.error(f"Product details error: {str(e)}")
+            elif i == 2: #Debug
+                st.title("Debug")
+                # Your debug code here
+            elif i == 3: #Specific Products Debug
+                st.title("Specific Products Debug")
+                if SPECIFIC_PRODUCTS:
+                    selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
+                    if selected_product_url:
+                        debug_logs = debug_product_url(selected_product_url)
+                        for log in debug_logs:
+                            st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
+                else:
+                    st.info("No specific products defined for debugging.")
+            elif i == 4: #Scraping Logs
+                st.title("Scraping Logs")
+                # Your scraping log display code here
+            elif i == 5: #Fix Country Codes
+                st.title("Fix Country Codes")
+                # Your country code fixing code here
+            elif i == 6: #Export Data
+                st.title("Export Data")
+                # Your data export code here
+            elif i == 7:  # Ingredient Analysis
+                handle_ingredient_analysis(db)
 
 
 if __name__ == "__main__":
