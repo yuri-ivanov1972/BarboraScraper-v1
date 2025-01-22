@@ -43,6 +43,51 @@ if 'selected_ingredient' not in st.session_state:
 if 'active_tab' not in st.session_state:
     st.session_state.active_tab = 0
 
+@st.cache_data(ttl=300)
+def get_cached_product_additives(_additive_manager, sku, ingredients):
+    """Cache additive processing results to avoid repeated processing"""
+    if not ingredients:
+        return None, []
+    stats = _additive_manager.process_product_ingredients(sku, ingredients)
+    additives = _additive_manager.get_product_additives(sku) if stats['processed'] else []
+    return stats, additives
+
+def display_product_additives(sku: str, ingredients: str):
+    """Display additives found in the product ingredients"""
+    if not ingredients:
+        logger.info(f"No ingredients provided for product {sku}")
+        return
+    try:
+        additive_manager = st.session_state.additive_manager
+        logger.info(f"Processing ingredients for product {sku}")
+
+        # Get cached additive information
+        stats, additives = get_cached_product_additives(additive_manager, sku, ingredients)
+
+        if stats and stats['processed']:
+            st.markdown("#### 🧪 Food Additives")
+            if additives:
+                # Create columns for better layout
+                cols = st.columns(2)
+                for idx, additive in enumerate(additives):
+                    col = cols[idx % 2]
+                    with col:
+                        with st.expander(f"{additive.e_number} - {additive.name or 'Unknown'}"):
+                            if additive.description:
+                                st.markdown(f"**Description:** {additive.description}")
+                            if additive.safety_rating:
+                                st.markdown(f"**Safety Rating:** {additive.safety_rating}")
+                            if additive.source_url:
+                                st.markdown(f"[More Information]({additive.source_url})")
+            else:
+                st.info("No additive information available in the database.")
+        else:
+            st.info("No food additives (E-numbers) found in this product.")
+
+    except Exception as e:
+        logger.error(f"Error displaying additives for {sku}: {str(e)}")
+        st.error("Failed to process additive information")
+
 def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
     st.session_state.selected_ingredient = ingredient
@@ -52,12 +97,45 @@ def select_ingredient(ingredient: str):
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
     """Cache product list to avoid repeated database queries"""
-    return _db.get_products()
+    try:
+        conn = _db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT p.*, n.ingredients 
+                    FROM products p
+                    LEFT JOIN product_nutrition n ON p.sku = n.sku
+                """)
+                columns = [desc[0] for desc in cur.description]
+                return [dict(zip(columns, row)) for row in cur.fetchall()]
+        finally:
+            _db.return_connection(conn)
+    except Exception as e:
+        logger.error(f"Error getting cached products: {str(e)}")
+        return []
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_product_nutrition(_db, sku):
-    """Cache nutritional information to avoid repeated database queries"""
-    return _db.get_product_nutrition(sku)
+def get_cached_product_by_name(_db, product_name: str) -> Optional[List[Dict]]:
+    """Cache product search results to avoid repeated database queries"""
+    try:
+        conn = _db.get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT p.*, n.ingredients 
+                    FROM products p
+                    LEFT JOIN product_nutrition n ON p.sku = n.sku
+                    WHERE LOWER(p.name) LIKE LOWER(%s)
+                    LIMIT 10
+                """, (f"%{product_name}%",))
+                columns = [desc[0] for desc in cur.description]
+                products = [dict(zip(columns, row)) for row in cur.fetchall()]
+                return products if products else None
+        finally:
+            _db.return_connection(conn)
+    except Exception as e:
+        logger.error(f"Error searching for product: {str(e)}")
+        return None
 
 def normalize_ingredient(ingredient: str) -> str:
     """Normalize ingredient text for consistent analysis"""
@@ -153,27 +231,24 @@ def refresh_ingredient_analysis(db: Database) -> bool:
         return False
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
-def get_cached_product_by_name(_db, product_name: str) -> Optional[List[Dict]]:
-    """Cache product search results to avoid repeated database queries"""
+def get_cached_product_nutrition(_db, sku):
+    """Cache nutritional information to avoid repeated database queries"""
     try:
         conn = _db.get_connection()
         try:
-            with conn.cursor() as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT p.*, n.ingredients 
-                    FROM products p
-                    LEFT JOIN product_nutrition n ON p.sku = n.sku
-                    WHERE LOWER(p.name) LIKE LOWER(%s)
-                    LIMIT 10
-                """, (f"%{product_name}%",))
-                columns = [desc[0] for desc in cur.description]
-                products = [dict(zip(columns, row)) for row in cur.fetchall()]
-                return products if products else None
+                    SELECT *
+                    FROM product_nutrition
+                    WHERE sku = %s
+                """, (sku,))
+                nutrition_info = cur.fetchone()
+                return nutrition_info if nutrition_info else {}
         finally:
             _db.return_connection(conn)
     except Exception as e:
-        logger.error(f"Error searching for product: {str(e)}")
-        return None
+        logger.error(f"Error getting product nutrition for {sku}: {str(e)}")
+        return {}
 
 def debug_product_url(url: str) -> list:
     """Debug scraping process for a specific URL"""
@@ -402,6 +477,7 @@ def main():
             st.error(f"Failed to analyze ingredients: {str(e)}")
 
     # Remaining tabs with their content
+
 
 if __name__ == "__main__":
     main()
