@@ -393,6 +393,21 @@ def get_cached_ingredient_analysis(_db: Database):
         logger.error(f"Error getting cached ingredient analysis: {str(e)}")
         return []
 
+def handle_tab_switch(ingredient: Optional[str] = None):
+    """Single unified function to handle tab switching and ingredient selection"""
+    if ingredient is not None:
+        logger.info(f"Selected ingredient: {ingredient}")
+        st.session_state.selected_ingredient = ingredient
+        st.session_state.active_tab = 0
+
+# Function to handle ingredient selection from analysis tab
+def select_ingredient_and_switch(ingredient: str):
+    """Helper function to handle ingredient selection and tab switching"""
+    logger.info(f"Selecting ingredient: {ingredient}")
+    st.session_state.selected_ingredient = ingredient
+    st.session_state.active_tab = 0
+    st.rerun()
+
 def handle_ingredient_analysis(db: Database):
     """Handle the Ingredient Analysis tab functionality"""
     st.title("Ingredient Analysis")
@@ -436,10 +451,7 @@ def handle_ingredient_analysis(db: Database):
                             help="Click to view products containing this ingredient",
                             use_container_width=True
                         ):
-                            st.session_state.selected_ingredient = ingredient
-                            logger.info(f"Selected ingredient: {ingredient}")
-                            st.session_state.active_tab = 0
-                            st.experimental_rerun()
+                            select_ingredient_and_switch(ingredient)
             else:
                 if search_term:
                     st.warning("No ingredients found matching your search.")
@@ -451,22 +463,6 @@ def handle_ingredient_analysis(db: Database):
     except Exception as e:
         logger.error(f"Error in ingredient analysis: {str(e)}")
         st.error(f"Failed to analyze ingredients: {str(e)}")
-
-def handle_tab_switch(ingredient: Optional[str] = None):
-    """Single unified function to handle tab switching and ingredient selection"""
-    if ingredient is not None:
-        st.session_state.selected_ingredient = ingredient
-        logger.info(f"Selected ingredient: {ingredient}")
-
-    logger.info(f"Current active tab index: {st.session_state.active_tab}")
-    logger.info(f"Selected ingredient: {st.session_state.selected_ingredient}")
-
-    # Only reset tab to Products Overview (0) if we have a selected ingredient
-    if ingredient is not None:
-        st.session_state.active_tab = 0
-        logger.info(f"Switching to Products Overview tab (index: 0)")
-        st.experimental_rerun()
-
 
 def main():
     # Initialize database connection
