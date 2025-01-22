@@ -116,6 +116,7 @@ def display_product_additives(sku: str, ingredients: str):
         st.error("Failed to process additive information")
 
 
+
 def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
     logger.info(f"Selecting ingredient: {ingredient}")
@@ -130,7 +131,7 @@ def select_ingredient(ingredient: str):
     logger.info(f"Updated session state - selected_ingredient: {st.session_state.selected_ingredient}")
 
     # Force UI refresh
-    st.experimental_rerun()
+    st.rerun()
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -463,7 +464,7 @@ def switch_to_products_tab(ingredient: Optional[str] = None):
     if ingredient is not None:
         st.session_state.selected_ingredient = ingredient
     st.session_state.active_tab = 0
-    st.experimental_rerun()
+    st.rerun()
 
 def main():
     # Initialize database connection
