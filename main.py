@@ -13,6 +13,13 @@ from collections import defaultdict
 from typing import Dict, List, Tuple, Optional
 import time
 
+# Page configuration must be the first Streamlit command
+st.set_page_config(
+    page_title="Rimi Product Scraper",
+    page_icon="🛒",
+    layout="wide"
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -124,13 +131,7 @@ def ensure_database_connection():
         return None
 
 def main():
-    # Page configuration
-    st.set_page_config(
-        page_title="Rimi Product Scraper",
-        page_icon="🛒",
-        layout="wide"
-    )
-
+    # Page configuration - MOVED TO TOP
     # Initialize database connection
     db = ensure_database_connection()
     if not db:
@@ -424,6 +425,7 @@ def display_product_additives(sku: str, ingredients: str):
     except Exception as e:
         logger.error(f"Error displaying additives for {sku}: {str(e)}")
         st.error("Failed to process additive information")
+
 
 
 def get_ingredient_frequencies(db: Database) -> List[Tuple[str, int, List[Dict]]]:
