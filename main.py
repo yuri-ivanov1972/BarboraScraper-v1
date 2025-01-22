@@ -661,7 +661,6 @@ def main():
         st.markdown("### 📊 Ingredient Analysis")
         st.markdown("Analysis of ingredient frequencies across all products")
 
-        # Add refresh button
         col1, col2 = st.columns([1, 3])
         with col1:
             if st.button("🔄 Refresh Analysis", key="refresh_ingredients"):
@@ -732,9 +731,9 @@ def main():
     @st.cache_data(ttl=300)  # Cache data for 5 minutes
     def get_cached_products(_db):
         """Cache product list to avoid repeated database queries"""
-        return _db.getproducts()
+        return _db.get_products()
 
-    @st.cache_data(ttl=300)  # Cache data for 5 minutes
+    @st.cache_data(ttl=300)  #Cache data for 5 minutes
     def get_cached_product_nutrition(_db, sku):
         """Cache nutritional information to avoid repeated database queries"""
         return _db.get_product_nutrition(sku)
@@ -818,15 +817,15 @@ def main():
         """
         try:
             conn = db.get_connection()
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
             try:
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
                     # First, clear existing analysis
-                    cur.execute("""
-                        TRUNCATE ingredient_analysis RESTART IDENTITY CASCADE;
-                        TRUNCATE ingredient_product_mapping RESTART IDENTITY;
-                    """)
+                    cur.execute("TRUNCATE ingredient_analysis RESTART IDENTITY CASCADE")
 
-                    # Get all products with ingredients
+                    # Get products with ingredients
                     cur.execute("""
                         SELECT p.sku, p.name, n.ingredients
                         FROM products p
@@ -835,80 +834,45 @@ def main():
                     """)
                     products = cur.fetchall()
 
-                    # Create progress bar and status
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
                     total_products = len(products)
                     status_text.text(f"Found {total_products} products to process")
 
                     # Process ingredients
-                    ingredient_data = defaultdict(lambda: {'count': 0, 'products': set()})
+                    ingredient_counts = defaultdict(int)
                     processed = 0
 
-                    # First pass: collect data
                     for product in products:
-                        if not product['ingredients']:
-                            continue
-
                         ingredients_text = product['ingredients']
-                        # Split by common separators and handle parentheses
                         ingredients = re.split(r'[,;]|\(|\)', ingredients_text)
 
-                        # Process each ingredient
                         for ingredient in ingredients:
                             normalized = normalize_ingredient(ingredient)
-                            if normalized and len(normalized) > 1:  # Skip single characters
-                                ingredient_data[normalized]['count'] += 1
-                                ingredient_data[normalized]['products'].add(product['sku'])
+                            if normalized and len(normalized) > 1:
+                                ingredient_counts[normalized] += 1
 
-                        # Update progress
                         processed += 1
                         progress = processed / total_products
                         progress_bar.progress(progress)
-                        status_text.text(f"Processing products: {processed}/{total_products} ({progress:.1%})")
+                        if processed % 10 == 0:  # Update status less frequently
+                            status_text.text(f"Processing products: {processed}/{total_products}")
 
-                    status_text.text(f"Analyzed {processed} products. Saving to database...")
-
-                    # Second pass: insert data
-                    saved_ingredients = 0
-                    total_ingredients = len(ingredient_data)
-
-                    for ingredient, data in ingredient_data.items():
-                        try:
-                            # Insert ingredient
-                            cur.execute("""
-                                INSERT INTO ingredient_analysis (ingredient, frequency)
-                                VALUES (%s, %s)
-                                RETURNING id
-                            """, (ingredient, len(data['products'])))
-                            ingredient_id = cur.fetchone()['id']
-
-                            # Insert product mappings
-                            for sku in data['products']:
-                                cur.execute("""
-                                    INSERT INTO ingredient_product_mapping (ingredient_id, product_sku)
-                                    VALUES (%s, %s)
-                                    ON CONFLICT DO NOTHING
-                                """, (ingredient_id, sku))
-
-                            # Update progress for saving
-                            saved_ingredients += 1
-                            progress = saved_ingredients / total_ingredients
-                            status_text.text(f"Saving ingredients to database: {saved_ingredients}/{total_ingredients} ({progress:.1%})")
-
-                        except Exception as e:
-                            logger.error(f"Error processing ingredient {ingredient}: {str(e)}")
-                            continue
+                    # Save to database
+                    status_text.text("Saving to database...")
+                    for ingredient, count in ingredient_counts.items():
+                        cur.execute("""
+                            INSERT INTO ingredient_analysis (ingredient, frequency)
+                            VALUES (%s, %s)
+                        """, (ingredient, count))
 
                     conn.commit()
                     status_text.text("✅ Analysis completed successfully!")
-                    time.sleep(1)  # Give user time to see completion message
                     return True
 
             finally:
                 db.return_connection(conn)
+
         except Exception as e:
-            logger.error(f"Error refreshing ingredient analysis: {str(e)}")
+            logger.error(f"Error in refresh_ingredient_analysis: {str(e)}")
             if 'status_text' in locals():
                 status_text.text(f"❌ Error during analysis: {str(e)}")
             return False
