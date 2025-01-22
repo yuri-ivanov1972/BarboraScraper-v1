@@ -92,7 +92,7 @@ def select_ingredient(ingredient: str):
     """Callback for ingredient selection"""
     st.session_state.selected_ingredient = ingredient
     st.session_state.active_tab = 0  # Switch to products tab
-    st.experimental_rerun()  # Force a rerun to update the UI
+    st.rerun()  # Using rerun instead of experimental_rerun
 
 @st.cache_data(ttl=300)  # Cache data for 5 minutes
 def get_cached_products(_db):
@@ -341,7 +341,7 @@ def main():
                     # Clear filter button
                     if st.button("Clear Filter"):
                         st.session_state.selected_ingredient = None
-                        st.experimental_rerun()
+                        st.rerun()
 
                     # Filter products containing the selected ingredient
                     filtered_products = filter_products_by_ingredient(products, st.session_state.selected_ingredient)
@@ -428,7 +428,7 @@ def main():
             with st.spinner("Refreshing ingredient analysis..."):
                 if refresh_ingredient_analysis(db):
                     st.success("Successfully refreshed ingredient analysis!")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Failed to refresh ingredient analysis")
 
