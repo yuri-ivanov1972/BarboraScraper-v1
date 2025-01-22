@@ -331,7 +331,6 @@ def filter_products_by_ingredient(products, ingredient):
     return filtered_products
 
 
-
 def handle_products_overview(products, db):
     """Handle the Products Overview tab functionality"""
     st.title("Products Overview")
@@ -404,7 +403,7 @@ def select_ingredient_and_switch(ingredient: str):
         logger.info(f"Selecting ingredient: {ingredient}")
         st.session_state['selected_ingredient'] = ingredient
         st.session_state['active_tab'] = 0
-        st.rerun()
+        st.experimental_rerun()
 
 def handle_ingredient_analysis(db: Database):
     """Handle the Ingredient Analysis tab functionality"""
@@ -469,11 +468,8 @@ def main():
         st.error("Database Connection Error")
         return
 
-    # Initialize session state for tab management
-    if 'active_tab' not in st.session_state:
-        st.session_state.active_tab = 0
-    if 'selected_ingredient' not in st.session_state:
-        st.session_state.selected_ingredient = None
+    # Get products once for all tabs
+    all_products = get_cached_products(db)
 
     # Tab configuration
     tab_titles = [
@@ -487,80 +483,79 @@ def main():
         "Ingredient Analysis"
     ]
 
-    logger.info(f"Current active tab index: {st.session_state.active_tab}")
-    logger.info(f"Selected ingredient: {st.session_state.get('selected_ingredient')}")
-
-    # Create tabs and handle tab selection
+    # Create tabs
     tabs = st.tabs(tab_titles)
 
-    # Add tab selector above the tabs
+    # Process active tab
+    active_tab = st.session_state.get('active_tab', 0)
+
+    # Process tabs
+    with tabs[active_tab]:
+        if active_tab == 0:  # Products Overview
+            handle_products_overview(all_products, db)
+        elif active_tab == 1:  # Product Details
+            st.title("Product Details")
+            product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
+            if product_name:
+                try:
+                    products = get_cached_product_by_name(db, product_name)
+                    if products:
+                        product_options = {f"{p['name']} (SKU: {p['sku']})": p for p in products}
+                        selected_product_name = st.selectbox("Select a product:", list(product_options.keys()))
+                        if selected_product_name:
+                            product = product_options[selected_product_name]
+                            st.write("### Product Information")
+                            st.json(product)
+                            if 'ingredients' in product:
+                                display_product_additives(product['sku'], product['ingredients'])
+                            nutrition = get_cached_product_nutrition(db, product['sku'])
+                            if nutrition:
+                                st.write("### Nutrition Information")
+                                st.json(nutrition)
+                    else:
+                        st.warning("No products found matching your search.")
+                except Exception as e:
+                    st.error(f"Error loading product details: {str(e)}")
+                    logger.error(f"Product details error: {str(e)}")
+        elif active_tab == 2:  # Debug
+            st.title("Debug")
+            st.write("Debug information will be displayed here.")
+        elif active_tab == 3:  # Specific Products Debug
+            st.title("Specific Products Debug")
+            if SPECIFIC_PRODUCTS:
+                selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
+                if selected_product_url:
+                    debug_logs = debug_product_url(selected_product_url)
+                    for log in debug_logs:
+                        st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
+            else:
+                st.info("No specific products defined for debugging.")
+        elif active_tab == 4:  # Scraping Logs
+            st.title("Scraping Logs")
+            st.write("Scraping logs will be displayed here.")
+        elif active_tab == 5:  # Fix Country Codes
+            st.title("Fix Country Codes")
+            st.write("Country code fixing interface will be shown here.")
+        elif active_tab == 6:  # Export Data
+            st.title("Export Data")
+            st.write("Data export options will be available here.")
+        elif active_tab == 7:  # Ingredient Analysis
+            handle_ingredient_analysis(db)
+
+    # Tab selector with callback
     selected_tab = st.selectbox(
         "Select Tab",
         range(len(tab_titles)),
         format_func=lambda x: tab_titles[x],
-        index=st.session_state.active_tab,
-        label_visibility="hidden"
+        index=active_tab,
+        key='tab_selector'
     )
 
     # Update session state if tab changed
-    if selected_tab != st.session_state.active_tab:
-        logger.info(f"Tab changed from {st.session_state.active_tab} to {selected_tab}")
-        st.session_state.active_tab = selected_tab
-        st.rerun()
-
-    # Process tabs
-    for i, tab in enumerate(tabs):
-        with tab:
-            if i == 0:  # Products Overview
-                handle_products_overview(get_cached_products(db), db)
-            elif i == 1:  # Product Details
-                st.title("Product Details")
-                product_name = st.text_input("Enter product name:", help="Enter part of the product name to search")
-                if product_name:
-                    try:
-                        products = get_cached_product_by_name(db, product_name)
-                        if products:
-                            product_options = {f"{p['name']} (SKU: {p['sku']})": p for p in products}
-                            selected_product_name = st.selectbox("Select a product:", list(product_options.keys()))
-                            if selected_product_name:
-                                product = product_options[selected_product_name]
-                                st.write("### Product Information")
-                                st.json(product)
-                                if 'ingredients' in product:
-                                    display_product_additives(product['sku'], product['ingredients'])
-                                nutrition = get_cached_product_nutrition(db, product['sku'])
-                                if nutrition:
-                                    st.write("### Nutrition Information")
-                                    st.json(nutrition)
-                        else:
-                            st.warning("No products found matching your search.")
-                    except Exception as e:
-                        st.error(f"Error loading product details: {str(e)}")
-                        logger.error(f"Product details error: {str(e)}")
-            elif i == 2: #Debug
-                st.title("Debug")
-                # Your debug code here
-            elif i == 3: #Specific Products Debug
-                st.title("Specific Products Debug")
-                if SPECIFIC_PRODUCTS:
-                    selected_product_url = st.selectbox("Select a product", SPECIFIC_PRODUCTS)
-                    if selected_product_url:
-                        debug_logs = debug_product_url(selected_product_url)
-                        for log in debug_logs:
-                            st.markdown(f"<div class='debug-log'>{log}</div>", unsafe_allow_html=True)
-                else:
-                    st.info("No specific products defined for debugging.")
-            elif i == 4: #Scraping Logs
-                st.title("Scraping Logs")
-                # Your scraping log display code here
-            elif i == 5: #Fix Country Codes
-                st.title("Fix Country Codes")
-                # Your country code fixing code here
-            elif i == 6: #Export Data
-                st.title("Export Data")
-                # Your data export code here
-            elif i == 7:  # Ingredient Analysis
-                handle_ingredient_analysis(db)
+    if selected_tab != active_tab:
+        logger.info(f"Tab changed from {active_tab} to {selected_tab}")
+        st.session_state['active_tab'] = selected_tab
+        st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
