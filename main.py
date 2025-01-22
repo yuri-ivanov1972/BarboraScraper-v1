@@ -348,7 +348,7 @@ def handle_products_overview(products, db):
                 if st.button("Clear Filter"):
                     logger.info("Clearing ingredient filter")
                     st.session_state.selected_ingredient = None
-                    st.rerun()
+                    st.experimental_rerun()
 
                 # Filter products containing the selected ingredient
                 filtered_products = filter_products_by_ingredient(products, st.session_state.selected_ingredient)
@@ -436,8 +436,10 @@ def handle_ingredient_analysis(db: Database):
                             help="Click to view products containing this ingredient",
                             use_container_width=True
                         ):
-                            st.session_state.active_tab = 0  # Set tab before switching
-                            handle_tab_switch(ingredient)
+                            st.session_state.selected_ingredient = ingredient
+                            logger.info(f"Selected ingredient: {ingredient}")
+                            st.session_state.active_tab = 0
+                            st.experimental_rerun()
             else:
                 if search_term:
                     st.warning("No ingredients found matching your search.")
@@ -454,14 +456,16 @@ def handle_tab_switch(ingredient: Optional[str] = None):
     """Single unified function to handle tab switching and ingredient selection"""
     if ingredient is not None:
         st.session_state.selected_ingredient = ingredient
-        logger.info(f"Setting selected ingredient to: {ingredient}")
+        logger.info(f"Selected ingredient: {ingredient}")
+
+    logger.info(f"Current active tab index: {st.session_state.active_tab}")
+    logger.info(f"Selected ingredient: {st.session_state.selected_ingredient}")
 
     # Only reset tab to Products Overview (0) if we have a selected ingredient
-    if ingredient is not None or st.session_state.selected_ingredient is not None:
+    if ingredient is not None:
         st.session_state.active_tab = 0
         logger.info(f"Switching to Products Overview tab (index: 0)")
-
-    st.rerun()
+        st.experimental_rerun()
 
 
 def main():
