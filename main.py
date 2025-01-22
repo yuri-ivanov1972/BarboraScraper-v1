@@ -403,7 +403,7 @@ def handle_ingredient_analysis(db: Database):
         with st.spinner("Refreshing ingredient analysis..."):
             if refresh_ingredient_analysis(db):
                 st.success("Successfully refreshed ingredient analysis!")
-                handle_tab_switch() # Changed to use the new function
+                handle_tab_switch()
             else:
                 st.error("Failed to refresh ingredient analysis")
                 return
@@ -455,11 +455,11 @@ def handle_tab_switch(ingredient: Optional[str] = None):
         st.session_state.selected_ingredient = ingredient
         logger.info(f"Setting selected ingredient to: {ingredient}")
 
-    # Update tab index
-    if 'active_tab' not in st.session_state:
-      st.session_state.active_tab = 0
-    st.session_state.active_tab = 0
-    logger.info(f"Setting active tab to: {st.session_state.active_tab}")
+    # Only reset tab to Products Overview (0) if we have a selected ingredient
+    if ingredient is not None or st.session_state.selected_ingredient is not None:
+        st.session_state.active_tab = 0
+        logger.info(f"Switching to Products Overview tab (index: 0)")
+
     st.rerun()
 
 
