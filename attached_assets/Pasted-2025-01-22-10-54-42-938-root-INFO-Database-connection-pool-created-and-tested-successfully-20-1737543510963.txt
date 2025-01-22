@@ -1,0 +1,33 @@
+2025-01-22 10:54:42,938 - root - INFO - Database connection pool created and tested successfully
+2025-01-22 10:54:43,149 - __main__ - INFO - Database connection established successfully
+2025-01-22 10:54:43,233 - __main__ - INFO - Current active tab index: 0
+2025-01-22 10:54:43,233 - __main__ - INFO - Selected ingredient: None
+2025-01-22 10:54:43,891 - __main__ - INFO - Displaying all products
+2025-01-22 10:54:45,234 - __main__ - INFO - Querying cached ingredient analysis data...
+2025-01-22 10:54:45,364 - __main__ - INFO - Found 15617 ingredients in cache
+2025-01-22 10:56:52,033 - __main__ - INFO - Current active tab index: 0
+2025-01-22 10:56:52,034 - __main__ - INFO - Selected ingredient: None
+2025-01-22 10:56:52,079 - __main__ - INFO - Displaying all products
+2025-01-22 10:56:53,932 - __main__ - INFO - Selected ingredient: e410
+2025-01-22 10:56:54,139 - __main__ - INFO - Current active tab index: 0
+2025-01-22 10:56:54,139 - __main__ - INFO - Selected ingredient: e410
+2025-01-22 10:56:54,178 - __main__ - INFO - Filtering for ingredient: e410
+2025-01-22 10:56:56,833 - __main__ - INFO - Filtering products for ingredient: e410
+2025-01-22 10:56:56,848 - __main__ - INFO - Found 105 products containing e410
+2025-01-22 10:56:56,850 - __main__ - INFO - Displaying 105 filtered products
+2025-01-22 10:57:00.288 Uncaught app execution
+Traceback (most recent call last):
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 88, in exec_func_with_error_handling
+    result = func()
+             ^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 541, in code_to_exec
+    self._session_state.on_script_will_rerun(
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/state/safe_session_state.py", line 66, in on_script_will_rerun
+    self._state.on_script_will_rerun(latest_widget_states)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/state/session_state.py", line 556, in on_script_will_rerun
+    self._reset_triggers()
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/state/session_state.py", line 601, in _reset_triggers
+    for state_id in self._new_widget_state:
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/state/session_state.py", line 157, in __iter__
+    yield from self.states
+RuntimeError: dictionary changed size during iteration

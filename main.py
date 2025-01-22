@@ -412,7 +412,7 @@ def handle_ingredient_analysis(db: Database):
         with st.spinner("Refreshing ingredient analysis..."):
             if refresh_ingredient_analysis(db):
                 st.success("Successfully refreshed ingredient analysis!")
-                st.experimental_rerun()
+                switch_to_products_tab()
             else:
                 st.error("Failed to refresh ingredient analysis")
                 return
@@ -445,10 +445,7 @@ def handle_ingredient_analysis(db: Database):
                             help="Click to view products containing this ingredient",
                             use_container_width=True
                         ):
-                            logger.info(f"Selected ingredient: {ingredient}")
-                            st.session_state.selected_ingredient = ingredient
-                            st.session_state.active_tab = 0
-                            st.rerun()
+                            switch_to_products_tab(ingredient)
             else:
                 if search_term:
                     st.warning("No ingredients found matching your search.")
@@ -460,6 +457,13 @@ def handle_ingredient_analysis(db: Database):
     except Exception as e:
         logger.error(f"Error in ingredient analysis: {str(e)}")
         st.error(f"Failed to analyze ingredients: {str(e)}")
+
+def switch_to_products_tab(ingredient: Optional[str] = None):
+    """Helper function to handle tab switching and ingredient selection"""
+    if ingredient is not None:
+        st.session_state.selected_ingredient = ingredient
+    st.session_state.active_tab = 0
+    st.experimental_rerun()
 
 def main():
     # Initialize database connection
@@ -489,8 +493,9 @@ def main():
     logger.info(f"Current active tab index: {st.session_state.active_tab}")
     logger.info(f"Selected ingredient: {st.session_state.get('selected_ingredient')}")
 
-    # Create tabs
+    # Create tabs and handle tab switching
     tabs = st.tabs(tab_titles)
+    current_tab = st.session_state.active_tab
 
     # Process tabs
     for i, tab in enumerate(tabs):
