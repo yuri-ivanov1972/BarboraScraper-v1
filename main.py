@@ -162,6 +162,123 @@ def main():
         except Exception as e:
             st.error(f"Error loading products: {str(e)}")
 
+    # Tab 2: Product Details
+    with tabs[1]:
+        st.title("Product Details")
+        try:
+            products = get_cached_products(db)
+            if products:
+                df = pd.DataFrame(products)
+                selected_product = st.selectbox(
+                    "Select a product to view details:",
+                    options=df['sku'].tolist(),
+                    format_func=lambda x: df[df['sku'] == x]['name'].iloc[0]
+                )
+
+                if selected_product:
+                    nutrition = get_cached_product_nutrition(db, selected_product)
+                    if nutrition:
+                        product_info = df[df['sku'] == selected_product].iloc[0]
+
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"#### {product_info['name']}")
+                            st.markdown(f"**Price:** €{product_info['price']}")
+                            if product_info['price_per_unit']:
+                                st.markdown(f"**Price per unit:** {product_info['price_per_unit']}")
+                            st.markdown(f"**Category:** {product_info['category']}")
+
+                        st.markdown("#### 📊 Nutritional Information")
+                        st.markdown('<div class="nutritional-info">', unsafe_allow_html=True)
+
+                        if nutrition['ingredients']:
+                            st.markdown("##### Ingredients")
+                            st.markdown(nutrition['ingredients'])
+
+                            # Display additives information
+                            display_product_additives(selected_product, nutrition['ingredients'])
+                    else:
+                        st.warning("No nutritional information available for this product.")
+            else:
+                st.info("No products available. Please refresh the data first.")
+        except Exception as e:
+            st.error(f"Error displaying product details: {str(e)}")
+
+    # Tab 3: Debug
+    with tabs[2]:
+        st.title("Debug Single Product")
+        debug_url = st.text_input(
+            "Product URL to debug",
+            value="https://www.rimi.lv/e-veikals/lv/produkti/gala-zivis-un-gatava-kulinarija/gatava-kulinarija/uzkodas-plates-kulinarija/lasa-filejas-skelites-mazs-ar-dillem-kg/p/222966"
+        )
+
+        if st.button("Start Debug", key="start_debug"):
+            debug_logs = debug_product_url(debug_url)
+            for log in debug_logs:
+                st.text(log)
+
+    # Tab 4: Specific Products Debug
+    with tabs[3]:
+        st.title("Specific Products Debug")
+        if st.button("Debug Specific Products", key="debug_specific"):
+            for url in SPECIFIC_PRODUCTS:
+                st.markdown(f"### Debugging {url}")
+                debug_logs = debug_product_url(url)
+                for log in debug_logs:
+                    st.text(log)
+
+    # Tab 5: Scraping Logs
+    with tabs[4]:
+        st.title("Scraping Logs")
+        if 'scraping_logs' not in st.session_state:
+            st.session_state.scraping_logs = []
+
+        if st.button("Clear Logs", key="clear_logs"):
+            st.session_state.scraping_logs = []
+            st.success("Logs cleared!")
+
+        for log in st.session_state.scraping_logs:
+            st.text(log)
+
+    # Tab 6: Fix Country Codes
+    with tabs[5]:
+        st.title("Fix Country Codes")
+        if st.button("Reparse Missing Country Codes", key="reparse_countries"):
+            try:
+                with st.spinner("Checking products without country codes..."):
+                    conn = db.get_connection()
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT COUNT(*) FROM products WHERE country_code IS NULL")
+                        missing_count = cur.fetchone()[0]
+                    db.return_connection(conn)
+
+                    if missing_count > 0:
+                        st.info(f"Found {missing_count} products without country codes")
+                    else:
+                        st.success("All products have country codes!")
+            except Exception as e:
+                st.error(f"Error checking country codes: {str(e)}")
+
+    # Tab 7: Export Data
+    with tabs[6]:
+        st.title("Export Data")
+        if st.button("Export to CSV", key="export_csv"):
+            try:
+                products = db.get_products()
+                if products:
+                    df = pd.DataFrame(products)
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="Download CSV",
+                        data=csv,
+                        file_name="products_export.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.warning("No data to export")
+            except Exception as e:
+                st.error(f"Error exporting data: {str(e)}")
+
     # Tab 8: Ingredient Analysis
     with tabs[7]:
         st.title("Ingredient Analysis")
@@ -190,19 +307,13 @@ def main():
                     """)
                     ingredients_data = cur.fetchall()
                     logger.info(f"Found {len(ingredients_data) if ingredients_data else 0} ingredients")
-            except Exception as e:
-                logger.error(f"Database error: {str(e)}")
-                st.error(f"Error querying database: {str(e)}")
             finally:
                 db.return_connection(conn)
 
             if ingredients_data:
                 st.info(f"Found {len(ingredients_data)} unique ingredients")
-
-                # Search box
                 search_term = st.text_input("🔍 Search ingredients", "")
 
-                # Filter and display ingredients
                 filtered_data = [
                     (ing, freq) for ing, freq in ingredients_data
                     if not search_term or search_term.lower() in ing.lower()
