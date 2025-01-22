@@ -436,6 +436,7 @@ def handle_ingredient_analysis(db: Database):
                             help="Click to view products containing this ingredient",
                             use_container_width=True
                         ):
+                            st.session_state.active_tab = 0  # Set tab before switching
                             handle_tab_switch(ingredient)
             else:
                 if search_term:
