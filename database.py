@@ -213,6 +213,14 @@ class Database:
                             'image_url': existing_product[5],
                             'category': existing_product[6]
                         }
+                        
+                        # Check for price change specifically
+                        price_changed = False
+                        if current_values['price'] != db_values['price'] or current_values['price_per_unit'] != db_values['price_per_unit']:
+                            price_changed = True
+                            logging.info(f"Price change detected for SKU {product.get('sku')}: "
+                                        f"{db_values['price']} → {current_values['price']}, "
+                                        f"{db_values['price_per_unit']} → {current_values['price_per_unit']}")
 
                         if current_values != db_values:
                             cur.execute("""
@@ -234,6 +242,17 @@ class Database:
                                 product.get('category'),
                                 product.get('sku')
                             ))
+                            
+                            # Record price history if price changed
+                            if price_changed:
+                                self.record_price_change(
+                                    product.get('sku'),
+                                    db_values['price'],
+                                    current_values['price'],
+                                    db_values['price_per_unit'],
+                                    current_values['price_per_unit']
+                                )
+                                
                             updated_products += 1
                     else:
                         cur.execute("""
@@ -319,10 +338,24 @@ class Database:
                                           db_values['quantity_unit'] is None or 
                                           db_values['country_code'] is None)
 
+                        # Check for price change specifically
+                        price_changed = False
+                        current_price = current_values['price']
+                        db_price = db_values['price']
+                        current_price_per_unit = current_values['price_per_unit']
+                        db_price_per_unit = db_values['price_per_unit']
+                        
+                        if current_price != db_price or current_price_per_unit != db_price_per_unit:
+                            price_changed = True
+                            logging.info(f"Price change detected for SKU {product.get('sku')}: "
+                                        f"{db_price} → {current_price}, "
+                                        f"{db_price_per_unit} → {current_price_per_unit}")
+                        
                         if is_problematic:
                             logging.info(f"Database values: {db_values}")
                             logging.info(f"Current values: {current_values}")
                             logging.info(f"Should update: {should_update}")
+                            logging.info(f"Price changed: {price_changed}")
 
                         if should_update:
                             cur.execute("""
@@ -350,6 +383,17 @@ class Database:
                                 product.get('country_code'),
                                 product.get('sku')
                             ))
+                            
+                            # Record price history if price changed
+                            if price_changed:
+                                self.record_price_change(
+                                    product.get('sku'),
+                                    db_price,
+                                    current_price,
+                                    db_price_per_unit,
+                                    current_price_per_unit
+                                )
+                                
                             if is_problematic:
                                 logging.info(f"Updated problematic SKU: {product.get('sku')}")
                             updated_products += 1
