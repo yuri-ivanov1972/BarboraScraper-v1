@@ -5,10 +5,9 @@ import logging
 from decimal import Decimal
 from dataclasses import asdict
 from scraper import NutritionalInfo
-from typing import Optional, Dict, List, Tuple, Union
+from typing import Optional, Dict
 from psycopg2 import pool
 import time
-from datetime import datetime
 
 class Database:
     def __init__(self):
@@ -155,21 +154,6 @@ class Database:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
-                
-                # Create price_history table if it doesn't exist
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS price_history (
-                        id SERIAL PRIMARY KEY,
-                        sku VARCHAR(50) REFERENCES products(sku),
-                        old_price DECIMAL(10,2) NOT NULL,
-                        new_price DECIMAL(10,2) NOT NULL,
-                        old_price_per_unit VARCHAR(50),
-                        new_price_per_unit VARCHAR(50),
-                        recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        index_number INT NOT NULL,
-                        UNIQUE(sku, recorded_at, index_number)
-                    )
-                """)
                 conn.commit()
         except Exception as e:
             logging.error(f"Table creation error: {str(e)}")
@@ -213,14 +197,6 @@ class Database:
                             'image_url': existing_product[5],
                             'category': existing_product[6]
                         }
-                        
-                        # Check for price change specifically
-                        price_changed = False
-                        if current_values['price'] != db_values['price'] or current_values['price_per_unit'] != db_values['price_per_unit']:
-                            price_changed = True
-                            logging.info(f"Price change detected for SKU {product.get('sku')}: "
-                                        f"{db_values['price']} → {current_values['price']}, "
-                                        f"{db_values['price_per_unit']} → {current_values['price_per_unit']}")
 
                         if current_values != db_values:
                             cur.execute("""
@@ -242,17 +218,6 @@ class Database:
                                 product.get('category'),
                                 product.get('sku')
                             ))
-                            
-                            # Record price history if price changed
-                            if price_changed:
-                                self.record_price_change(
-                                    product.get('sku'),
-                                    db_values['price'],
-                                    current_values['price'],
-                                    db_values['price_per_unit'],
-                                    current_values['price_per_unit']
-                                )
-                                
                             updated_products += 1
                     else:
                         cur.execute("""
@@ -338,24 +303,10 @@ class Database:
                                           db_values['quantity_unit'] is None or 
                                           db_values['country_code'] is None)
 
-                        # Check for price change specifically
-                        price_changed = False
-                        current_price = current_values['price']
-                        db_price = db_values['price']
-                        current_price_per_unit = current_values['price_per_unit']
-                        db_price_per_unit = db_values['price_per_unit']
-                        
-                        if current_price != db_price or current_price_per_unit != db_price_per_unit:
-                            price_changed = True
-                            logging.info(f"Price change detected for SKU {product.get('sku')}: "
-                                        f"{db_price} → {current_price}, "
-                                        f"{db_price_per_unit} → {current_price_per_unit}")
-                        
                         if is_problematic:
                             logging.info(f"Database values: {db_values}")
                             logging.info(f"Current values: {current_values}")
                             logging.info(f"Should update: {should_update}")
-                            logging.info(f"Price changed: {price_changed}")
 
                         if should_update:
                             cur.execute("""
@@ -383,17 +334,6 @@ class Database:
                                 product.get('country_code'),
                                 product.get('sku')
                             ))
-                            
-                            # Record price history if price changed
-                            if price_changed:
-                                self.record_price_change(
-                                    product.get('sku'),
-                                    db_price,
-                                    current_price,
-                                    db_price_per_unit,
-                                    current_price_per_unit
-                                )
-                                
                             if is_problematic:
                                 logging.info(f"Updated problematic SKU: {product.get('sku')}")
                             updated_products += 1
@@ -636,110 +576,7 @@ class Database:
         finally:
             if conn:
                 self.return_connection(conn)
-                
-    def record_price_change(self, sku: str, old_price: Decimal, new_price: Decimal, 
-                           old_price_per_unit: str = None, new_price_per_unit: str = None) -> bool:
-        """Record a price change in the price_history table"""
-        conn = None
-        try:
-            conn = self.get_connection()
-            with conn.cursor() as cur:
-                # Get current index
-                cur.execute("""
-                    SELECT MAX(index_number) FROM price_history WHERE sku = %s
-                """, (sku,))
-                result = cur.fetchone()
-                next_index = 1  # default starting index
-                if result and result[0] is not None:
-                    next_index = result[0] + 1
-                
-                # Record the price change
-                cur.execute("""
-                    INSERT INTO price_history 
-                    (sku, old_price, new_price, old_price_per_unit, new_price_per_unit, index_number)
-                    VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
-                    sku, 
-                    old_price, 
-                    new_price, 
-                    old_price_per_unit, 
-                    new_price_per_unit,
-                    next_index
-                ))
-                
-                return True
-        except Exception as e:
-            logging.error(f"Error recording price change: {str(e)}")
-            return False
-        finally:
-            if conn:
-                self.return_connection(conn)
-                
-    def get_price_history(self, sku: str) -> List[Dict]:
-        """Get price history for a specific product"""
-        conn = None
-        try:
-            conn = self.get_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT 
-                        ph.sku, 
-                        p.name as product_name,
-                        ph.old_price, 
-                        ph.new_price, 
-                        ph.old_price_per_unit, 
-                        ph.new_price_per_unit, 
-                        ph.recorded_at,
-                        ph.index_number
-                    FROM price_history ph
-                    JOIN products p ON p.sku = ph.sku  
-                    WHERE ph.sku = %s
-                    ORDER BY ph.recorded_at DESC, ph.index_number DESC
-                """, (sku,))
-                return cur.fetchall()
-        except Exception as e:
-            logging.error(f"Error retrieving price history: {str(e)}")
-            return []
-        finally:
-            if conn:
-                self.return_connection(conn)
-                
-    def get_recent_price_changes(self, limit: int = 50) -> List[Dict]:
-        """Get most recent price changes across all products"""
-        conn = None
-        try:
-            conn = self.get_connection()
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT 
-                        ph.sku, 
-                        p.name as product_name,
-                        p.category,
-                        ph.old_price, 
-                        ph.new_price, 
-                        ph.old_price_per_unit, 
-                        ph.new_price_per_unit, 
-                        ph.recorded_at,
-                        ph.index_number,
-                        (ph.new_price - ph.old_price) as price_diff,
-                        CASE 
-                            WHEN ph.old_price > 0 THEN 
-                                ROUND(((ph.new_price - ph.old_price) / ph.old_price) * 100, 2)
-                            ELSE 
-                                NULL
-                        END as percentage_change
-                    FROM price_history ph
-                    JOIN products p ON p.sku = ph.sku  
-                    ORDER BY ph.recorded_at DESC, ph.index_number DESC
-                    LIMIT %s
-                """, (limit,))
-                return cur.fetchall()
-        except Exception as e:
-            logging.error(f"Error retrieving recent price changes: {str(e)}")
-            return []
-        finally:
-            if conn:
-                self.return_connection(conn)
+
 
     def close(self):
         """Close all database connections"""
@@ -747,44 +584,6 @@ class Database:
             self.pool.closeall()
             logging.info("Closed all database connections")
 
-    def backup_database(self):
-        """Create a backup of the database tables"""
-        conn = None
-        try:
-            conn = self.get_connection()
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            
-            tables_to_backup = ['products', 'product_nutrition', 'ingredient_analysis', 'additives', 'product_additives']
-            with conn.cursor() as cur:
-                for table in tables_to_backup:
-                    # Create backup table if it doesn't exist
-                    backup_table = f"{table}_backup_{timestamp}"
-                    cur.execute(f"""
-                        CREATE TABLE IF NOT EXISTS {backup_table} 
-                        AS SELECT * FROM {table}
-                    """)
-                    
-                    # Get row count to report
-                    cur.execute(f"SELECT COUNT(*) FROM {backup_table}")
-                    count = cur.fetchone()[0]
-                    logging.info(f"Backed up {count} rows from {table} to {backup_table}")
-            
-            return {
-                'success': True,
-                'timestamp': timestamp,
-                'tables': tables_to_backup
-            }
-                
-        except Exception as e:
-            logging.error(f"Error creating database backup: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
-        finally:
-            if conn:
-                self.return_connection(conn)
-    
     def __del__(self):
         """Destructor to ensure connections are closed"""
         self.close()

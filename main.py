@@ -37,16 +37,6 @@ def get_cached_product_nutrition(_db, sku):
     """Cache nutritional information to avoid repeated database queries"""
     return _db.get_product_nutrition(sku)
 
-@st.cache_data(ttl=300)
-def get_cached_price_history(_db, sku):
-    """Cache price history to avoid repeated database queries"""
-    return _db.get_price_history(sku)
-
-@st.cache_data(ttl=300)
-def get_cached_recent_price_changes(_db, limit=50):
-    """Cache recent price changes to avoid repeated database queries"""
-    return _db.get_recent_price_changes(limit)
-
 def normalize_ingredient(ingredient: str) -> str:
     """Normalize ingredient text for consistent analysis"""
     if not ingredient:
@@ -249,7 +239,6 @@ def main():
     tabs = st.tabs([
         "Products Overview",
         "Product Details",
-        "Price History",
         "Debug",
         "Specific Products Debug",
         "Scraping Logs",
@@ -338,168 +327,8 @@ def main():
         except Exception as e:
             st.error(f"Error displaying product details: {str(e)}")
 
-    # Tab 3: Price History
+    # Tab 3: Debug
     with tabs[2]:
-        st.title("Price History")
-        
-        # Create two sections with tabs
-        price_tabs = st.tabs(["Product Price History", "Recent Price Changes"])
-        
-        # Tab 1: Product Price History
-        with price_tabs[0]:
-            st.header("Product Price History")
-            try:
-                products = get_cached_products(db)
-                if products:
-                    df = pd.DataFrame(products)
-                    selected_product = st.selectbox(
-                        "Select a product to view price history:",
-                        options=df['sku'].tolist(),
-                        format_func=lambda x: df[df['sku'] == x]['name'].iloc[0],
-                        key="price_history_product_selector"
-                    )
-                    
-                    if selected_product:
-                        product_info = df[df['sku'] == selected_product].iloc[0]
-                        st.subheader(f"{product_info['name']}")
-                        st.markdown(f"**Current Price:** €{product_info['price']}")
-                        
-                        # Get price history
-                        price_history = get_cached_price_history(db, selected_product)
-                        
-                        if price_history:
-                            # Convert to DataFrame
-                            history_df = pd.DataFrame(price_history)
-                            
-                            # Format the datetime
-                            history_df['recorded_at'] = pd.to_datetime(history_df['recorded_at'])
-                            history_df['date'] = history_df['recorded_at'].dt.strftime('%Y-%m-%d %H:%M')
-                            
-                            # Calculate price change and percentage
-                            history_df['price_change'] = history_df['new_price'] - history_df['old_price']
-                            history_df['percentage_change'] = (history_df['price_change'] / history_df['old_price'] * 100).round(2)
-                            
-                            # Create a styled table
-                            st.markdown("### Price Change History")
-                            st.dataframe(
-                                history_df[[
-                                    'date', 'old_price', 'new_price', 'price_change', 
-                                    'percentage_change', 'old_price_per_unit', 'new_price_per_unit'
-                                ]],
-                                use_container_width=True
-                            )
-                            
-                            # Create a price chart
-                            if len(history_df) > 0:
-                                st.markdown("### Price Trend")
-                                # Prepare data for chart
-                                chart_data = pd.DataFrame({
-                                    'Date': history_df['recorded_at'],
-                                    'Price': history_df['new_price']
-                                })
-                                # Remove duplicates and sort by date
-                                chart_data = chart_data.drop_duplicates(subset=['Date']).sort_values('Date')
-                                
-                                # Display line chart
-                                st.line_chart(chart_data.set_index('Date'))
-                            
-                            # Display stats
-                            st.markdown("### Statistics")
-                            col1, col2, col3 = st.columns(3)
-                            
-                            # Get the first and last price
-                            if len(history_df) > 1:
-                                first_record = history_df.iloc[-1]  # Oldest record
-                                latest_record = history_df.iloc[0]  # Newest record
-                                
-                                with col1:
-                                    st.metric(
-                                        "First Recorded Price", 
-                                        f"€{first_record['old_price']}", 
-                                        f"{first_record['percentage_change']}%"
-                                    )
-                                
-                                with col2:
-                                    total_change = latest_record['new_price'] - first_record['old_price']
-                                    total_percent = (total_change / first_record['old_price'] * 100).round(2)
-                                    st.metric(
-                                        "Total Change", 
-                                        f"€{total_change:.2f}", 
-                                        f"{total_percent}%"
-                                    )
-                                
-                                with col3:
-                                    st.metric(
-                                        "Current Price", 
-                                        f"€{latest_record['new_price']}"
-                                    )
-                        else:
-                            st.info("No price history available for this product yet.")
-                else:
-                    st.info("No products available. Please refresh the data first.")
-            except Exception as e:
-                st.error(f"Error displaying price history: {str(e)}")
-                
-        # Tab 2: Recent Price Changes
-        with price_tabs[1]:
-            st.header("Recent Price Changes")
-            try:
-                # Get recent price changes
-                recent_changes = get_cached_recent_price_changes(db, 100)
-                
-                if recent_changes:
-                    # Convert to DataFrame
-                    changes_df = pd.DataFrame(recent_changes)
-                    
-                    # Format the datetime
-                    changes_df['recorded_at'] = pd.to_datetime(changes_df['recorded_at'])
-                    changes_df['date'] = changes_df['recorded_at'].dt.strftime('%Y-%m-%d %H:%M')
-                    
-                    # Add price change direction indicators
-                    changes_df['change_direction'] = changes_df['price_diff'].apply(
-                        lambda x: "🔺" if x > 0 else "🔻" if x < 0 else "➡️"
-                    )
-                    
-                    # Prepare display data
-                    display_df = changes_df[[
-                        'date', 'product_name', 'category', 'old_price', 'new_price', 
-                        'price_diff', 'percentage_change', 'change_direction'
-                    ]]
-                    
-                    # Display table of changes
-                    st.dataframe(display_df, use_container_width=True)
-                    
-                    # Display statistics
-                    st.markdown("### Price Change Statistics")
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        increases = len(changes_df[changes_df['price_diff'] > 0])
-                        st.metric("Price Increases", f"{increases}")
-                    
-                    with col2:
-                        decreases = len(changes_df[changes_df['price_diff'] < 0])
-                        st.metric("Price Decreases", f"{decreases}")
-                    
-                    with col3:
-                        avg_change = changes_df['percentage_change'].mean()
-                        st.metric("Average Change", f"{avg_change:.2f}%")
-                    
-                    # Display category breakdown
-                    st.markdown("### Price Changes by Category")
-                    category_counts = changes_df.groupby('category').size().reset_index(name='count')
-                    category_counts = category_counts.sort_values('count', ascending=False)
-                    
-                    # Display as a horizontal bar chart
-                    st.bar_chart(category_counts.set_index('category'))
-                    
-                else:
-                    st.info("No recent price changes recorded yet.")
-            except Exception as e:
-                st.error(f"Error displaying recent price changes: {str(e)}")
-            
-    # Tab 4: Debug
-    with tabs[3]:
         st.title("Debug Single Product")
         debug_url = st.text_input(
             "Product URL to debug",
@@ -511,8 +340,8 @@ def main():
             for log in debug_logs:
                 st.text(log)
 
-    # Tab 5: Specific Products Debug
-    with tabs[4]:
+    # Tab 4: Specific Products Debug
+    with tabs[3]:
         st.title("Specific Products Debug")
         if st.button("Debug Specific Products", key="debug_specific"):
             for url in SPECIFIC_PRODUCTS:
@@ -521,8 +350,8 @@ def main():
                 for log in debug_logs:
                     st.text(log)
 
-    # Tab 6: Scraping Logs
-    with tabs[5]:
+    # Tab 5: Scraping Logs
+    with tabs[4]:
         st.title("Scraping Logs")
         if 'scraping_logs' not in st.session_state:
             st.session_state.scraping_logs = []
@@ -534,8 +363,8 @@ def main():
         for log in st.session_state.scraping_logs:
             st.text(log)
 
-    # Tab 7: Fix Country Codes
-    with tabs[6]:
+    # Tab 6: Fix Country Codes
+    with tabs[5]:
         st.title("Fix Country Codes")
         if st.button("Reparse Missing Country Codes", key="reparse_countries"):
             try:
@@ -553,8 +382,8 @@ def main():
             except Exception as e:
                 st.error(f"Error checking country codes: {str(e)}")
 
-    # Tab 8: Export Data
-    with tabs[7]:
+    # Tab 7: Export Data
+    with tabs[6]:
         st.title("Export Data")
 
         # Products export section
@@ -607,8 +436,8 @@ def main():
             except Exception as e:
                 st.error(f"Error exporting ingredients data: {str(e)}")
 
-    # Tab 9: Ingredient Analysis
-    with tabs[8]:
+    # Tab 8: Ingredient Analysis
+    with tabs[7]:
         st.title("Ingredient Analysis")
         st.markdown("### 📊 Ingredient Analysis")
 
