@@ -161,13 +161,13 @@ class Database:
                     CREATE TABLE IF NOT EXISTS price_history (
                         id SERIAL PRIMARY KEY,
                         sku VARCHAR(50) REFERENCES products(sku),
-                        old_price DECIMAL(10,2),
-                        new_price DECIMAL(10,2),
+                        old_price DECIMAL(10,2) NOT NULL,
+                        new_price DECIMAL(10,2) NOT NULL,
                         old_price_per_unit VARCHAR(50),
                         new_price_per_unit VARCHAR(50),
                         recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        index_number INT NULL,
-                        UNIQUE(sku, recorded_at)
+                        index_number INT NOT NULL,
+                        UNIQUE(sku, recorded_at, index_number)
                     )
                 """)
                 conn.commit()

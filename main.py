@@ -553,8 +553,8 @@ def main():
             except Exception as e:
                 st.error(f"Error checking country codes: {str(e)}")
 
-    # Tab 7: Export Data
-    with tabs[6]:
+    # Tab 8: Export Data
+    with tabs[7]:
         st.title("Export Data")
 
         # Products export section
@@ -607,8 +607,8 @@ def main():
             except Exception as e:
                 st.error(f"Error exporting ingredients data: {str(e)}")
 
-    # Tab 8: Ingredient Analysis
-    with tabs[7]:
+    # Tab 9: Ingredient Analysis
+    with tabs[8]:
         st.title("Ingredient Analysis")
         st.markdown("### 📊 Ingredient Analysis")
 
