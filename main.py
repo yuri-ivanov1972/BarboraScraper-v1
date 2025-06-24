@@ -3,6 +3,8 @@ import pandas as pd
 from scraper import RimiScraper, ScraperError
 from database import Database
 from additive_manager import AdditiveManager
+from database_integration import ExternalDatabaseManager
+from enhanced_scraper import EnhancedRimiScraper
 import logging
 import traceback
 from datetime import datetime
@@ -12,6 +14,7 @@ import re
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional
 import time
+import json
 
 # Page configuration must be the first Streamlit command
 st.set_page_config(
