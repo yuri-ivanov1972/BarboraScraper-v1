@@ -22,8 +22,8 @@ class EnhancedRimiScraper:
         
         # Configuration
         self.max_products_per_session = 1000
-        self.delay_between_categories = (2, 5)  # Random delay in seconds
-        self.delay_between_products = (1, 3)
+        self.delay_between_categories = (1, 3)  # Random delay in seconds  
+        self.delay_between_products = (0.5, 1.5)
     
     def get_scraping_plan(self) -> Dict:
         """Create a comprehensive scraping plan"""

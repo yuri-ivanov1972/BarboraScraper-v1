@@ -149,14 +149,33 @@ class ExternalDatabaseManager:
             conn.autocommit = True
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Check if nutrition_facts table exists, if not fall back to basic product count
                 cur.execute("""
-                    SELECT 
-                        COUNT(*) as total_products,
-                        COUNT(nf.product_id) as with_nutrition,
-                        COUNT(CASE WHEN nf.ingredients IS NOT NULL THEN 1 END) as with_ingredients
-                    FROM products p
-                    LEFT JOIN nutrition_facts nf ON p.product_id = nf.product_id;
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = 'nutrition_facts'
+                    );
                 """)
+                
+                nutrition_table_exists = cur.fetchone()['exists']
+                
+                if nutrition_table_exists:
+                    cur.execute("""
+                        SELECT 
+                            COUNT(*) as total_products,
+                            COUNT(nf.product_id) as with_nutrition,
+                            COUNT(CASE WHEN nf.ingredients IS NOT NULL THEN 1 END) as with_ingredients
+                        FROM products p
+                        LEFT JOIN nutrition_facts nf ON p.product_id = nf.product_id;
+                    """)
+                else:
+                    cur.execute("""
+                        SELECT 
+                            COUNT(*) as total_products,
+                            0 as with_nutrition,
+                            0 as with_ingredients
+                        FROM products;
+                    """)
                 
                 result = cur.fetchone()
                 return {
