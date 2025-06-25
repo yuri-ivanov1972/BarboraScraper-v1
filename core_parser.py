@@ -183,14 +183,42 @@ class RimiParser:
                             name = name_elem.get_text(strip=True)
                             break
                     
-                    # Extract price
-                    price_selectors = ['[class*="price"]', '[data-testid*="price"]']
+                    # Extract price - Method 1: JSON data attribute (more reliable)
                     price = ""
-                    for selector in price_selectors:
-                        price_elem = element.select_one(selector)
+                    gtm_data = element.get('data-gtm-eec-product')
+                    if gtm_data:
+                        try:
+                            import json
+                            product_data = json.loads(gtm_data)
+                            if 'price' in product_data:
+                                price = f"€{product_data['price']}"
+                        except:
+                            pass
+                    
+                    # Method 2: Fallback to HTML price structure
+                    if not price:
+                        price_tag = element.select_one('.price-tag')
+                        if price_tag:
+                            # Extract main price and decimal parts
+                            price_parts = []
+                            main_span = price_tag.find('span')
+                            if main_span:
+                                price_parts.append(main_span.get_text(strip=True))
+                            
+                            sup_elem = price_tag.find('sup')
+                            if sup_elem:
+                                price_parts.append(sup_elem.get_text(strip=True))
+                            
+                            if len(price_parts) >= 2:
+                                price = f"€{price_parts[0]}.{price_parts[1]}"
+                            elif len(price_parts) == 1:
+                                price = f"€{price_parts[0]}"
+                    
+                    # Method 3: Simple fallback
+                    if not price:
+                        price_elem = element.select_one('[class*="price"]')
                         if price_elem:
                             price = price_elem.get_text(strip=True)
-                            break
                     
                     if sku and name:
                         products.append(ProductInfo(
