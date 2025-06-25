@@ -262,8 +262,10 @@ class DatabaseConnection:
             conn.autocommit = True
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Search for products with category_id that matches our pattern
-                # Since we don't have direct mapping, search by URL pattern
+                # Search for products using multiple methods
+                products = []
+                
+                # Method 1: Direct URL match
                 cur.execute("""
                     SELECT product_id, sku, name, rimi_url, category_id,
                            quantity_value, quantity_unit, name_norm
@@ -271,6 +273,26 @@ class DatabaseConnection:
                     WHERE rimi_url LIKE %s
                     ORDER BY name;
                 """, (f'%/c/{category_code}%',))
+                products.extend(cur.fetchall())
+                
+                # Method 2: If SH-11 (dairy), also search by URL pattern
+                if category_code == 'SH-11':
+                    cur.execute("""
+                        SELECT product_id, sku, name, rimi_url, category_id,
+                               quantity_value, quantity_unit, name_norm
+                        FROM products 
+                        WHERE rimi_url LIKE '%piena-produkti%' OR rimi_url LIKE '%dairy%'
+                        ORDER BY name;
+                    """)
+                    products.extend(cur.fetchall())
+                
+                # Remove duplicates based on sku
+                unique_products = {}
+                for product in products:
+                    if product['sku'] not in unique_products:
+                        unique_products[product['sku']] = product
+                
+                return list(unique_products.values())
                 return cur.fetchall()
                 
         except Exception as e:
