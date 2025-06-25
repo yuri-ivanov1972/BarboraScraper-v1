@@ -57,20 +57,44 @@ class RimiParser:
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Look for pagination information
-            pagination_elements = soup.find_all(['a', 'span'], class_=re.compile(r'page|pagination'))
-            
             max_page = 1
             total_products = 0
             
-            # Try to find pagination links
-            for element in pagination_elements:
-                text = element.get_text(strip=True)
-                if text.isdigit():
-                    page_num = int(text)
-                    max_page = max(max_page, page_num)
+            # Method 1: Look for Rimi's specific pagination structure
+            pagination_container = soup.find('div', class_='pagination')
+            if pagination_container:
+                # Find all page links with data-page attribute
+                page_links = pagination_container.find_all('a', attrs={'data-page': True})
+                if page_links:
+                    page_numbers = []
+                    for link in page_links:
+                        page_num = link.get('data-page')
+                        if page_num and page_num.isdigit():
+                            page_numbers.append(int(page_num))
+                    if page_numbers:
+                        max_page = max(page_numbers)
+                        self.status_callback(f"Found pagination with pages: {sorted(page_numbers)}")
             
-            # Also check for "Show X of Y products" type text
+            # Method 2: Fallback - look for any numeric pagination links
+            if max_page == 1:
+                pagination_links = soup.find_all('a', href=re.compile(r'currentPage=\d+'))
+                for link in pagination_links:
+                    href = link.get('href', '')
+                    page_match = re.search(r'currentPage=(\d+)', href)
+                    if page_match:
+                        page_num = int(page_match.group(1))
+                        max_page = max(max_page, page_num)
+            
+            # Method 3: Look for numeric text in pagination elements
+            if max_page == 1:
+                pagination_elements = soup.find_all(['a', 'span'], class_=re.compile(r'pagination'))
+                for element in pagination_elements:
+                    text = element.get_text(strip=True)
+                    if text.isdigit() and 1 <= int(text) <= 100:
+                        page_num = int(text)
+                        max_page = max(max_page, page_num)
+            
+            # Method 4: Check for product count patterns
             product_count_patterns = [
                 r'(\d+)\s*produkti',  # Latvian
                 r'(\d+)\s*products',  # English
@@ -85,9 +109,10 @@ class RimiParser:
                     total_products = int(match.group(1))
                     break
             
-            # If we found pagination but no total, estimate from pages
-            if max_page > 1 and total_products == 0:
-                total_products = max_page * 20  # Rimi typically shows 20 products per page
+            # Calculate total products from pages if not found directly
+            if total_products == 0 and max_page > 1:
+                # Rimi typically shows 20 products per page
+                total_products = max_page * 20
             
             # Count products on current page if no other method worked
             if total_products == 0:
@@ -203,10 +228,10 @@ class DatabaseConnection:
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT id, category_code, name_lv, name_en, 
-                           parent_id, level
+                    SELECT category_code, category_name, category_name_eng
                     FROM categories 
-                    ORDER BY level, name_lv;
+                    WHERE category_code LIKE 'SH-%'
+                    ORDER BY category_code;
                 """)
                 return cur.fetchall()
                 
@@ -222,13 +247,14 @@ class DatabaseConnection:
         try:
             # First get category_id
             categories = self.get_categories()
-            category_id = None
+            # Check if the category exists
+            category_found = False
             for cat in categories:
-                if cat['category_code'] == category_code:
-                    category_id = cat['id']
+                if cat['category_code'].startswith(category_code):
+                    category_found = True
                     break
             
-            if not category_id:
+            if not category_found:
                 return []
             
             # Get products for this category
@@ -236,13 +262,15 @@ class DatabaseConnection:
             conn.autocommit = True
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Search for products with category_id that matches our pattern
+                # Since we don't have direct mapping, search by URL pattern
                 cur.execute("""
-                    SELECT id, sku, name, rimi_url, category_id,
+                    SELECT product_id, sku, name, rimi_url, category_id,
                            quantity_value, quantity_unit, name_norm
                     FROM products 
-                    WHERE category_id = %s
+                    WHERE rimi_url LIKE %s
                     ORDER BY name;
-                """, (category_id,))
+                """, (f'%/c/{category_code}%',))
                 return cur.fetchall()
                 
         except Exception as e:
