@@ -105,13 +105,13 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-- **June 25, 2025**: Simplified to category-by-category analysis system (read-only mode)
-  - Removed complex web interface and focused on single category analysis
-  - Created category_analyzer.py for read-only comparison between website and database
-  - Implemented pagination-based product counting for accurate totals
-  - Added field for Rimi category code input (e.g., SH-11, SH-13, SH-2)
-  - System compares website data vs database data without making any changes
-  - Clean interface shows coverage percentage and product differences
+- **June 25, 2025**: Simplified to core parsing functionality only
+  - Removed all complex features and modules
+  - Extracted core parsing code for category pages with pagination
+  - Extracted core parsing code for product pages
+  - Created minimal database connection module
+  - Archived all non-essential files (additive analysis, enhanced scraping, etc.)
+  - Clean starting point with only essential parsing and database connection code
 
 ## Changelog
 
