@@ -33,23 +33,11 @@ def main():
     # Category input section
     st.subheader("Category Analysis")
     
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        category_code = st.text_input(
-            "Enter Rimi Category Code",
-            placeholder="e.g., SH-11 (dairy products), SH-13 (sweets), SH-2 (fruits)",
-            help="Enter the category code from Rimi URL. Examples: SH-11, SH-13, SH-2"
-        )
-    
-    with col2:
-        sample_pages = st.number_input(
-            "Pages to sample",
-            min_value=1,
-            max_value=5,
-            value=2,
-            help="Number of pages to sample from website (20 products per page)"
-        )
+    category_code = st.text_input(
+        "Enter Rimi Category Code",
+        placeholder="e.g., SH-11 (dairy products), SH-13 (sweets), SH-2 (fruits)",
+        help="Enter the category code from Rimi URL. Examples: SH-11, SH-13, SH-2"
+    )
 
     # Analysis button
     if st.button("Analyze Category", type="primary", disabled=not category_code):
@@ -74,7 +62,7 @@ def main():
 
             try:
                 analyzer.status_callback = status_callback
-                result = analyzer.analyze_category(category_code, sample_pages=sample_pages)
+                result = analyzer.analyze_category(category_code, sample_pages=2)
                 
                 # Clear status displays
                 status_placeholder.empty()
@@ -89,31 +77,20 @@ def main():
                 # Display results
                 st.success("Analysis completed successfully!")
                 
-                # Overview metrics
-                st.subheader("Overview")
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    st.metric("Website Total", f"{result['website_total_products']:,}")
-                with col2:
-                    st.metric("Database Total", f"{result['comparison']['total_in_database']:,}")
-                with col3:
-                    st.metric("Coverage", f"{result['comparison']['coverage_percentage']}%")
-                with col4:
-                    st.metric("Pages Found", result['website_total_pages'])
-                
                 # Detailed comparison
-                st.subheader("Comparison Details")
+                st.subheader("Analysis Results")
                 
                 comparison = result['comparison']
                 
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Sampled from Website", comparison['sampled_from_website'])
+                    st.metric("Website Total", f"{result['website_total_products']:,}")
                 with col2:
-                    st.metric("Common Products", len(comparison['common_skus']))
+                    st.metric("Database Total", f"{comparison['total_in_database']:,}")
                 with col3:
-                    st.metric("Differences Found", len(comparison['only_on_website']) + len(comparison['only_in_database']))
+                    st.metric("Coverage", f"{comparison['coverage_percentage']}%")
+                with col4:
+                    st.metric("Sample Size", comparison['sampled_from_website'])
                 
                 # Tabs for detailed data
                 tabs = st.tabs(["Website Sample", "Database Products", "Differences"])
