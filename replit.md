@@ -105,12 +105,13 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-- **June 24, 2025**: Enhanced scraping system with external database integration
-  - Integrated with CATEGORIES_DB_URL (396 categories) and PRODUCTS_DB_URL (8,447 products)
-  - Created advanced scraping system with intelligent category coverage
-  - Added comprehensive database comparison and sync capabilities
-  - Implemented smart update system for stale products
-  - Enhanced Streamlit interface with advanced analysis features
+- **June 25, 2025**: Simplified to category-by-category analysis system (read-only mode)
+  - Removed complex web interface and focused on single category analysis
+  - Created category_analyzer.py for read-only comparison between website and database
+  - Implemented pagination-based product counting for accurate totals
+  - Added field for Rimi category code input (e.g., SH-11, SH-13, SH-2)
+  - System compares website data vs database data without making any changes
+  - Clean interface shows coverage percentage and product differences
 
 ## Changelog
 
@@ -120,3 +121,4 @@ The application uses a PostgreSQL database with the following key tables:
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Preferred approach: Simplified category-by-category analysis in read-only mode without database modifications.
