@@ -203,8 +203,8 @@ class DatabaseConnection:
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT category_code, rimi_category_code, name_lv, name_en, 
-                           parent_category_code, level
+                    SELECT id, category_code, name_lv, name_en, 
+                           parent_id, level
                     FROM categories 
                     ORDER BY level, name_lv;
                 """)
@@ -224,8 +224,8 @@ class DatabaseConnection:
             categories = self.get_categories()
             category_id = None
             for cat in categories:
-                if cat['rimi_category_code'] == category_code:
-                    category_id = cat['category_code']
+                if cat['category_code'] == category_code:
+                    category_id = cat['id']
                     break
             
             if not category_id:
@@ -237,10 +237,10 @@ class DatabaseConnection:
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT product_id, sku, name, rimi_url, category_code,
+                    SELECT id, sku, name, rimi_url, category_id,
                            quantity_value, quantity_unit, name_norm
                     FROM products 
-                    WHERE category_code = %s
+                    WHERE category_id = %s
                     ORDER BY name;
                 """, (category_id,))
                 return cur.fetchall()
