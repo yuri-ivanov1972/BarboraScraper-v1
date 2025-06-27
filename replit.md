@@ -105,17 +105,15 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-- **June 25, 2025**: Simplified to core parsing functionality only
-  - Removed all complex features and modules
-  - Extracted core parsing code for category pages with pagination
-  - Extracted core parsing code for product pages
-  - Created minimal database connection module
-  - Archived all non-essential files (additive analysis, enhanced scraping, etc.)
+- **June 25, 2025**: Implemented exact hierarchical matching logic
+  - Removed all fuzzy logic with category-specific URL patterns
+  - Removed dynamic pattern detection by analyzing sample products
+  - Implemented exact matching using normalized_categories table with parent_category_id and level fields
+  - Added recursive category tree traversal for subcategories when level < 3
   - Fixed pagination parsing bug (now correctly finds 44 pages instead of 20 for category SH-11)
   - Fixed price parsing using JSON data attributes (€3.49 instead of malformed 349€)
-  - Fixed product matching for all categories (SH-12 now shows 510 products instead of 0)
-  - Added category-specific URL pattern matching for better database coverage
-  - Clean starting point with only essential parsing and database connection code
+  - Clean hierarchical database matching based on category structure
+  - System now detects category level and looks for subcategories automatically
 
 ## Changelog
 

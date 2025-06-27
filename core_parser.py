@@ -3,7 +3,7 @@
 Core parsing functionality for Rimi website
 - Category page parsing with pagination
 - Product page parsing
-- Database connections
+- Database connections using exact hierarchical matching
 """
 import requests
 from bs4 import BeautifulSoup
@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
+import json
 
 @dataclass
 class ProductInfo:
@@ -188,7 +189,6 @@ class RimiParser:
                     gtm_data = element.get('data-gtm-eec-product')
                     if gtm_data:
                         try:
-                            import json
                             product_data = json.loads(gtm_data)
                             if 'price' in product_data:
                                 price = f"€{product_data['price']}"
@@ -239,7 +239,7 @@ class RimiParser:
             return []
 
 class DatabaseConnection:
-    """Simple database connection manager"""
+    """Database connection manager using exact hierarchical matching"""
     
     def __init__(self):
         self.categories_db_url = os.getenv('CATEGORIES_DB_URL')
@@ -323,93 +323,44 @@ class DatabaseConnection:
                 conn.close()
     
     def get_products_for_category(self, category_code: str) -> List[Dict]:
-        """Get products from external database for specific category"""
+        """Get products from external database using exact hierarchical matching"""
         try:
-            # Get all categories that match the main category code
-            categories = self.get_categories()
-            matching_categories = [cat for cat in categories if cat['category_code'].startswith(category_code)]
+            # Get all subcategories for the given category using hierarchical structure
+            subcategories = self.get_subcategories(category_code)
             
-            if not matching_categories:
+            if not subcategories:
                 return []
             
-            # Get products for this category
+            # Extract category IDs for product lookup
+            category_ids = [cat['category_id'] for cat in subcategories]
+            
+            # Get products for these categories
             conn = psycopg2.connect(self.products_db_url)
             conn.autocommit = True
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                all_products = []
+                # Use exact category_id matching
+                if len(category_ids) == 1:
+                    cur.execute("""
+                        SELECT product_id, sku, name, rimi_url, category_id,
+                               quantity_value, quantity_unit, name_norm
+                        FROM products 
+                        WHERE category_id = %s
+                        ORDER BY name;
+                    """, (category_ids[0],))
+                else:
+                    # Use IN clause for multiple category IDs
+                    placeholders = ','.join(['%s'] * len(category_ids))
+                    cur.execute(f"""
+                        SELECT product_id, sku, name, rimi_url, category_id,
+                               quantity_value, quantity_unit, name_norm
+                        FROM products 
+                        WHERE category_id IN ({placeholders})
+                        ORDER BY name;
+                    """, category_ids)
                 
-                # Method 1: Direct URL pattern match
-                cur.execute("""
-                    SELECT product_id, sku, name, rimi_url, category_id,
-                           quantity_value, quantity_unit, name_norm
-                    FROM products 
-                    WHERE rimi_url LIKE %s
-                    ORDER BY name;
-                """, (f'%/c/{category_code}%',))
-                direct_matches = cur.fetchall()
-                all_products.extend(direct_matches)
-                
-                # Method 2: Search by category-specific URL patterns
-                url_patterns = {
-                    'SH-11': ['%piena-produkti%', '%olas%'],  # dairy and eggs
-                    'SH-12': ['%saldeti%', '%saldejums%'],    # frozen foods
-                    'SH-13': ['%desa%', '%galas%'],           # meat products
-                    'SH-2': ['%maize%', '%konditori%'],       # bread and confectionery
-                    'SH-3': ['%auglu%', '%darzenu%'],         # fruits and vegetables
-                }
-                
-                if category_code in url_patterns:
-                    for pattern in url_patterns[category_code]:
-                        cur.execute("""
-                            SELECT product_id, sku, name, rimi_url, category_id,
-                                   quantity_value, quantity_unit, name_norm
-                            FROM products 
-                            WHERE rimi_url LIKE %s
-                            ORDER BY name;
-                        """, (pattern,))
-                        pattern_matches = cur.fetchall()
-                        all_products.extend(pattern_matches)
-                
-                # Method 3: Find products by examining sample URLs from website
-                # This helps when URL patterns don't match exactly
-                if not all_products:
-                    # Get sample product from website to understand URL structure
-                    try:
-                        parser = RimiParser()
-                        category_url = parser.build_category_url(category_code)
-                        page_url = f"{category_url}?pageSize=20&currentPage=1"
-                        sample_products = parser.extract_products_from_page(page_url, max_products=3)
-                        
-                        if sample_products:
-                            # Extract URL patterns from sample products
-                            for sample_product in sample_products:
-                                if '/produkti/' in sample_product.url:
-                                    # Extract the category path from URL
-                                    url_parts = sample_product.url.split('/produkti/')[1].split('/')
-                                    if len(url_parts) > 1:
-                                        category_path = url_parts[0]
-                                        cur.execute("""
-                                            SELECT product_id, sku, name, rimi_url, category_id,
-                                                   quantity_value, quantity_unit, name_norm
-                                            FROM products 
-                                            WHERE rimi_url LIKE %s
-                                            ORDER BY name;
-                                        """, (f'%/{category_path}/%',))
-                                        path_matches = cur.fetchall()
-                                        all_products.extend(path_matches)
-                                        break
-                    except Exception:
-                        pass  # Ignore errors in this fallback method
-                
-                # Remove duplicates based on sku
-                unique_products = {}
-                for product in all_products:
-                    if product['sku'] not in unique_products:
-                        unique_products[product['sku']] = product
-                
-                return list(unique_products.values())
-                return cur.fetchall()
+                products = cur.fetchall()
+                return products
                 
         except Exception as e:
             print(f"Error getting products for category: {str(e)}")
@@ -426,7 +377,7 @@ if __name__ == "__main__":
     parser = RimiParser(test_callback)
     db = DatabaseConnection()
     
-    category_code = "SH-11"
+    category_code = "SH-12"
     category_url = parser.build_category_url(category_code)
     
     # Test pagination parsing
@@ -438,9 +389,9 @@ if __name__ == "__main__":
     products = parser.extract_products_from_page(page_url)
     print(f"Extracted {len(products)} products from first page")
     
-    # Test database connection
-    categories = db.get_categories()
-    print(f"Found {len(categories)} categories in database")
+    # Test hierarchical database connection
+    subcategories = db.get_subcategories(category_code)
+    print(f"Found {len(subcategories)} subcategories for {category_code}")
     
     db_products = db.get_products_for_category(category_code)
     print(f"Found {len(db_products)} products in database for {category_code}")
