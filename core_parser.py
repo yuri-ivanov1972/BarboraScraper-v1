@@ -50,7 +50,7 @@ class RimiParser:
         return f"https://www.rimi.lv/e-veikals/lv/produkti/c/{category_code}"
     
     def get_total_products_from_pagination(self, category_url: str) -> Tuple[int, int]:
-        """Get total products and pages using pagination"""
+        """Get exact product count by checking the last page"""
         try:
             self.status_callback(f"Fetching category page: {category_url}")
             response = self.session.get(category_url, timeout=10)
@@ -59,7 +59,6 @@ class RimiParser:
             soup = BeautifulSoup(response.content, 'html.parser')
             
             max_page = 1
-            total_products = 0
             
             # Method 1: Look for Rimi's specific pagination structure
             pagination_container = soup.find('div', class_='pagination')
@@ -95,34 +94,23 @@ class RimiParser:
                         page_num = int(text)
                         max_page = max(max_page, page_num)
             
-            # Method 4: Check for product count patterns
-            product_count_patterns = [
-                r'(\d+)\s*produkti',  # Latvian
-                r'(\d+)\s*products',  # English
-                r'Rāda\s*\d+\s*no\s*(\d+)',  # "Showing X of Y"
-                r'Showing\s*\d+\s*of\s*(\d+)'
-            ]
+            # Now get exact product count
+            if max_page == 1:
+                # Single page - count products directly
+                products_on_page = len(self.extract_products_from_page(category_url))
+                total_products = products_on_page
+                self.status_callback(f"Single page with {total_products} products")
+            else:
+                # Multiple pages - get exact count from last page
+                last_page_url = f"{category_url}?pageSize=20&currentPage={max_page}"
+                self.status_callback(f"Fetching last page ({max_page}) to count exact products")
+                
+                products_on_last_page = len(self.extract_products_from_page(last_page_url))
+                
+                # Calculate exact total: (pages-1) * 20 + products on last page
+                total_products = (max_page - 1) * 20 + products_on_last_page
+                self.status_callback(f"Exact count: ({max_page}-1) × 20 + {products_on_last_page} = {total_products} products")
             
-            page_text = soup.get_text()
-            for pattern in product_count_patterns:
-                match = re.search(pattern, page_text, re.IGNORECASE)
-                if match:
-                    total_products = int(match.group(1))
-                    break
-            
-            # Calculate total products from pages if not found directly
-            if total_products == 0 and max_page > 1:
-                # Rimi typically shows 20 products per page
-                total_products = max_page * 20
-            
-            # Count products on current page if no other method worked
-            if total_products == 0:
-                product_elements = soup.find_all(['div', 'article'], class_=re.compile(r'product|item'))
-                total_products = len(product_elements)
-                if max_page > 1:
-                    total_products = total_products * max_page
-            
-            self.status_callback(f"Found {max_page} pages, estimated {total_products} products")
             return total_products, max_page
             
         except Exception as e:

@@ -105,15 +105,17 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-- **June 25, 2025**: Implemented exact hierarchical matching logic
+- **June 25, 2025**: Implemented exact hierarchical matching and precise product counting
   - Removed all fuzzy logic with category-specific URL patterns
   - Removed dynamic pattern detection by analyzing sample products
   - Implemented exact matching using normalized_categories table with parent_category_id and level fields
   - Added recursive category tree traversal for subcategories when level < 3
+  - Fixed website product counting: For pages > 1: (Total pages - 1) × 20 + actual products on last page
+  - For single page categories: direct product count without estimation
   - Fixed pagination parsing bug (now correctly finds 44 pages instead of 20 for category SH-11)
   - Fixed price parsing using JSON data attributes (€3.49 instead of malformed 349€)
   - Clean hierarchical database matching based on category structure
-  - System now detects category level and looks for subcategories automatically
+  - System now provides exact product counts instead of estimates
 
 ## Changelog
 
