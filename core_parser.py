@@ -63,17 +63,44 @@ class RimiParser:
             # Method 1: Look for Rimi's specific pagination structure
             pagination_container = soup.find('div', class_='pagination')
             if pagination_container:
-                # Find all page links with data-page attribute
-                page_links = pagination_container.find_all('a', attrs={'data-page': True})
-                if page_links:
-                    page_numbers = []
-                    for link in page_links:
-                        page_num = link.get('data-page')
-                        if page_num and page_num.isdigit():
-                            page_numbers.append(int(page_num))
-                    if page_numbers:
-                        max_page = max(page_numbers)
-                        self.status_callback(f"Found pagination with pages: {sorted(page_numbers)}")
+                # Get all page numbers from pagination links
+                visible_page_links = pagination_container.find_all('a')
+                visible_pages = []
+                for link in visible_page_links:
+                    text = link.get_text(strip=True)
+                    if text.isdigit() and 1 <= int(text) <= 200:
+                        visible_pages.append(int(text))
+                
+                if visible_pages:
+                    # Check if we have a gap in pagination (like 2, 3, 72)
+                    sorted_pages = sorted(set(visible_pages))
+                    self.status_callback(f"Found visible page numbers: {sorted_pages}")
+                    
+                    # If there's a large gap (> 5 pages), the highest number might be incorrect
+                    if len(sorted_pages) >= 2:
+                        gaps = [sorted_pages[i+1] - sorted_pages[i] for i in range(len(sorted_pages)-1)]
+                        max_gap = max(gaps) if gaps else 0
+                        
+                        if max_gap > 10:  # Large gap detected
+                            self.status_callback(f"Large gap detected in pagination ({max_gap} pages), using binary search to find actual last page")
+                            # Use binary search to find the real last page
+                            max_page = self._find_actual_last_page(category_url, sorted_pages[-1])
+                        else:
+                            max_page = max(visible_pages)
+                    else:
+                        max_page = max(visible_pages)
+                else:
+                    # Fallback to data-page attributes
+                    page_links = pagination_container.find_all('a', attrs={'data-page': True})
+                    if page_links:
+                        page_numbers = []
+                        for link in page_links:
+                            page_num = link.get('data-page')
+                            if page_num and page_num.isdigit():
+                                page_numbers.append(int(page_num))
+                        if page_numbers:
+                            max_page = max(page_numbers)
+                            self.status_callback(f"Found pagination with pages: {sorted(page_numbers)}")
             
             # Method 2: Fallback - look for any numeric pagination links
             if max_page == 1:
@@ -101,11 +128,28 @@ class RimiParser:
                 total_products = products_on_page
                 self.status_callback(f"Single page with {total_products} products")
             else:
-                # Multiple pages - get exact count from last page
+                # Multiple pages - validate last page and get exact count
+                self.status_callback(f"Validating last page ({max_page}) contains products")
                 last_page_url = f"{category_url}?pageSize=20&currentPage={max_page}"
-                self.status_callback(f"Fetching last page ({max_page}) to count exact products")
                 
                 products_on_last_page = len(self.extract_products_from_page(last_page_url))
+                
+                # If the detected last page is empty, search backwards for the real last page
+                if products_on_last_page == 0:
+                    self.status_callback(f"Page {max_page} is empty, searching for actual last page")
+                    actual_last_page = max_page
+                    
+                    # Search backwards from detected max_page
+                    for test_page in range(max_page - 1, max(1, max_page - 10), -1):
+                        test_url = f"{category_url}?pageSize=20&currentPage={test_page}"
+                        test_products = len(self.extract_products_from_page(test_url))
+                        if test_products > 0:
+                            actual_last_page = test_page
+                            products_on_last_page = test_products
+                            self.status_callback(f"Found actual last page: {actual_last_page} with {test_products} products")
+                            break
+                    
+                    max_page = actual_last_page
                 
                 # Calculate exact total: (pages-1) * 20 + products on last page
                 total_products = (max_page - 1) * 20 + products_on_last_page
@@ -225,6 +269,37 @@ class RimiParser:
         except Exception as e:
             self.status_callback(f"Error extracting products: {str(e)}")
             return []
+    
+    def _find_actual_last_page(self, category_url: str, suspected_max: int) -> int:
+        """Use binary search to find the actual last page with products"""
+        
+        # Start with a reasonable upper bound
+        left, right = 1, min(suspected_max, 100)  # Cap at 100 to avoid infinite loops
+        actual_last_page = 1
+        
+        self.status_callback(f"Binary searching for last page between 1 and {right}")
+        
+        # Binary search for the last page with products
+        while left <= right:
+            mid = (left + right) // 2
+            test_url = f"{category_url}?pageSize=20&currentPage={mid}"
+            
+            try:
+                products_count = len(self.extract_products_from_page(test_url))
+                
+                if products_count > 0:
+                    actual_last_page = mid
+                    left = mid + 1  # Search for higher pages
+                    self.status_callback(f"Page {mid}: {products_count} products - searching higher")
+                else:
+                    right = mid - 1  # This page is empty, search lower
+                    self.status_callback(f"Page {mid}: 0 products - searching lower")
+                    
+            except Exception:
+                right = mid - 1  # Treat errors as empty pages
+                
+        self.status_callback(f"Binary search found actual last page: {actual_last_page}")
+        return actual_last_page
 
 class DatabaseConnection:
     """Database connection manager using exact hierarchical matching"""
