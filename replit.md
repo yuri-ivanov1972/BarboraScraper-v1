@@ -112,7 +112,8 @@ The application uses a PostgreSQL database with the following key tables:
   - Added recursive category tree traversal for subcategories when level < 3
   - Fixed website product counting: For pages > 1: (Total pages - 1) × 20 + actual products on last page
   - For single page categories: direct product count without estimation
-  - Fixed pagination parsing bug (now correctly finds 44 pages instead of 20 for category SH-11)
+  - Fixed pagination parsing bug with binary search for actual last page when large gaps detected
+  - Handles pagination display bugs (e.g., SH-13 showing 2,3,72 instead of continuous pages)
   - Fixed price parsing using JSON data attributes (€3.49 instead of malformed 349€)
   - Clean hierarchical database matching based on category structure
   - System now provides exact product counts instead of estimates
