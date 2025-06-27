@@ -113,6 +113,8 @@ The application uses a PostgreSQL database with the following key tables:
   - Archived all non-essential files (additive analysis, enhanced scraping, etc.)
   - Fixed pagination parsing bug (now correctly finds 44 pages instead of 20 for category SH-11)
   - Fixed price parsing using JSON data attributes (€3.49 instead of malformed 349€)
+  - Fixed product matching for all categories (SH-12 now shows 510 products instead of 0)
+  - Added category-specific URL pattern matching for better database coverage
   - Clean starting point with only essential parsing and database connection code
 
 ## Changelog

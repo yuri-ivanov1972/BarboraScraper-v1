@@ -273,16 +273,11 @@ class DatabaseConnection:
     def get_products_for_category(self, category_code: str) -> List[Dict]:
         """Get products from external database for specific category"""
         try:
-            # First get category_id
+            # Get all categories that match the main category code
             categories = self.get_categories()
-            # Check if the category exists
-            category_found = False
-            for cat in categories:
-                if cat['category_code'].startswith(category_code):
-                    category_found = True
-                    break
+            matching_categories = [cat for cat in categories if cat['category_code'].startswith(category_code)]
             
-            if not category_found:
+            if not matching_categories:
                 return []
             
             # Get products for this category
@@ -290,10 +285,9 @@ class DatabaseConnection:
             conn.autocommit = True
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                # Search for products using multiple methods
-                products = []
+                all_products = []
                 
-                # Method 1: Direct URL match
+                # Method 1: Direct URL pattern match
                 cur.execute("""
                     SELECT product_id, sku, name, rimi_url, category_id,
                            quantity_value, quantity_unit, name_norm
@@ -301,22 +295,64 @@ class DatabaseConnection:
                     WHERE rimi_url LIKE %s
                     ORDER BY name;
                 """, (f'%/c/{category_code}%',))
-                products.extend(cur.fetchall())
+                direct_matches = cur.fetchall()
+                all_products.extend(direct_matches)
                 
-                # Method 2: If SH-11 (dairy), also search by URL pattern
-                if category_code == 'SH-11':
-                    cur.execute("""
-                        SELECT product_id, sku, name, rimi_url, category_id,
-                               quantity_value, quantity_unit, name_norm
-                        FROM products 
-                        WHERE rimi_url LIKE '%piena-produkti%' OR rimi_url LIKE '%dairy%'
-                        ORDER BY name;
-                    """)
-                    products.extend(cur.fetchall())
+                # Method 2: Search by category-specific URL patterns
+                url_patterns = {
+                    'SH-11': ['%piena-produkti%', '%olas%'],  # dairy and eggs
+                    'SH-12': ['%saldeti%', '%saldejums%'],    # frozen foods
+                    'SH-13': ['%desa%', '%galas%'],           # meat products
+                    'SH-2': ['%maize%', '%konditori%'],       # bread and confectionery
+                    'SH-3': ['%auglu%', '%darzenu%'],         # fruits and vegetables
+                }
+                
+                if category_code in url_patterns:
+                    for pattern in url_patterns[category_code]:
+                        cur.execute("""
+                            SELECT product_id, sku, name, rimi_url, category_id,
+                                   quantity_value, quantity_unit, name_norm
+                            FROM products 
+                            WHERE rimi_url LIKE %s
+                            ORDER BY name;
+                        """, (pattern,))
+                        pattern_matches = cur.fetchall()
+                        all_products.extend(pattern_matches)
+                
+                # Method 3: Find products by examining sample URLs from website
+                # This helps when URL patterns don't match exactly
+                if not all_products:
+                    # Get sample product from website to understand URL structure
+                    try:
+                        parser = RimiParser()
+                        category_url = parser.build_category_url(category_code)
+                        page_url = f"{category_url}?pageSize=20&currentPage=1"
+                        sample_products = parser.extract_products_from_page(page_url, max_products=3)
+                        
+                        if sample_products:
+                            # Extract URL patterns from sample products
+                            for sample_product in sample_products:
+                                if '/produkti/' in sample_product.url:
+                                    # Extract the category path from URL
+                                    url_parts = sample_product.url.split('/produkti/')[1].split('/')
+                                    if len(url_parts) > 1:
+                                        category_path = url_parts[0]
+                                        cur.execute("""
+                                            SELECT product_id, sku, name, rimi_url, category_id,
+                                                   quantity_value, quantity_unit, name_norm
+                                            FROM products 
+                                            WHERE rimi_url LIKE %s
+                                            ORDER BY name;
+                                        """, (f'%/{category_path}/%',))
+                                        path_matches = cur.fetchall()
+                                        all_products.extend(path_matches)
+                                        break
+                    except Exception:
+                        pass  # Ignore errors in this fallback method
                 
                 # Remove duplicates based on sku
                 unique_products = {}
-                for product in products:
+                for product in all_products:
                     if product['sku'] not in unique_products:
                         unique_products[product['sku']] = product
                 
