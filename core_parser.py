@@ -81,12 +81,10 @@ class RimiParser:
                         gaps = [sorted_pages[i+1] - sorted_pages[i] for i in range(len(sorted_pages)-1)]
                         max_gap = max(gaps) if gaps else 0
                         
-                        if max_gap > 10:  # Large gap detected
-                            self.status_callback(f"Large gap detected in pagination ({max_gap} pages), using binary search to find actual last page")
-                            # Use binary search to find the real last page
-                            max_page = self._find_actual_last_page(category_url, sorted_pages[-1])
-                        else:
-                            max_page = max(visible_pages)
+                        # Even with gaps in pagination display, use the highest page number found
+                        max_page = max(visible_pages)
+                        if max_gap > 10:
+                            self.status_callback(f"Large gap in pagination display ({max_gap} pages) - this may be normal pagination UI behavior")
                     else:
                         max_page = max(visible_pages)
                 else:
