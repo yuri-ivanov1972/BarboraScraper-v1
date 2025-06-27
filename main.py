@@ -111,7 +111,7 @@ def main():
                 # Group by main category
                 main_categories = {}
                 for cat in categories[:50]:  # Show first 50
-                    main_code = cat['category_code'].split('-')[1] if '-' in cat['category_code'] else cat['category_code']
+                    main_code = cat['rimi_category_code'].split('-')[1] if '-' in cat['rimi_category_code'] else cat['rimi_category_code']
                     if main_code not in main_categories:
                         main_categories[main_code] = []
                     main_categories[main_code].append(cat)
@@ -119,7 +119,7 @@ def main():
                 for main_code, cats in list(main_categories.items())[:10]:
                     st.write(f"**SH-{main_code}**: {len(cats)} subcategories")
                     for cat in cats[:3]:
-                        st.text(f"  - {cat['category_code']}: {cat.get('category_name', 'N/A')}")
+                        st.text(f"  - {cat['rimi_category_code']}: {cat.get('name_lv', 'N/A')}")
                     if len(cats) > 3:
                         st.text(f"  ... and {len(cats)-3} more")
             else:

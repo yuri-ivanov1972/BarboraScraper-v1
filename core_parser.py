@@ -249,22 +249,74 @@ class DatabaseConnection:
             raise ValueError("CATEGORIES_DB_URL and PRODUCTS_DB_URL must be set")
     
     def get_categories(self) -> List[Dict]:
-        """Get all categories from external database"""
+        """Get all categories from normalized_categories table"""
         try:
             conn = psycopg2.connect(self.categories_db_url)
             conn.autocommit = True
             
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT category_code, category_name, category_name_eng
-                    FROM categories 
-                    WHERE category_code LIKE 'SH-%'
-                    ORDER BY category_code;
+                    SELECT category_id, rimi_category_code, name_lv, name_en, 
+                           parent_category_id, level
+                    FROM normalized_categories 
+                    ORDER BY level, rimi_category_code;
                 """)
                 return cur.fetchall()
                 
         except Exception as e:
             print(f"Error getting categories: {str(e)}")
+            return []
+        finally:
+            if 'conn' in locals():
+                conn.close()
+    
+    def get_subcategories(self, category_code: str) -> List[Dict]:
+        """Get all subcategories for a given category using hierarchical structure"""
+        try:
+            conn = psycopg2.connect(self.categories_db_url)
+            conn.autocommit = True
+            
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # First, find the target category and its level
+                cur.execute("""
+                    SELECT category_id, rimi_category_code, level, parent_category_id
+                    FROM normalized_categories 
+                    WHERE rimi_category_code = %s;
+                """, (category_code,))
+                target_category = cur.fetchone()
+                
+                if not target_category:
+                    return []
+                
+                # If level < 3, find all subcategories recursively
+                if target_category['level'] < 3:
+                    cur.execute("""
+                        WITH RECURSIVE category_tree AS (
+                            -- Start with the target category
+                            SELECT category_id, rimi_category_code, parent_category_id, level, name_lv
+                            FROM normalized_categories 
+                            WHERE category_id = %s
+                            
+                            UNION ALL
+                            
+                            -- Find all children recursively
+                            SELECT nc.category_id, nc.rimi_category_code, nc.parent_category_id, nc.level, nc.name_lv
+                            FROM normalized_categories nc
+                            INNER JOIN category_tree ct ON nc.parent_category_id = ct.category_id
+                        )
+                        SELECT category_id, rimi_category_code, level, name_lv
+                        FROM category_tree
+                        ORDER BY level, rimi_category_code;
+                    """, (target_category['category_id'],))
+                    
+                    all_categories = cur.fetchall()
+                    return all_categories
+                else:
+                    # If level = 3, just return the category itself
+                    return [target_category]
+                
+        except Exception as e:
+            print(f"Error getting subcategories: {str(e)}")
             return []
         finally:
             if 'conn' in locals():
