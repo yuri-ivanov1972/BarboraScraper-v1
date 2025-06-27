@@ -105,7 +105,7 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-- **June 25, 2025**: Implemented exact hierarchical matching and precise product counting
+- **June 25, 2025**: Implemented exact hierarchical matching, precise product counting, and detailed product comparison
   - Removed all fuzzy logic with category-specific URL patterns
   - Removed dynamic pattern detection by analyzing sample products
   - Implemented exact matching using normalized_categories table with parent_category_id and level fields
@@ -114,9 +114,13 @@ The application uses a PostgreSQL database with the following key tables:
   - For single page categories: direct product count without estimation
   - Fixed pagination parsing to handle UI patterns where only some page numbers are displayed (e.g., 1,2,3...72)
   - Confirmed SH-13 legitimately has 72 pages with 1,429 products total
+  - Added detailed product-by-product comparison logic with exact SKU matching
+  - Identifies new products (on website, not in database) and missing products (in database, not on website)
+  - Detects changes in product names, prices, and URLs between website and database
+  - Provides CSV export functionality for detailed comparison results
   - Fixed price parsing using JSON data attributes (€3.49 instead of malformed 349€)
   - Clean hierarchical database matching based on category structure
-  - System now provides exact product counts instead of estimates
+  - System now provides exact product counts and detailed product matching instead of estimates
 
 ## Changelog
 

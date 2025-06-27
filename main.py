@@ -8,6 +8,71 @@ st.set_page_config(
     layout="wide"
 )
 
+def compare_products_detailed(category_code: str):
+    """Compare website vs database products with exact matching"""
+    from product_matcher import ProductMatcher
+    
+    st.subheader("🔍 Detailed Product Comparison")
+    
+    matcher = ProductMatcher(lambda msg: st.write(f"📊 {msg}"))
+    
+    with st.spinner("Performing detailed product comparison..."):
+        result = matcher.compare_products(category_code)
+    
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("New Products", len(result.new_products))
+    with col2:
+        st.metric("Missing Products", len(result.missing_products))
+    with col3:
+        st.metric("Changed Products", len(result.changed_products))
+    with col4:
+        st.metric("Matched Products", len(result.matched_products))
+    
+    # New products section
+    if result.new_products:
+        st.subheader("🆕 New Products (On Website, Not in Database)")
+        
+        with st.expander(f"Show all {len(result.new_products)} new products"):
+            for i, product in enumerate(result.new_products, 1):
+                st.write(f"**{i}. {product.sku}**: {product.name}")
+                if product.website_data and product.website_data.price:
+                    st.write(f"   Price: {product.website_data.price}")
+                if product.website_data and product.website_data.url:
+                    st.write(f"   URL: {product.website_data.url[:80]}...")
+                st.divider()
+    
+    # Missing products section  
+    if result.missing_products:
+        st.subheader("❌ Missing Products (In Database, Not on Website)")
+        
+        with st.expander(f"Show all {len(result.missing_products)} missing products"):
+            for i, product in enumerate(result.missing_products, 1):
+                st.write(f"**{i}. {product.sku}**: {product.name}")
+                if product.database_data and product.database_data.get('quantity_value'):
+                    st.write(f"   Quantity: {product.database_data['quantity_value']}{product.database_data.get('quantity_unit', '')}")
+                if product.database_data and product.database_data.get('rimi_url'):
+                    st.write(f"   URL: {product.database_data['rimi_url'][:80]}...")
+                st.divider()
+    
+    # Changed products section
+    if result.changed_products:
+        st.subheader("🔄 Changed Products")
+        
+        with st.expander(f"Show all {len(result.changed_products)} changed products"):
+            for i, product in enumerate(result.changed_products, 1):
+                st.write(f"**{i}. {product.sku}**: {product.name}")
+                if product.changes:
+                    for field, change in product.changes.items():
+                        st.write(f"   {field.title()} changed:")
+                        st.write(f"     Website: {change['website']}")
+                        st.write(f"     Database: {change['database']}")
+                st.divider()
+    
+    return result
+
 def analyze_category(category_code: str):
     """Analyze a single category comparing website vs database"""
     
@@ -89,13 +154,68 @@ def main():
         help="Enter a Rimi category code like SH-11 (dairy products)"
     )
     
-    if st.button("Analyze Category", type="primary"):
+    # Analysis type selection
+    analysis_type = st.radio(
+        "Analysis Type:",
+        ["Basic Overview", "Detailed Product Comparison"],
+        help="Basic: Quick stats comparison. Detailed: Product-by-product matching"
+    )
+    
+    if st.button("Run Analysis", type="primary"):
         if category_code.strip():
-            with st.spinner(f"Analyzing category {category_code}..."):
-                try:
-                    analyze_category(category_code.strip().upper())
-                except Exception as e:
-                    st.error(f"Analysis error: {str(e)}")
+            try:
+                if analysis_type == "Basic Overview":
+                    with st.spinner(f"Analyzing category {category_code}..."):
+                        analyze_category(category_code.strip().upper())
+                        st.success(f"Basic analysis complete for {category_code}")
+                
+                elif analysis_type == "Detailed Product Comparison":
+                    with st.spinner(f"Performing detailed comparison for {category_code}..."):
+                        result = compare_products_detailed(category_code.strip().upper())
+                        st.success(f"Detailed comparison complete for {category_code}")
+                        
+                        # Show download option for detailed results
+                        if result.new_products or result.missing_products:
+                            st.subheader("Export Results")
+                            
+                            # Prepare CSV data
+                            csv_data = []
+                            
+                            # Add new products
+                            for product in result.new_products:
+                                csv_data.append({
+                                    'Status': 'New',
+                                    'SKU': product.sku,
+                                    'Name': product.name,
+                                    'Price': product.website_data.price if product.website_data and product.website_data.price else '',
+                                    'URL': product.website_data.url if product.website_data and product.website_data.url else ''
+                                })
+                            
+                            # Add missing products
+                            for product in result.missing_products:
+                                csv_data.append({
+                                    'Status': 'Missing',
+                                    'SKU': product.sku,
+                                    'Name': product.name,
+                                    'Price': product.database_data.get('price', '') if product.database_data else '',
+                                    'URL': product.database_data.get('rimi_url', '') if product.database_data else ''
+                                })
+                            
+                            if csv_data:
+                                import pandas as pd
+                                df = pd.DataFrame(csv_data)
+                                csv = df.to_csv(index=False)
+                                
+                                st.download_button(
+                                    label="Download Results as CSV",
+                                    data=csv,
+                                    file_name=f"{category_code}_product_comparison.csv",
+                                    mime="text/csv"
+                                )
+                
+            except Exception as e:
+                st.error(f"Analysis error: {str(e)}")
+                st.write("Please check the category code and try again.")
         else:
             st.error("Please enter a category code")
     
