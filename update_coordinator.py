@@ -215,10 +215,28 @@ class UpdateCoordinator:
         }
     
     def _get_category_id(self, category_code: str) -> int:
-        """Get category ID from category code - placeholder implementation"""
-        # TODO: Map category codes to database category IDs
-        # For now, return default category ID
-        return 1
+        """Get category ID from category code using normalized_categories table"""
+        try:
+            # Import here to avoid circular imports
+            from database_integration import ExternalDatabaseManager
+            
+            # Get all categories and find the matching one
+            db = ExternalDatabaseManager()
+            categories = db.get_all_categories()
+            
+            # Find exact match for category code
+            for category in categories:
+                if category.rimi_category_code == category_code:
+                    self.status_callback(f"Found category {category_code}: ID={category.category_id}, Name={category.name_lv}")
+                    return category.category_id
+            
+            # If not found, log warning and return default
+            self.status_callback(f"Warning: Category {category_code} not found in normalized_categories, using default ID=1")
+            return 1
+            
+        except Exception as e:
+            self.status_callback(f"Error getting category ID for {category_code}: {str(e)}, using default ID=1")
+            return 1
     
     def get_update_summary(self, update_results: Dict) -> str:
         """Generate human-readable summary of update results"""

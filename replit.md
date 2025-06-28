@@ -105,7 +105,7 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-- **June 28, 2025**: Implemented comprehensive database update system
+- **June 28, 2025**: Implemented comprehensive database update system with category assignment fixes
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
   - Added ingredient processor for new products only (not price updates)
   - Implemented update coordinator for complete workflow orchestration
@@ -114,7 +114,9 @@ The application uses a PostgreSQL database with the following key tables:
   - Integrated automatic price change registration without review thresholds
   - Added product unavailability marking for disappeared products
   - Implemented Streamlit interface for database updates with safety confirmations
-  - System now supports full CRUD operations on PRODUCTS_DB_URL database
+  - Fixed Streamlit database update button by separating from nested button structure
+  - Fixed category assignment logic to use normalized_categories table for proper category_id mapping
+  - System now supports full CRUD operations on PRODUCTS_DB_URL database with correct category assignments
 
 - **June 25, 2025**: Implemented exact hierarchical matching, precise product counting, and detailed product comparison
   - Removed all fuzzy logic with category-specific URL patterns
