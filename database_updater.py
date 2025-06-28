@@ -277,12 +277,13 @@ class DatabaseUpdater:
     
     def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str):
         """Add price history record"""
-        # Use current timestamp to avoid future timestamp constraint issues
-        current_time = datetime.now(timezone.utc)
+        # Use past timestamp to avoid constraint issues - subtract 1 minute to ensure it's in the past
+        from datetime import timedelta
+        current_time = datetime.now(timezone.utc) - timedelta(minutes=1)
         
         price_query = """
-            INSERT INTO product_price_history (product_id, price, currency, is_available, recorded_at, data_source, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO product_price_history (product_id, price, currency, is_available, recorded_at, data_source)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """
         
         self._execute_query(price_query, (
@@ -291,8 +292,7 @@ class DatabaseUpdater:
             'EUR',
             is_available,
             current_time,
-            data_source,
-            current_time
+            data_source
         ))
     
     def _parse_price(self, price_str: str) -> Optional[Decimal]:
