@@ -1,11 +1,12 @@
-# Database Update Plan - One-Time Implementation
+# Database Update Plan - One-Time Implementation (UPDATED)
 
 ## Overview
 This plan implements a comprehensive database update system that will:
 1. Add new products with complete information (nutrition, photos, prices)
-2. Update product availability tracking
+2. Update product availability tracking  
 3. Update product prices with historical tracking
 4. Handle ingredient analysis and mapping
+5. **Calculate nutri-scores using provided nutriscore_calculator.py module**
 
 ## Database Analysis
 
@@ -36,7 +37,8 @@ Create `database_updater.py` with these components:
 
 #### 1.2 Nutrition Data Integration
 - **New Nutrition Records**: Link to products via `product_id`
-- **Update Existing Nutrition**: Preserve nutri-score fields for separate module
+- **Update Existing Nutrition**: Update all nutrition fields including nutri-score calculation
+- **Nutri-Score Calculation**: Use provided `nutriscore_calculator.py` module for automatic scoring
 - **Ingredients Processing**: Extract and normalize ingredients text
 
 #### 1.3 Price History Tracking
@@ -50,18 +52,20 @@ Create `database_updater.py` with these components:
 - **Primary Photo Logic**: Set first photo as primary
 - **Duplicate Prevention**: Check existing photos before insertion
 
-### Phase 2: Ingredient Analysis Engine
-Create `ingredient_processor.py`:
+### Phase 2: Nutrition and Scoring Engine
+Create `nutrition_processor.py`:
 
-#### 2.1 Ingredient Extraction
-- **Text Parsing**: Extract individual ingredients from nutrition text
+#### 2.1 Nutri-Score Integration
+- **Calculator Import**: Use provided `NutriscoreCalculator` class
+- **Category Mapping**: Map product categories to nutri-score classifications
+- **Score Calculation**: Automatically calculate grades for products with nutrition data
+- **Database Updates**: Store calculated scores and points in `nutri_score_grade` and `nutri_score_points` fields
+
+#### 2.2 Ingredient Analysis Engine
+- **Text Parsing**: Extract individual ingredients from nutrition text (for new products only)
 - **Normalization**: Clean and standardize ingredient names
 - **Frequency Calculation**: Update ingredient counts across products
-
-#### 2.2 Mapping Management
-- **Product-Ingredient Links**: Maintain many-to-many relationships
-- **Orphan Cleanup**: Remove old mappings for updated products
-- **Batch Processing**: Efficient bulk operations
+- **Mapping Management**: Maintain many-to-many relationships
 
 ### Phase 3: Integration Layer
 Create `update_coordinator.py`:
@@ -74,8 +78,8 @@ Create `update_coordinator.py`:
 
 #### 3.2 Conflict Resolution
 - **SKU Matching**: Handle existing vs new product conflicts
-- **Price Validation**: Detect and flag unusual price changes
-- **Availability Logic**: Smart availability determination
+- **Price Registration**: Register all price changes without user review
+- **Availability Logic**: Mark disappeared products as unavailable
 - **Data Quality Checks**: Validate required fields
 
 ### Phase 4: Update Operations
@@ -86,17 +90,27 @@ Create specific update handlers:
 def add_new_product(product_data):
     # Insert into products table
     # Add nutrition facts if available
-    # Add product photos
+    # Calculate nutri-score using nutriscore_calculator
+    # Add product photos (no URL validation)
     # Create initial price history record
-    # Process ingredients
+    # Process ingredients for new products only
 ```
 
 #### 4.2 Price and Availability Updates
 ```python
 def update_product_status(sku, price, availability):
-    # Insert new price history record
+    # Insert new price history record (all changes tracked)
     # Update availability flag
     # Track data source and timestamp
+    # Do NOT trigger ingredient reprocessing
+```
+
+#### 4.3 Disappeared Product Handling
+```python
+def mark_products_unavailable(missing_skus):
+    # Set is_available = false in product_price_history
+    # Record timestamp of unavailability
+    # Preserve all historical data
 ```
 
 #### 4.3 Batch Update Processing
@@ -126,6 +140,8 @@ def process_category_updates(category_code):
 - Index usage optimization for SKU lookups
 - Prepared statements for repeated operations
 - Connection pooling to handle concurrent updates
+- No photo URL validation to minimize external requests
+- Ingredient processing only for new products (not price updates)
 
 ### Error Handling
 - Database constraint violations
@@ -224,12 +240,55 @@ Data Integrity Checks → Constraint Validation → Update Reports
 5. Generate test update report
 6. Request approval for full deployment
 
-## Questions for Approval
+## Updated Implementation Based on Feedback
 
-1. Should we preserve existing nutri-score data during nutrition updates?
-2. What should be the default behavior for products that disappear from website (mark unavailable or leave unchanged)?
-3. Should we validate photo URLs by attempting to fetch them?
-4. What's the acceptable price change threshold for generating warnings?
-5. Should ingredient analysis run for all products or only new/changed ones?
+### 1. Nutri-Score Integration
+- **Module Usage**: Import and use provided `nutriscore_calculator.py`
+- **Automatic Calculation**: Calculate nutri-scores for all products with nutrition data
+- **Category Mapping**: Use category codes for proper classification (beverages, fats, cheese, fruits/vegetables)
+- **Database Storage**: Update `nutri_score_grade` and `nutri_score_points` fields
 
-This plan provides a comprehensive, production-ready system for database updates while preserving data integrity and providing detailed tracking of all changes.
+### 2. Product Availability Management
+- **Disappeared Products**: Mark as unavailable (`is_available = false`)
+- **Historical Preservation**: Keep all existing data, only update availability status
+- **Timestamp Tracking**: Record when products became unavailable
+
+### 3. Price Change Handling
+- **Universal Registration**: Register all price changes without review thresholds
+- **No Manual Review**: Automatic processing of all price updates
+- **Complete History**: Maintain full price change timeline
+
+### 4. Request Minimization
+- **No Photo URL Validation**: Store URLs without attempting to fetch them
+- **Efficient Scraping**: Use existing scraper data without additional requests
+
+### 5. Ingredient Processing Scope
+- **New Products Only**: Process ingredients only for newly added products
+- **Price Update Isolation**: Price changes do not trigger ingredient reprocessing
+- **Performance Optimization**: Reduce processing overhead for existing products
+
+## Enhanced Architecture
+
+### Core Components
+1. **Database Updater** (`database_updater.py`)
+   - Product CRUD with SKU validation
+   - Nutrition data integration with nutri-score calculation
+   - Price history management (all changes tracked)
+   - Photo URL storage (no validation)
+
+2. **Nutrition Processor** (`nutrition_processor.py`)
+   - `NutriscoreCalculator` integration
+   - Category-based classification logic
+   - Automatic score calculation and storage
+
+3. **Ingredient Processor** (`ingredient_processor.py`)
+   - New product ingredient analysis only
+   - Text parsing and normalization
+   - Frequency updates and mapping
+
+4. **Update Coordinator** (`update_coordinator.py`)
+   - Scraper integration
+   - Unavailability marking for missing products
+   - Transaction management and reporting
+
+This updated plan addresses all your feedback points and provides a streamlined, efficient update system.
