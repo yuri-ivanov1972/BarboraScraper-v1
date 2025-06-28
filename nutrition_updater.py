@@ -70,7 +70,7 @@ class NutritionUpdater:
             query = f"""
                 SELECT p.product_id, p.sku, p.name, p.rimi_url, p.category_id
                 FROM products p
-                LEFT JOIN nutrition_data n ON p.product_id = n.product_id
+                LEFT JOIN product_nutrition n ON p.product_id = n.product_id
                 WHERE n.product_id IS NULL AND ({' OR '.join(name_conditions)})
                 ORDER BY p.sku
             """
@@ -78,7 +78,7 @@ class NutritionUpdater:
             query = """
                 SELECT p.product_id, p.sku, p.name, p.rimi_url, p.category_id
                 FROM products p
-                LEFT JOIN nutrition_data n ON p.product_id = n.product_id
+                LEFT JOIN product_nutrition n ON p.product_id = n.product_id
                 WHERE n.product_id IS NULL
                 ORDER BY p.sku
             """
@@ -248,7 +248,7 @@ class NutritionUpdater:
             return False
         
         query = """
-            INSERT INTO nutrition_data (
+            INSERT INTO product_nutrition (
                 product_id, ingredients, energy_kj, energy_kcal, 
                 fat_total, fat_saturated, carbs_total, carbs_sugars,
                 protein, salt, fiber, data_source, created_at
@@ -291,7 +291,7 @@ class NutritionUpdater:
             from nutriscore_calculator import NutriscoreCalculator
             
             # Check if nutriscore already exists
-            check_query = "SELECT nutriscore_grade FROM nutrition_data WHERE product_id = %s AND nutriscore_grade IS NOT NULL"
+            check_query = "SELECT nutriscore_grade FROM product_nutrition WHERE product_id = %s AND nutriscore_grade IS NOT NULL"
             existing = self._execute_query(check_query, (product_id,), fetch=True)
             
             if existing:
@@ -310,9 +310,9 @@ class NutritionUpdater:
                 category_code=category_code
             )
             
-            # Update nutrition_data with nutriscore
+            # Update product_nutrition with nutriscore
             update_query = """
-                UPDATE nutrition_data 
+                UPDATE product_nutrition 
                 SET nutriscore_grade = %s, nutriscore_score = %s, updated_at = NOW()
                 WHERE product_id = %s
             """
