@@ -105,6 +105,17 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
+- **June 28, 2025**: Implemented comprehensive database update system
+  - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
+  - Added ingredient processor for new products only (not price updates)
+  - Implemented update coordinator for complete workflow orchestration
+  - Added conditional nutri-score calculation (only for new products without existing scores)
+  - Created tracking system for products without nutrition facts (fruits/vegetables)
+  - Integrated automatic price change registration without review thresholds
+  - Added product unavailability marking for disappeared products
+  - Implemented Streamlit interface for database updates with safety confirmations
+  - System now supports full CRUD operations on PRODUCTS_DB_URL database
+
 - **June 25, 2025**: Implemented exact hierarchical matching, precise product counting, and detailed product comparison
   - Removed all fuzzy logic with category-specific URL patterns
   - Removed dynamic pattern detection by analyzing sample products

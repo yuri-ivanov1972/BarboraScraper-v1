@@ -157,8 +157,8 @@ def main():
     # Analysis type selection
     analysis_type = st.radio(
         "Analysis Type:",
-        ["Basic Overview", "Detailed Product Comparison"],
-        help="Basic: Quick stats comparison. Detailed: Product-by-product matching"
+        ["Basic Overview", "Detailed Product Comparison", "Database Update"],
+        help="Basic: Quick stats comparison. Detailed: Product-by-product matching. Database Update: Permanent database changes"
     )
     
     if st.button("Run Analysis", type="primary"):
@@ -212,6 +212,49 @@ def main():
                                     file_name=f"{category_code}_product_comparison.csv",
                                     mime="text/csv"
                                 )
+                
+                elif analysis_type == "Database Update":
+                    st.warning("⚠️ Database Update performs permanent changes to PRODUCTS_DB_URL database")
+                    
+                    if st.checkbox("I understand this will modify the database", key="db_update_confirm"):
+                        if st.button("Perform Database Update", type="secondary"):
+                            with st.spinner(f"Updating database for {category_code}..."):
+                                try:
+                                    from update_coordinator import UpdateCoordinator
+                                    
+                                    def update_callback(msg):
+                                        st.write(f"📊 {msg}")
+                                    
+                                    coordinator = UpdateCoordinator(update_callback)
+                                    update_result = coordinator.perform_category_update(category_code.strip().upper())
+                                    
+                                    # Show summary
+                                    st.success("Database update completed!")
+                                    st.text(coordinator.get_update_summary(update_result))
+                                    
+                                    # Show products without nutrition
+                                    if update_result['products_without_nutrition']:
+                                        st.subheader("📋 Products Without Nutrition Facts")
+                                        st.write(f"Found {len(update_result['products_without_nutrition'])} products that need nutrition data:")
+                                        
+                                        for product in update_result['products_without_nutrition']:
+                                            st.write(f"• **{product['sku']}**: {product['name']}")
+                                        
+                                        # Export option
+                                        csv_export = coordinator.export_products_without_nutrition(update_result)
+                                        if csv_export:
+                                            st.download_button(
+                                                label="Download Products Without Nutrition (CSV)",
+                                                data=csv_export,
+                                                file_name=f"{category_code}_no_nutrition.csv",
+                                                mime="text/csv"
+                                            )
+                                    
+                                    coordinator.close()
+                                    
+                                except Exception as e:
+                                    st.error(f"Database update failed: {str(e)}")
+                                    st.write("Check the error message and try again.")
                 
             except Exception as e:
                 st.error(f"Analysis error: {str(e)}")
