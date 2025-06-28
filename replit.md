@@ -118,7 +118,7 @@ The application uses a PostgreSQL database with the following key tables:
   - Identifies new products (on website, not in database) and missing products (in database, not on website)
   - Detects changes in product names, prices, and URLs between website and database
   - Provides CSV export functionality for detailed comparison results
-  - Fixed price parsing using JSON data attributes (€3.49 instead of malformed 349€)
+  - Fixed price parsing prioritizing HTML structure over JSON data (addresses JSON data discrepancies)
   - Clean hierarchical database matching based on category structure
   - System now provides exact product counts and detailed product matching instead of estimates
 

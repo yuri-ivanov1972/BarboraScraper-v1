@@ -80,19 +80,19 @@ def extract_product_price_complete(element):
     Complete price extraction logic used in the system
     
     Tries multiple methods in order of reliability:
-    1. JSON data attribute (most accurate)
-    2. HTML price structure parsing
+    1. HTML price structure parsing (most accurate - prioritized due to JSON data discrepancies)
+    2. JSON data attribute (fallback)
     3. Simple text extraction fallback
     """
     print("--- Price Extraction Process ---")
     
-    # Method 1: JSON data attribute (most reliable)
-    price = extract_product_price_method_1(element)
+    # Method 1: HTML structure parsing (most reliable)
+    price = extract_product_price_method_2(element)
     if price:
         return price
     
-    # Method 2: HTML structure parsing
-    price = extract_product_price_method_2(element)
+    # Method 2: JSON data attribute (fallback due to potential inaccuracies)
+    price = extract_product_price_method_1(element)
     if price:
         return price
     
