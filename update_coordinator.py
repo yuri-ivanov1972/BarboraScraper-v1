@@ -194,25 +194,178 @@ class UpdateCoordinator:
     
     def _get_nutrition_data(self, product_url: str) -> Dict:
         """
-        Get nutrition data for a product URL
-        This would integrate with detailed scraping if available
-        For now, returns empty data structure
+        Get nutrition data for a product URL by scraping the product page
         """
-        # TODO: Integrate with detailed product page scraping
-        # For now, return empty nutrition data
-        return {
-            'has_nutrition': False,
-            'ingredients': '',
-            'energy_kcal': 0,
-            'energy_kj': 0,
-            'fat_total': 0,
-            'fat_saturated': 0,
-            'carbs_total': 0,
-            'carbs_sugars': 0,
-            'protein': 0,
-            'salt': 0,
-            'fiber': 0
-        }
+        import requests
+        import json
+        import re
+        from bs4 import BeautifulSoup
+        from decimal import Decimal, InvalidOperation
+        
+        try:
+            if not product_url:
+                return {'has_nutrition': False, 'ingredients': '', 'energy_kcal': 0, 'energy_kj': 0, 
+                       'fat_total': 0, 'fat_saturated': 0, 'carbs_total': 0, 'carbs_sugars': 0, 
+                       'protein': 0, 'salt': 0, 'fiber': 0}
+            
+            self.status_callback(f"Fetching nutrition data from: {product_url}")
+            
+            # Create session with proper headers
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'lv,en-US;q=0.7,en;q=0.3',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            })
+            
+            response = session.get(product_url)
+            if response.status_code != 200:
+                self.status_callback(f"Failed to fetch product page: {response.status_code}")
+                return {'has_nutrition': False, 'ingredients': '', 'energy_kcal': 0, 'energy_kj': 0, 
+                       'fat_total': 0, 'fat_saturated': 0, 'carbs_total': 0, 'carbs_sugars': 0, 
+                       'protein': 0, 'salt': 0, 'fiber': 0}
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Initialize nutrition data
+            nutrition_data = {
+                'has_nutrition': False,
+                'ingredients': '',
+                'energy_kcal': 0,
+                'energy_kj': 0,
+                'fat_total': 0,
+                'fat_saturated': 0,
+                'carbs_total': 0,
+                'carbs_sugars': 0,
+                'protein': 0,
+                'salt': 0,
+                'fiber': 0
+            }
+            
+            # Helper function to extract decimal values
+            def extract_decimal(text: str) -> float:
+                try:
+                    cleaned = re.sub(r'[^0-9.-]', '', text.replace(',', '.'))
+                    return float(cleaned) if cleaned else 0.0
+                except (ValueError, TypeError):
+                    return 0.0
+            
+            # Helper function to extract energy values (kJ and kcal)
+            def extract_energy_values(text: str) -> tuple:
+                try:
+                    pattern = r'(\d+(?:[,.]\d+)?)\s*kJ\s*(?:/|\s)\s*(\d+(?:[,.]\d+)?)\s*kcal'
+                    match = re.search(pattern, text, re.IGNORECASE)
+                    if match:
+                        kj = extract_decimal(match.group(1))
+                        kcal = extract_decimal(match.group(2))
+                        return kj, kcal
+                    return 0.0, 0.0
+                except Exception:
+                    return 0.0, 0.0
+            
+            # Find product details script containing nutrition information
+            script_tag = None
+            for script in soup.find_all('script'):
+                if script.string and 'Storefront.product_details_page' in script.string:
+                    script_tag = script
+                    break
+            
+            if script_tag:
+                script_content = script_tag.string
+                self.status_callback("Found product details script")
+                
+                # Extract the details tab HTML content
+                try:
+                    details_match = re.search(
+                        r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']',
+                        script_content, re.DOTALL)
+                    
+                    if not details_match:
+                        details_match = re.search(
+                            r'html:\s*["\']([^"\']+)["\'].*?identifier:\s*["\']details["\']',
+                            script_content, re.DOTALL)
+                    
+                    if details_match:
+                        html_content = details_match.group(1)
+                        
+                        # Handle escaped characters
+                        html_content = html_content.encode().decode('unicode-escape')
+                        html_content = html_content.replace('\\/', '/')
+                        html_content = html_content.replace('\\"', '"')
+                        
+                        details_soup = BeautifulSoup(html_content, 'html.parser')
+                        
+                        # Find ingredients
+                        for section in details_soup.find_all('div', class_='product__list-wrapper'):
+                            heading = section.find('p', class_='heading')
+                            if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
+                                text_div = section.find('div', class_='text')
+                                if text_div and text_div.p:
+                                    nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
+                                    self.status_callback(f"Found ingredients: {nutrition_data['ingredients'][:50]}...")
+                                break
+                        
+                        # Find nutrition table
+                        tables = details_soup.find_all('table')
+                        nutrition_table = None
+                        for table in tables:
+                            headers = table.find_all('th')
+                            if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
+                                nutrition_table = table
+                                self.status_callback("Found nutrition table")
+                                break
+                        
+                        if nutrition_table:
+                            nutrition_data['has_nutrition'] = True
+                            for row in nutrition_table.find_all('tr'):
+                                cells = row.find_all(['td'])
+                                if len(cells) >= 2:
+                                    label = cells[0].get_text(strip=True).lower()
+                                    value = cells[1].get_text(strip=True)
+                                    
+                                    if 'enerģētiskā vērtība' in label:
+                                        kj, kcal = extract_energy_values(value)
+                                        nutrition_data['energy_kj'] = kj
+                                        nutrition_data['energy_kcal'] = kcal
+                                    elif 'tauki' == label:
+                                        nutrition_data['fat_total'] = extract_decimal(value)
+                                    elif 'piesātinātās taukskābes' in label:
+                                        nutrition_data['fat_saturated'] = extract_decimal(value)
+                                    elif 'ogļhidrāti' == label:
+                                        nutrition_data['carbs_total'] = extract_decimal(value)
+                                    elif 'cukuri' in label:
+                                        nutrition_data['carbs_sugars'] = extract_decimal(value)
+                                    elif 'olbaltumvielas' == label:
+                                        nutrition_data['protein'] = extract_decimal(value)
+                                    elif 'sāls' == label:
+                                        nutrition_data['salt'] = extract_decimal(value)
+                                    elif 'šķiedrvielas' in label or 'fiber' in label.lower():
+                                        nutrition_data['fiber'] = extract_decimal(value)
+                            
+                            if nutrition_data['has_nutrition']:
+                                self.status_callback(f"Successfully extracted nutrition data: {nutrition_data['energy_kcal']} kcal, {nutrition_data['protein']}g protein")
+                        
+                        # If we found ingredients but no nutrition table, still mark as partial nutrition data
+                        if nutrition_data['ingredients'] and not nutrition_data['has_nutrition']:
+                            nutrition_data['has_nutrition'] = True
+                            self.status_callback("Found ingredients only (no nutrition table)")
+                
+                except Exception as e:
+                    self.status_callback(f"Error processing product details: {str(e)}")
+            
+            if not nutrition_data['has_nutrition']:
+                self.status_callback("No nutrition data found on product page")
+            
+            return nutrition_data
+            
+        except Exception as e:
+            self.status_callback(f"Error fetching nutrition data: {str(e)}")
+            return {'has_nutrition': False, 'ingredients': '', 'energy_kcal': 0, 'energy_kj': 0, 
+                   'fat_total': 0, 'fat_saturated': 0, 'carbs_total': 0, 'carbs_sugars': 0, 
+                   'protein': 0, 'salt': 0, 'fiber': 0}
     
     def _get_category_id(self, category_code: str) -> int:
         """Get category ID from category code using normalized_categories table"""

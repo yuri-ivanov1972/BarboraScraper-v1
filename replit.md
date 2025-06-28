@@ -105,7 +105,7 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-- **June 28, 2025**: Implemented comprehensive database update system with category assignment fixes
+- **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
   - Added ingredient processor for new products only (not price updates)
   - Implemented update coordinator for complete workflow orchestration
@@ -116,7 +116,9 @@ The application uses a PostgreSQL database with the following key tables:
   - Implemented Streamlit interface for database updates with safety confirmations
   - Fixed Streamlit database update button by separating from nested button structure
   - Fixed category assignment logic to use normalized_categories table for proper category_id mapping
-  - System now supports full CRUD operations on PRODUCTS_DB_URL database with correct category assignments
+  - Implemented complete nutrition data scraping from product pages including ingredients and nutritional facts
+  - Added extraction of Latvian nutrition labels (Sastāvdaļas, Uzturvērtība) with proper data conversion
+  - System now supports full CRUD operations with automatic nutrition data extraction and nutri-score calculation
 
 - **June 25, 2025**: Implemented exact hierarchical matching, precise product counting, and detailed product comparison
   - Removed all fuzzy logic with category-specific URL patterns
