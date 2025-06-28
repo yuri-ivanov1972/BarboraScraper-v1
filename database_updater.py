@@ -92,7 +92,9 @@ class DatabaseUpdater:
             
             # Add initial price history record
             if price and price != 'N/A':
-                self._add_price_history_record(product_id, price, True, 'rimi_scraper')
+                price_decimal = self._parse_price(price)
+                if price_decimal is not None:
+                    self._add_price_history_record(product_id, price_decimal, True, 'rimi_scraper')
             
             self.conn.commit()
             self.status_callback(f"Successfully added product {sku} with ID {product_id}")
@@ -115,17 +117,17 @@ class DatabaseUpdater:
             True if successful
         """
         try:
-            # Extract nutrition values
+            # Extract nutrition values with safe conversion
             ingredients_text = nutrition_data.get('ingredients', '')
-            energy_kcal = nutrition_data.get('energy_kcal', 0)
-            energy_kj = nutrition_data.get('energy_kj', 0)
-            fat_total = nutrition_data.get('fat_total', 0)
-            fat_saturated = nutrition_data.get('fat_saturated', 0)
-            carbs_total = nutrition_data.get('carbs_total', 0)
-            carbs_sugars = nutrition_data.get('carbs_sugars', 0)
-            protein = nutrition_data.get('protein', 0)
-            salt = nutrition_data.get('salt', 0)
-            fiber = nutrition_data.get('fiber', 0)
+            energy_kcal = float(nutrition_data.get('energy_kcal', 0)) if nutrition_data.get('energy_kcal') else 0
+            energy_kj = float(nutrition_data.get('energy_kj', 0)) if nutrition_data.get('energy_kj') else 0
+            fat_total = float(nutrition_data.get('fat_total', 0)) if nutrition_data.get('fat_total') else 0
+            fat_saturated = float(nutrition_data.get('fat_saturated', 0)) if nutrition_data.get('fat_saturated') else 0
+            carbs_total = float(nutrition_data.get('carbs_total', 0)) if nutrition_data.get('carbs_total') else 0
+            carbs_sugars = float(nutrition_data.get('carbs_sugars', 0)) if nutrition_data.get('carbs_sugars') else 0
+            protein = float(nutrition_data.get('protein', 0)) if nutrition_data.get('protein') else 0
+            salt = float(nutrition_data.get('salt', 0)) if nutrition_data.get('salt') else 0
+            fiber = float(nutrition_data.get('fiber', 0)) if nutrition_data.get('fiber') else 0
             
             # Check if product already has nutri-score
             existing_nutri_query = """
@@ -275,9 +277,12 @@ class DatabaseUpdater:
     
     def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str):
         """Add price history record"""
+        # Use current timestamp to avoid future timestamp constraint issues
+        current_time = datetime.now(timezone.utc)
+        
         price_query = """
-            INSERT INTO product_price_history (product_id, price, currency, is_available, recorded_at, data_source)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO product_price_history (product_id, price, currency, is_available, recorded_at, data_source, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         
         self._execute_query(price_query, (
@@ -285,8 +290,9 @@ class DatabaseUpdater:
             price,
             'EUR',
             is_available,
-            datetime.now(timezone.utc),
-            data_source
+            current_time,
+            data_source,
+            current_time
         ))
     
     def _parse_price(self, price_str: str) -> Optional[Decimal]:
@@ -299,8 +305,11 @@ class DatabaseUpdater:
             clean_price = re.sub(r'[€$£]', '', price_str).strip()
             # Replace comma with dot for decimal
             clean_price = clean_price.replace(',', '.')
+            # Remove any remaining non-numeric characters except dots
+            clean_price = re.sub(r'[^\d.]', '', clean_price)
             return Decimal(clean_price)
-        except:
+        except Exception as e:
+            self.status_callback(f"Failed to parse price '{price_str}': {str(e)}")
             return None
     
     def _parse_quantity(self, product_name: str) -> Tuple[Optional[Decimal], Optional[str]]:
