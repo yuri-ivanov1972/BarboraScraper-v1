@@ -114,9 +114,10 @@ The application uses a PostgreSQL database with the following key tables:
   - Added comprehensive debug logging for nutrition extraction process
   - Fixed availability detection logic: Products with €0.00 price now correctly marked as unavailable in price history
   - Resolved hardcoded availability settings in both product updates and new product creation
-  - Fixed quantity extraction and database storage issues: Enhanced regex pattern to handle Latvian units (gb/gab = pieces)
-  - Implemented comprehensive quantity data population: 99.7% coverage with proper handling of variable weight products
-  - Products with fixed quantities show values and units, products sold by weight show unit only (kg)
+  - Fixed quantity extraction and database storage issues: Enhanced regex pattern to handle Latvian units (gb → gab for pieces)
+  - Implemented comprehensive quantity data population: 99.7% coverage preserving existing Latvian vocabulary
+  - Products with fixed quantities show values and units in Latvian (e.g., "10 gab"), products sold by weight show unit only (kg)
+  - Corrected field mapping between processing results and Streamlit display interface for quantity information
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module

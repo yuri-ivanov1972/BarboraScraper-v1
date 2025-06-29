@@ -330,9 +330,9 @@ class DatabaseUpdater:
             if match:
                 value = Decimal(match.group(1).replace(',', '.'))
                 unit = match.group(2).lower()
-                # Normalize Latvian units
-                if unit in ['gb', 'gab']:
-                    unit = 'pcs'
+                # Normalize Latvian units to standard abbreviations
+                if unit in ['gb']:
+                    unit = 'gab'  # Keep Latvian abbreviation for pieces
                 return value, unit
             
             # Check for products sold by weight (ending with " kg")
