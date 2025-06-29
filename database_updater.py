@@ -137,7 +137,10 @@ class DatabaseUpdater:
                 SELECT nutri_score_grade FROM nutritionfacts WHERE product_id = %s
             """
             existing_nutri = self._execute_query(existing_nutri_query, (product_id,), fetch=True)
-            has_existing_nutriscore = existing_nutri and existing_nutri[0].get('nutri_score_grade') is not None
+            has_existing_nutriscore = (existing_nutri and 
+                                     len(existing_nutri) > 0 and 
+                                     existing_nutri[0].get('nutri_score_grade') is not None and 
+                                     existing_nutri[0].get('nutri_score_grade') != '')
             
             # Calculate nutri-score if missing and we have sufficient data
             nutri_score_grade = None
@@ -158,8 +161,10 @@ class DatabaseUpdater:
                     nutri_score_grade = nutri_result['grade']
                     nutri_score_points = nutri_result['score']
                     self.status_callback(f"Calculated nutri-score: {nutri_score_grade} ({nutri_score_points} points)")
-            elif existing_nutri:
+            elif has_existing_nutriscore:
                 self.status_callback(f"Product {product_id} already has nutri-score, skipping calculation")
+            else:
+                self.status_callback(f"Insufficient nutrition data for nutri-score calculation (missing: energy_kj={energy_kj}, sugars={carbs_sugars}, sat_fat={fat_saturated}, salt={salt}, protein={protein})")
             
             # Insert nutrition data using correct table schema from export
             nutrition_query = """
