@@ -360,30 +360,39 @@ def product_manager_tab():
                         # Verify product exists in database
                         db_product = db_updater.get_product_by_sku(sku)
                         if db_product:
-                            st.success(f"✅ Product verified in database (ID: {db_product['id']})")
+                            st.success(f"✅ Product verified in database (ID: {db_product['product_id']})")
                             
-                            # Check for nutrition data - use correct table name
+                            # Check for nutrition data - use correct table from schema export
                             nutrition_query = """
-                            SELECT energy_kcal, protein, fat, carbohydrates, sugars, salt, nutriscore_grade
-                            FROM product_nutrition 
-                            WHERE sku = %s
+                            SELECT energy_kcal, protein, fat_total, carbs_total, carbs_sugars, salt, nutri_score_grade
+                            FROM nutritionfacts 
+                            WHERE product_id = %s
                             """
-                            nutrition_data = db_updater._execute_query(nutrition_query, (sku,), fetch=True)
+                            nutrition_data = db_updater._execute_query(nutrition_query, (db_product['product_id'],), fetch=True)
                             
                             if nutrition_data:
                                 st.info(f"✅ Nutrition data verified: {len(nutrition_data)} records")
                                 latest_nutrition = nutrition_data[0]
                                 st.write(f"Energy: {latest_nutrition.get('energy_kcal')} kcal, Protein: {latest_nutrition.get('protein')}g")
-                                st.write(f"Nutri-Score: {latest_nutrition.get('nutriscore_grade', 'N/A')}")
+                                st.write(f"Nutri-Score: {latest_nutrition.get('nutri_score_grade', 'N/A')}")
                             else:
                                 st.warning("No nutrition data found in database")
                             
-                            # Check for photos - use products table image_url field
-                            if db_product.get('image_url'):
-                                st.info(f"✅ Product image verified in database")
-                                st.write(f"Image URL: {db_product['image_url'][:60]}...")
+                            # Check for photos - use productphotos table from schema export
+                            photo_query = """
+                            SELECT photo_url, is_primary 
+                            FROM productphotos 
+                            WHERE product_id = %s
+                            """
+                            photo_data = db_updater._execute_query(photo_query, (db_product['product_id'],), fetch=True)
+                            
+                            if photo_data:
+                                st.info(f"✅ Photos verified: {len(photo_data)} images")
+                                for photo in photo_data:
+                                    if photo.get('is_primary'):
+                                        st.write(f"Primary photo: {photo['photo_url'][:60]}...")
                             else:
-                                st.warning("No product image found in database")
+                                st.warning("No photos found in database")
                         else:
                             st.error("❌ Product not found in database after processing")
                         

@@ -104,12 +104,12 @@ class DatabaseUpdater:
             self.conn.rollback()
             raise Exception(f"Failed to add product {sku}: {str(e)}")
     
-    def add_nutrition_data(self, sku: str, nutrition_data: Dict, category_code: str = None) -> bool:
+    def add_nutrition_data(self, product_id: int, nutrition_data: Dict, category_code: str = None) -> bool:
         """
         Add nutrition data for a product with conditional nutri-score calculation
         
         Args:
-            sku: Product SKU
+            product_id: ID of the product
             nutrition_data: Dictionary with nutrition information
             category_code: Product category for nutri-score calculation
             
@@ -133,9 +133,9 @@ class DatabaseUpdater:
             
             # Check if product already has nutri-score
             existing_nutri_query = """
-                SELECT nutriscore_grade FROM product_nutrition WHERE sku = %s
+                SELECT nutri_score_grade FROM nutritionfacts WHERE product_id = %s
             """
-            existing_nutri = self._execute_query(existing_nutri_query, (sku,), fetch=True)
+            existing_nutri = self._execute_query(existing_nutri_query, (product_id,), fetch=True)
             
             # Calculate nutri-score only if product doesn't have one and we have sufficient data
             nutri_score_grade = None
@@ -159,54 +159,60 @@ class DatabaseUpdater:
             elif existing_nutri:
                 self.status_callback(f"Product {product_id} already has nutri-score, skipping calculation")
             
-            # Insert nutrition data using correct table and field names
+            # Insert nutrition data using correct table schema from export
             nutrition_query = """
-                INSERT INTO product_nutrition 
-                (sku, ingredients, energy_kcal, energy_kj, fat, saturated_fat,
-                 carbohydrates, sugars, protein, salt, nutriscore_grade, nutriscore_score,
-                 created_at, updated_at)
+                INSERT INTO nutritionfacts 
+                (product_id, ingredients_text, energy_kcal, energy_kj, fat_total, fat_saturated,
+                 carbs_total, carbs_sugars, protein, salt, fiber, nutri_score_grade, nutri_score_points,
+                 data_source_date)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (sku) DO UPDATE SET
-                    ingredients = EXCLUDED.ingredients,
+                ON CONFLICT (product_id) DO UPDATE SET
+                    ingredients_text = EXCLUDED.ingredients_text,
                     energy_kcal = EXCLUDED.energy_kcal,
                     energy_kj = EXCLUDED.energy_kj,
-                    fat = EXCLUDED.fat,
-                    saturated_fat = EXCLUDED.saturated_fat,
-                    carbohydrates = EXCLUDED.carbohydrates,
-                    sugars = EXCLUDED.sugars,
+                    fat_total = EXCLUDED.fat_total,
+                    fat_saturated = EXCLUDED.fat_saturated,
+                    carbs_total = EXCLUDED.carbs_total,
+                    carbs_sugars = EXCLUDED.carbs_sugars,
                     protein = EXCLUDED.protein,
                     salt = EXCLUDED.salt,
-                    nutriscore_grade = EXCLUDED.nutriscore_grade,
-                    nutriscore_score = EXCLUDED.nutriscore_score,
-                    updated_at = EXCLUDED.updated_at
+                    fiber = EXCLUDED.fiber,
+                    nutri_score_grade = EXCLUDED.nutri_score_grade,
+                    nutri_score_points = EXCLUDED.nutri_score_points,
+                    data_source_date = EXCLUDED.data_source_date
             """
             
             self._execute_query(nutrition_query, (
-                sku, ingredients_text, energy_kcal, energy_kj, fat_total, fat_saturated,
-                carbs_total, carbs_sugars, protein, salt, nutri_score_grade, nutri_score_points,
-                datetime.now(timezone.utc), datetime.now(timezone.utc)
+                product_id, ingredients_text, energy_kcal, energy_kj, fat_total, fat_saturated,
+                carbs_total, carbs_sugars, protein, salt, fiber, nutri_score_grade, nutri_score_points,
+                datetime.now(timezone.utc)
             ))
             
             # Commit the transaction
             self.conn.commit()
-            self.status_callback(f"Added nutrition data for product SKU {sku}")
+            self.status_callback(f"Added nutrition data for product ID {product_id}")
             return True
             
         except Exception as e:
             raise Exception(f"Failed to add nutrition data: {str(e)}")
     
     def add_product_photos(self, product_id: int, photo_urls: List[str]) -> bool:
-        """Add product photo to products table"""
+        """Add product photos to productphotos table"""
         try:
             if not photo_urls:
                 return True
             
-            # Update the image_url field in products table with the first (main) photo
-            main_photo_url = photo_urls[0]
-            photo_query = """
-                UPDATE products SET image_url = %s WHERE id = %s
-            """
-            self._execute_query(photo_query, (main_photo_url, product_id))
+            # Clear existing photos
+            self._execute_query("DELETE FROM productphotos WHERE product_id = %s", (product_id,))
+            
+            # Add new photos
+            for i, url in enumerate(photo_urls):
+                is_primary = (i == 0)  # First photo is primary
+                photo_query = """
+                    INSERT INTO productphotos (product_id, photo_url, is_primary)
+                    VALUES (%s, %s, %s)
+                """
+                self._execute_query(photo_query, (product_id, url, is_primary))
             
             # Commit the transaction
             self.conn.commit()
