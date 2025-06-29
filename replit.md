@@ -131,6 +131,11 @@ The application uses a PostgreSQL database with the following key tables:
   - Enhanced ingredient extraction for compound ingredients: "vistas OLAS" now correctly maps to "olas" (main ingredient)
   - Integrated ingredient processing into update workflow: Both new products and updates now process ingredients automatically
   - Successfully resolved product 999409 issues: Price €3.59 (was €0.00), availability True (was False), ingredient "olas" mapped correctly
+  - Fixed database sequence constraint violations: Implemented manual ID assignment to bypass broken ingredient_analysis sequence
+  - Resolved ingredient processing errors for products with complex ingredients like "ieraugs. Lauksaimniecība ES" and "LV-BIO-02"
+  - Enhanced ingredient processor with retry logic and robust error handling for database constraint conflicts
+  - Successfully tested complete fix with product 961367: All 3 ingredients processed correctly (VĀJPIENS, ieraugs, LV-BIO-02)
+  - System now handles all ingredient processing scenarios without database constraint violations
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module

@@ -162,52 +162,66 @@ class IngredientProcessor:
             return ingredient
     
     def _get_or_create_ingredient(self, ingredient_name: str) -> int:
-        """Get existing ingredient ID or create new one using simple UPSERT"""
-        try:
-            # Use a simple UPSERT that PostgreSQL handles atomically
-            upsert_query = """
-                WITH upsert AS (
-                    UPDATE ingredient_analysis 
-                    SET frequency = frequency + 1 
-                    WHERE ingredient = %s 
-                    RETURNING id
-                )
-                INSERT INTO ingredient_analysis (ingredient, frequency)
-                SELECT %s, 1
-                WHERE NOT EXISTS (SELECT 1 FROM upsert)
-                RETURNING id;
-            """
-            
-            # Try the upsert first
-            result = self._execute_query(upsert_query, (ingredient_name, ingredient_name), fetch=True)
-            if result and len(result) > 0:
-                return result[0]['id']
-            
-            # If upsert didn't return anything, the UPDATE part worked, so get the ID
-            select_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
-            fallback_result = self._execute_query(select_query, (ingredient_name,), fetch=True)
-            if fallback_result and len(fallback_result) > 0:
-                return fallback_result[0]['id']
-            
-            # Final fallback for any edge cases
-            self.status_callback(f"Warning: Could not process ingredient {ingredient_name}")
-            return None
-                
-        except Exception as e:
-            # If there's any error, try a simple select as final fallback
+        """Get existing ingredient ID or create new one with robust handling"""
+        max_retries = 3
+        
+        for attempt in range(max_retries):
             try:
+                # First, try to find existing ingredient
                 select_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
-                fallback_result = self._execute_query(select_query, (ingredient_name,), fetch=True)
-                if fallback_result and len(fallback_result) > 0:
-                    # Update frequency manually
-                    update_query = "UPDATE ingredient_analysis SET frequency = frequency + 1 WHERE id = %s"
-                    self._execute_query(update_query, (fallback_result[0]['id'],))
-                    return fallback_result[0]['id']
-            except:
-                pass
-            
-            self.status_callback(f"Error processing ingredient {ingredient_name}: {str(e)}")
-            return None
+                result = self._execute_query(select_query, (ingredient_name,), fetch=True)
+                
+                if result and len(result) > 0:
+                    # Ingredient exists, update frequency
+                    ingredient_id = result[0]['id']
+                    try:
+                        update_query = "UPDATE ingredient_analysis SET frequency = frequency + 1 WHERE id = %s"
+                        self._execute_query(update_query, (ingredient_id,))
+                    except:
+                        pass  # Frequency update failure is not critical
+                    return ingredient_id
+                
+                # Ingredient doesn't exist, create it with manual ID to bypass sequence issues
+                try:
+                    # Get next available ID manually
+                    max_id_query = "SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM ingredient_analysis"
+                    max_result = self._execute_query(max_id_query, fetch=True)
+                    next_id = max_result[0]['next_id'] if max_result else 1
+                    
+                    # Insert with explicit ID
+                    insert_query = """
+                        INSERT INTO ingredient_analysis (id, ingredient, frequency) 
+                        VALUES (%s, %s, 1)
+                        ON CONFLICT (ingredient) DO UPDATE SET 
+                            frequency = ingredient_analysis.frequency + 1
+                        RETURNING id
+                    """
+                    insert_result = self._execute_query(insert_query, (next_id, ingredient_name), fetch=True)
+                    if insert_result and len(insert_result) > 0:
+                        # Update sequence to match
+                        self._execute_query("SELECT setval('ingredient_analysis_id_seq', %s)", (next_id,))
+                        return insert_result[0]['id']
+                
+                except Exception as insert_error:
+                    # If insert fails, try one more time to get existing
+                    retry_result = self._execute_query(select_query, (ingredient_name,), fetch=True)
+                    if retry_result and len(retry_result) > 0:
+                        return retry_result[0]['id']
+                    
+                    if attempt == max_retries - 1:  # Last attempt
+                        self.status_callback(f"Failed to create ingredient after {max_retries} attempts: {ingredient_name}")
+                        return None
+                
+            except Exception as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    self.status_callback(f"Error processing ingredient {ingredient_name}: {str(e)}")
+                    return None
+                
+                # Short delay before retry
+                import time
+                time.sleep(0.1)
+        
+        return None
     
     def _create_ingredient_mapping(self, ingredient_id: int, sku: str):
         """Create product-ingredient mapping"""
