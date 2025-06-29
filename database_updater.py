@@ -123,10 +123,10 @@ class DatabaseUpdater:
             energy_kj = float(nutrition_data.get('energy_kj', 0)) if nutrition_data.get('energy_kj') else None
             
             # Map extracted field names to database field names
-            fat_total = float(nutrition_data.get('fat', 0)) if nutrition_data.get('fat') else None
-            fat_saturated = float(nutrition_data.get('saturated_fat', 0)) if nutrition_data.get('saturated_fat') else None
-            carbs_total = float(nutrition_data.get('carbohydrates', 0)) if nutrition_data.get('carbohydrates') else None
-            carbs_sugars = float(nutrition_data.get('sugar', 0)) if nutrition_data.get('sugar') else None
+            fat_total = float(nutrition_data.get('fat_total', 0)) if nutrition_data.get('fat_total') else None
+            fat_saturated = float(nutrition_data.get('fat_saturated', 0)) if nutrition_data.get('fat_saturated') else None
+            carbs_total = float(nutrition_data.get('carbs_total', 0)) if nutrition_data.get('carbs_total') else None
+            carbs_sugars = float(nutrition_data.get('carbs_sugars', 0)) if nutrition_data.get('carbs_sugars') else None
             protein = float(nutrition_data.get('protein', 0)) if nutrition_data.get('protein') else None
             salt = float(nutrition_data.get('salt', 0)) if nutrition_data.get('salt') else None
             fiber = float(nutrition_data.get('fiber', 0)) if nutrition_data.get('fiber') else None
