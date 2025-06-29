@@ -98,7 +98,7 @@ class IngredientProcessor:
             raise Exception(f"Failed to process ingredients for {sku}: {str(e)}")
     
     def _extract_ingredients(self, ingredients_text: str) -> List[str]:
-        """Extract and normalize individual ingredients from text"""
+        """Extract and normalize individual ingredients from text using tokenization"""
         try:
             # Clean the text
             text = ingredients_text.strip()
@@ -118,27 +118,122 @@ class IngredientProcessor:
                     if normalized_main and len(normalized_main) > 1:
                         return [normalized_main]
                 
-                # Fallback to treating as single ingredient
-                normalized = self._normalize_ingredient(text.strip())
-                if normalized and len(normalized) > 1:
-                    return [normalized]
+                # Use tokenization for single complex ingredients
+                tokenized = self._tokenize_ingredient(text.strip())
+                if tokenized and len(tokenized) > 1:
+                    return [tokenized]
                 return []
             
             # Split by common delimiters for multi-ingredient products
-            ingredients = re.split(r'[,;]|\band\b|\bun\b', text, flags=re.IGNORECASE)
+            raw_ingredients = re.split(r'[,;]|\band\b|\bun\b', text, flags=re.IGNORECASE)
             
-            # Clean and normalize each ingredient
+            # Tokenize and normalize each ingredient
             normalized_ingredients = []
-            for ingredient in ingredients:
-                normalized = self._normalize_ingredient(ingredient.strip())
-                if normalized and len(normalized) > 1:  # Allow shorter ingredients
-                    normalized_ingredients.append(normalized)
+            for ingredient in raw_ingredients:
+                ingredient = ingredient.strip()
+                if ingredient:
+                    tokenized = self._tokenize_ingredient(ingredient)
+                    if tokenized and len(tokenized) > 1:
+                        normalized_ingredients.append(tokenized)
             
             return normalized_ingredients
             
         except Exception as e:
             self.status_callback(f"Error extracting ingredients: {str(e)}")
             return []
+    
+    def _tokenize_ingredient(self, ingredient_text: str) -> str:
+        """Tokenize ingredient text and extract core ingredient from certification info"""
+        try:
+            if not ingredient_text or not ingredient_text.strip():
+                return ""
+            
+            # Define certification and origin tokens to filter out
+            certification_tokens = {
+                'lauksaimniecība', 'es', 'eu', 'ārpus', 'organic', 'bio', 
+                'bioloģisks', 'bioloģisko', 'bioloģiskās', 'sertificēta',
+                'izcelsme', 'valsts', 'valstu', 'kods', 'kodu', 'maisījums',
+                'izejvielu', 'izejviela', 'sastāvdaļas', 'sastāvdaļa'
+            }
+            
+            # Define LV-BIO and similar pattern tokens
+            bio_pattern = re.compile(r'^[a-z]{2}-bio-\d+$', re.IGNORECASE)
+            country_code_pattern = re.compile(r'^[a-z]{2}$', re.IGNORECASE)
+            
+            # Clean and tokenize
+            text = ingredient_text.strip()
+            
+            # Remove parenthetical information first
+            text = re.sub(r'\([^)]*\)', '', text)
+            
+            # Remove percentages
+            text = re.sub(r'\d+%', '', text)
+            
+            # Split into tokens by spaces and punctuation
+            tokens = re.split(r'[\s.,;:]+', text)
+            tokens = [token.strip() for token in tokens if token.strip()]
+            
+            # Filter out certification tokens
+            ingredient_tokens = []
+            for token in tokens:
+                token_lower = token.lower()
+                
+                # Skip certification tokens
+                if token_lower in certification_tokens:
+                    continue
+                    
+                # Skip LV-BIO-XX patterns
+                if bio_pattern.match(token):
+                    continue
+                    
+                # Skip standalone country codes (ES, EU, etc.)
+                if country_code_pattern.match(token) and len(token) == 2:
+                    continue
+                    
+                # Skip numeric tokens
+                if token.isdigit():
+                    continue
+                    
+                # Keep actual ingredient tokens
+                ingredient_tokens.append(token_lower)
+            
+            # Join remaining tokens as the core ingredient
+            if ingredient_tokens:
+                core_ingredient = ' '.join(ingredient_tokens)
+                # Final cleanup
+                core_ingredient = core_ingredient.strip('.,;:')
+                return core_ingredient
+            
+            return ""
+            
+        except Exception as e:
+            # Fallback to old normalization method
+            return self._normalize_ingredient_fallback(ingredient_text)
+    
+    def _normalize_ingredient_fallback(self, ingredient: str) -> str:
+        """Fallback normalization method (original approach)"""
+        try:
+            # Remove parenthetical information
+            ingredient = re.sub(r'\([^)]*\)', '', ingredient)
+            
+            # Remove percentages
+            ingredient = re.sub(r'\d+%', '', ingredient)
+            
+            # Remove certification and origin information (case insensitive)
+            ingredient = re.sub(r'\.\s*(lauksaimniecība\s+es|lv-bio-\d+|es|eu|organic|bio).*', '', ingredient, flags=re.IGNORECASE)
+            ingredient = re.sub(r'\s+(lauksaimniecība\s+es|lv-bio-\d+|es|eu|organic|bio).*', '', ingredient, flags=re.IGNORECASE)
+            
+            # Remove extra whitespace
+            ingredient = re.sub(r'\s+', ' ', ingredient).strip()
+            
+            # Remove leading/trailing punctuation
+            ingredient = ingredient.strip('.,;:')
+            
+            # Convert to lowercase for consistent matching
+            return ingredient.lower()
+            
+        except Exception as e:
+            return ingredient.lower().strip()
     
     def _normalize_ingredient(self, ingredient: str) -> str:
         """Normalize a single ingredient"""
