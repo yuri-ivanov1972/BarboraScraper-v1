@@ -112,6 +112,8 @@ The application uses a PostgreSQL database with the following key tables:
   - Successfully implemented complete nutrition data extraction: Fat, Saturated Fat, Carbohydrates, Sugar
   - Verified Product Manager displays accurate nutrition values from database
   - Added comprehensive debug logging for nutrition extraction process
+  - Fixed availability detection logic: Products with €0.00 price now correctly marked as unavailable in price history
+  - Resolved hardcoded availability settings in both product updates and new product creation
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
