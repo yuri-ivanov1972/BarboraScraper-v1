@@ -261,8 +261,15 @@ def product_manager_tab():
                         st.write(f"**Category**: {selected_category}")
                         
                         # Show quantity if available
-                        if result['product_data'].get('quantity_value'):
-                            st.write(f"**Quantity**: {result['product_data']['quantity_value']} {result['product_data'].get('quantity_unit', '')}")
+                        quantity_value = result['product_data'].get('quantity_value')
+                        quantity_unit = result['product_data'].get('quantity_unit')
+                        
+                        if quantity_value and quantity_unit:
+                            st.write(f"**Quantity**: {quantity_value} {quantity_unit}")
+                        elif quantity_unit:
+                            st.write(f"**Quantity**: Variable weight ({quantity_unit})")
+                        else:
+                            st.write("**Quantity**: Not specified")
                     
                     with col2:
                         # Product image

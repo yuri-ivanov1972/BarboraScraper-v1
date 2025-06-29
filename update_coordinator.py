@@ -643,6 +643,10 @@ class UpdateCoordinator:
                         self.db_updater.add_product_photos(product_id, [image_url])
                         self.status_callback("Updated product photo")
                     
+                    # Add quantity data from existing product to results
+                    results['product_data']['quantity_value'] = existing_product.get('quantity_value')
+                    results['product_data']['quantity_unit'] = existing_product.get('quantity_unit')
+                    
                     results['success'] = True
                     results['changes'] = {
                         'price_updated': True,
@@ -669,9 +673,13 @@ class UpdateCoordinator:
                 
                 # Add quantity parsing
                 quantity_value, quantity_unit = self.db_updater._parse_quantity(product_name)
-                if quantity_value:
+                if quantity_value or quantity_unit:  # Include if either value or unit exists
                     product_data['quantity_value'] = quantity_value
                     product_data['quantity_unit'] = quantity_unit
+                    # Also add to results data for Streamlit display
+                    results['product_data']['quantity_value'] = quantity_value
+                    results['product_data']['quantity_unit'] = quantity_unit
+                    self.status_callback(f"Extracted quantity: {quantity_value} {quantity_unit}")
                 
                 # Create new product
                 product_id = self.db_updater.add_new_product(product_data)
