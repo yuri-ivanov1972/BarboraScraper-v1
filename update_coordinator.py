@@ -330,23 +330,27 @@ class UpdateCoordinator:
                                         kj, kcal = extract_energy_values(value)
                                         nutrition_data['energy_kj'] = kj
                                         nutrition_data['energy_kcal'] = kcal
-                                    elif 'tauki' == label:
+                                    elif 'tauki' in label and 'piesātinātās' not in label:  # Match "tauki" but not "piesātinātās taukskābes"
                                         nutrition_data['fat_total'] = extract_decimal(value)
-                                    elif 'piesātinātās taukskābes' in label:
+                                    elif 'piesātinātās taukskābes' in label:  # Handles both "piesātinātās taukskābes" and "tostarp piesātinātās taukskābes"
                                         nutrition_data['fat_saturated'] = extract_decimal(value)
-                                    elif 'ogļhidrāti' == label:
+                                    elif 'ogļhidrāti' in label and 'cukuri' not in label:  # Match "ogļhidrāti" but not "tostarp cukuri"
                                         nutrition_data['carbs_total'] = extract_decimal(value)
-                                    elif 'cukuri' in label:
+                                    elif 'cukuri' in label:  # Handles both "cukuri" and "tostarp cukuri"
                                         nutrition_data['carbs_sugars'] = extract_decimal(value)
-                                    elif 'olbaltumvielas' == label:
+                                    elif 'olbaltumvielas' in label:
                                         nutrition_data['protein'] = extract_decimal(value)
-                                    elif 'sāls' == label:
+                                    elif 'sāls' in label:
                                         nutrition_data['salt'] = extract_decimal(value)
                                     elif 'šķiedrvielas' in label or 'fiber' in label.lower():
                                         nutrition_data['fiber'] = extract_decimal(value)
                             
                             if nutrition_data['has_nutrition']:
-                                self.status_callback(f"Successfully extracted nutrition data: {nutrition_data['energy_kcal']} kcal, {nutrition_data['protein']}g protein")
+                                self.status_callback(f"Successfully extracted nutrition data:")
+                                self.status_callback(f"  Energy: {nutrition_data['energy_kcal']} kcal ({nutrition_data['energy_kj']} kJ)")
+                                self.status_callback(f"  Fat: {nutrition_data['fat_total']}g (saturated: {nutrition_data['fat_saturated']}g)")
+                                self.status_callback(f"  Carbohydrates: {nutrition_data['carbs_total']}g (sugars: {nutrition_data['carbs_sugars']}g)")
+                                self.status_callback(f"  Protein: {nutrition_data['protein']}g, Salt: {nutrition_data['salt']}g")
                         
                         # If we found ingredients but no nutrition table, still mark as partial nutrition data
                         if nutrition_data['ingredients'] and not nutrition_data['has_nutrition']:
