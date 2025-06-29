@@ -137,12 +137,13 @@ class DatabaseUpdater:
                 SELECT nutri_score_grade FROM nutritionfacts WHERE product_id = %s
             """
             existing_nutri = self._execute_query(existing_nutri_query, (product_id,), fetch=True)
+            has_existing_nutriscore = existing_nutri and existing_nutri[0].get('nutri_score_grade') is not None
             
-            # Calculate nutri-score only if product doesn't have one and we have sufficient data
+            # Calculate nutri-score if missing and we have sufficient data
             nutri_score_grade = None
             nutri_score_points = None
             
-            if not existing_nutri and energy_kj and energy_kj > 0 and carbs_sugars is not None and fat_saturated is not None and salt is not None and protein is not None:
+            if not has_existing_nutriscore and energy_kj and energy_kj > 0 and carbs_sugars is not None and fat_saturated is not None and salt is not None and protein is not None:
                 nutri_result = self.nutri_calculator.calculate_single_product(
                     energy_kj=energy_kj,
                     sugars=carbs_sugars,
