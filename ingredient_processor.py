@@ -162,42 +162,51 @@ class IngredientProcessor:
             return ingredient
     
     def _get_or_create_ingredient(self, ingredient_name: str) -> int:
-        """Get existing ingredient ID or create new one with robust conflict handling"""
+        """Get existing ingredient ID or create new one using simple UPSERT"""
         try:
-            # Use a single UPSERT query that handles all cases
+            # Use a simple UPSERT that PostgreSQL handles atomically
             upsert_query = """
+                WITH upsert AS (
+                    UPDATE ingredient_analysis 
+                    SET frequency = frequency + 1 
+                    WHERE ingredient = %s 
+                    RETURNING id
+                )
                 INSERT INTO ingredient_analysis (ingredient, frequency)
-                VALUES (%s, 1)
-                ON CONFLICT (ingredient) DO UPDATE SET
-                    frequency = ingredient_analysis.frequency + 1
-                RETURNING id
+                SELECT %s, 1
+                WHERE NOT EXISTS (SELECT 1 FROM upsert)
+                RETURNING id;
             """
             
-            result = self._execute_query(upsert_query, (ingredient_name,), fetch=True)
+            # Try the upsert first
+            result = self._execute_query(upsert_query, (ingredient_name, ingredient_name), fetch=True)
             if result and len(result) > 0:
                 return result[0]['id']
             
-            # If upsert failed, try to get existing record
-            fallback_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
-            fallback_result = self._execute_query(fallback_query, (ingredient_name,), fetch=True)
+            # If upsert didn't return anything, the UPDATE part worked, so get the ID
+            select_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
+            fallback_result = self._execute_query(select_query, (ingredient_name,), fetch=True)
             if fallback_result and len(fallback_result) > 0:
                 return fallback_result[0]['id']
             
-            # If all else fails, return None
-            self.status_callback(f"Warning: Could not get/create ingredient ID for {ingredient_name}")
+            # Final fallback for any edge cases
+            self.status_callback(f"Warning: Could not process ingredient {ingredient_name}")
             return None
                 
         except Exception as e:
-            # Log the error but don't fail the entire process
-            self.status_callback(f"Error processing ingredient {ingredient_name}: {str(e)}")
-            # Try to get existing ingredient as fallback
+            # If there's any error, try a simple select as final fallback
             try:
-                fallback_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
-                fallback_result = self._execute_query(fallback_query, (ingredient_name,), fetch=True)
+                select_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
+                fallback_result = self._execute_query(select_query, (ingredient_name,), fetch=True)
                 if fallback_result and len(fallback_result) > 0:
+                    # Update frequency manually
+                    update_query = "UPDATE ingredient_analysis SET frequency = frequency + 1 WHERE id = %s"
+                    self._execute_query(update_query, (fallback_result[0]['id'],))
                     return fallback_result[0]['id']
             except:
                 pass
+            
+            self.status_callback(f"Error processing ingredient {ingredient_name}: {str(e)}")
             return None
     
     def _create_ingredient_mapping(self, ingredient_id: int, sku: str):
