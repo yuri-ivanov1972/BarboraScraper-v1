@@ -149,14 +149,19 @@ class IngredientProcessor:
             # Remove percentages
             ingredient = re.sub(r'\d+%', '', ingredient)
             
+            # Remove certification and origin information (case insensitive)
+            # Common patterns: "Lauksaimniecība ES", "LV-BIO-02", etc.
+            ingredient = re.sub(r'\.\s*(lauksaimniecība\s+es|lv-bio-\d+|es|eu|organic|bio).*', '', ingredient, flags=re.IGNORECASE)
+            ingredient = re.sub(r'\s+(lauksaimniecība\s+es|lv-bio-\d+|es|eu|organic|bio).*', '', ingredient, flags=re.IGNORECASE)
+            
             # Remove extra whitespace
             ingredient = re.sub(r'\s+', ' ', ingredient).strip()
             
             # Remove leading/trailing punctuation
             ingredient = ingredient.strip('.,;:')
             
-            # Keep original case for database matching (don't convert to title case)
-            return ingredient
+            # Convert to lowercase for consistent matching
+            return ingredient.lower()
             
         except Exception as e:
             return ingredient
