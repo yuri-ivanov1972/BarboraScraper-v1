@@ -136,6 +136,12 @@ The application uses a PostgreSQL database with the following key tables:
   - Enhanced ingredient processor with retry logic and robust error handling for database constraint conflicts
   - Successfully tested complete fix with product 961367: All 3 ingredients processed correctly (VĀJPIENS, ieraugs, LV-BIO-02)
   - System now handles all ingredient processing scenarios without database constraint violations
+  - Implemented ingredient deduplicator tool: Created comprehensive duplicate detection and merging system
+  - Fixed ingredient normalization completely: All case variations now map to existing ingredients (e.g., "VĀJPIENS" → "vājpiens" ID 2684)
+  - Cleaned up duplicate ingredients: Merged "VĀJPIENS" (ID 15618) into existing "vājpiens" (ID 2684) with frequency 82
+  - Enhanced ingredient processor with similarity checking: Prevents creation of duplicates before database insertion
+  - Verified zero duplicate ingredients remain: Database is clean with proper case-insensitive ingredient matching
+  - Successfully tested complete workflow: Product 961367 processes correctly with all 3 ingredients mapped to existing records
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module

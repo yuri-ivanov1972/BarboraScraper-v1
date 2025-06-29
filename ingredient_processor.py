@@ -167,12 +167,27 @@ class IngredientProcessor:
         normalized_name = self._normalize_ingredient(ingredient_name)
         if not normalized_name:
             return None
+        
+        # Use the deduplicator to check for existing similar ingredients
+        from ingredient_deduplicator import IngredientDeduplicator
+        deduplicator = IngredientDeduplicator()
+        existing_id = deduplicator.find_ingredient_by_similarity(normalized_name)
+        deduplicator.close()
+        
+        if existing_id:
+            # Update frequency of existing ingredient
+            try:
+                update_query = "UPDATE ingredient_analysis SET frequency = frequency + 1 WHERE id = %s"
+                self._execute_query(update_query, (existing_id,))
+                return existing_id
+            except:
+                return existing_id  # Return ID even if frequency update fails
             
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
-                # First, try to find existing ingredient (case-insensitive)
+                # Double-check with exact case-insensitive search
                 select_query = "SELECT id FROM ingredient_analysis WHERE LOWER(ingredient) = LOWER(%s)"
                 result = self._execute_query(select_query, (normalized_name,), fetch=True)
                 

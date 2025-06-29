@@ -84,11 +84,17 @@ class IngredientDeduplicator:
             
             # Update product mappings to point to primary ingredient
             for dup in duplicates:
+                # Use INSERT ... ON CONFLICT to handle duplicate mappings
                 cursor.execute("""
-                    UPDATE ingredient_product_mapping 
-                    SET ingredient_id = %s 
-                    WHERE ingredient_id = %s
+                    INSERT INTO ingredient_product_mapping (ingredient_id, product_sku)
+                    SELECT %s, product_sku FROM ingredient_product_mapping WHERE ingredient_id = %s
+                    ON CONFLICT (ingredient_id, product_sku) DO NOTHING
                 """, (primary['id'], dup['id']))
+                
+                # Delete old mappings
+                cursor.execute("""
+                    DELETE FROM ingredient_product_mapping WHERE ingredient_id = %s
+                """, (dup['id'],))
                 
                 self.status_callback(f"  Moved mappings from '{dup['ingredient']}' (ID: {dup['id']})")
             
