@@ -340,6 +340,35 @@ def product_manager_tab():
                         if ingredients:
                             st.subheader("Ingredients")
                             st.text(ingredients)
+                            
+                            # Show ingredient mappings
+                            try:
+                                import os, psycopg2
+                                db_url = os.getenv('PRODUCTS_DB_URL')
+                                conn = psycopg2.connect(db_url)
+                                cursor = conn.cursor()
+                                
+                                cursor.execute('''
+                                    SELECT ipm.ingredient_id, ia.ingredient, ia.frequency
+                                    FROM ingredient_product_mapping ipm
+                                    JOIN ingredient_analysis ia ON ipm.ingredient_id = ia.id
+                                    WHERE ipm.product_sku = %s
+                                    ORDER BY ia.frequency DESC
+                                ''', (sku,))
+                                
+                                mappings = cursor.fetchall()
+                                if mappings:
+                                    st.write("**Ingredient Analysis:**")
+                                    for mapping in mappings:
+                                        ingredient_id, ingredient_name, frequency = mapping
+                                        st.write(f"• {ingredient_name} (ID: {ingredient_id}, appears in {frequency} products)")
+                                else:
+                                    st.write("*No ingredient mappings found*")
+                                
+                                cursor.close()
+                                conn.close()
+                            except Exception as e:
+                                st.write(f"*Error loading ingredient mappings: {str(e)}*")
                     else:
                         st.warning("No nutrition data found (may be fruits/vegetables without nutrition labels)")
                         

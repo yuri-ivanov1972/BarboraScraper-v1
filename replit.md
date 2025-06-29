@@ -121,6 +121,11 @@ The application uses a PostgreSQL database with the following key tables:
   - Fixed nutri-score calculation for new products: Enhanced conditional logic to detect missing nutri-scores properly
   - Integrated automatic nutri-score calculation using nutriscore_calculator module for products with complete nutrition data
   - Product Manager now displays nutri-score information (grade and points) for products with nutrition facts
+  - Fixed ingredient mapping system: Resolved case sensitivity issues in ingredient_processor.py (preserved original case instead of title case)
+  - Enhanced ingredient extraction for single-ingredient products like "olas" (eggs) with proper normalization
+  - Integrated ingredient processing into database update workflow for all new products
+  - Product Manager now displays ingredient analysis with mappings to ingredient_analysis table and frequency data
+  - Successfully mapped product 4007406 ingredient "olas" to ingredient_analysis id=45 with frequency tracking
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module

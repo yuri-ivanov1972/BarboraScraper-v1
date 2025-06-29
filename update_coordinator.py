@@ -713,10 +713,8 @@ class UpdateCoordinator:
                     
                     # Process ingredients for new products
                     if nutrition_data.get('ingredients'):
-                        ingredient_result = self.ingredient_processor.process_product_ingredients(
-                            sku, nutrition_data['ingredients']
-                        )
-                        self.status_callback(f"Processed {ingredient_result.get('ingredients_added', 0)} ingredients")
+                        self.db_updater.process_product_ingredients(sku, nutrition_data['ingredients'])
+                        self.status_callback("Processed product ingredients")
                     
                     results['success'] = True
                     results['product_data']['product_id'] = product_id
