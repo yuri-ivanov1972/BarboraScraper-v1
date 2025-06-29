@@ -626,8 +626,10 @@ class UpdateCoordinator:
             self.status_callback("Step 4: Database operation...")
             
             if results['operation'] == 'update':
-                # Update existing product
-                success = self.db_updater.update_product_price(sku, price, True)
+                # Update existing product - determine availability based on price
+                is_available = float(price) > 0.0  # Price of 0.00 means unavailable
+                self.status_callback(f"Price: €{price} -> Availability: {is_available}")
+                success = self.db_updater.update_product_price(sku, price, is_available)
                 if success:
                     # Update nutrition data if available
                     if nutrition_data['has_nutrition']:
@@ -653,14 +655,16 @@ class UpdateCoordinator:
                     self.status_callback("Failed to update product")
             
             else:  # Create new product
-                # Prepare product data for creation
+                # Prepare product data for creation - determine availability based on price
+                is_available = float(price) > 0.0  # Price of 0.00 means unavailable
+                self.status_callback(f"New product - Price: €{price} -> Availability: {is_available}")
                 product_data = {
                     'sku': sku,
                     'name': product_name,
                     'price': price,
                     'rimi_url': product_url,
                     'category_id': category_id,
-                    'is_available': True
+                    'is_available': is_available
                 }
                 
                 # Add quantity parsing
