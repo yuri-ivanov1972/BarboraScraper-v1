@@ -72,6 +72,7 @@ class DatabaseUpdater:
             
             # Parse quantity if available
             quantity_value, quantity_unit = self._parse_quantity(name)
+            self.status_callback(f"Extracted quantity: {quantity_value} {quantity_unit} from '{name[:50]}'")
             
             self.status_callback(f"Adding new product: {sku} - {name[:50]}")
             
@@ -321,13 +322,17 @@ class DatabaseUpdater:
     def _parse_quantity(self, product_name: str) -> Tuple[Optional[Decimal], Optional[str]]:
         """Extract quantity from product name"""
         try:
-            # Look for patterns like "500g", "1.5L", "250ml", etc.
-            quantity_pattern = r'(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l|pcs|pc|gab)\b'
+            # Look for patterns like "500g", "1.5L", "250ml", "10 gb.", etc.
+            # Added Latvian units: gb (gabali = pieces), gab (gabali)
+            quantity_pattern = r'(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l|pcs|pc|gab|gb)\.?\b'
             match = re.search(quantity_pattern, product_name.lower())
             
             if match:
                 value = Decimal(match.group(1).replace(',', '.'))
-                unit = match.group(2)
+                unit = match.group(2).lower()
+                # Normalize Latvian units
+                if unit in ['gb', 'gab']:
+                    unit = 'pcs'
                 return value, unit
             
             return None, None
