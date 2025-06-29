@@ -105,6 +105,14 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
+- **June 29, 2025**: Fixed nutrition data parsing and database storage issues
+  - Identified and resolved Latvian nutrition label parsing problems with "tostarp" (including) prefixes
+  - Fixed field name mapping between extraction code and Streamlit display interface
+  - Corrected database connection issues to use proper PRODUCTS_DB_URL with nutritionfacts table
+  - Successfully implemented complete nutrition data extraction: Fat, Saturated Fat, Carbohydrates, Sugar
+  - Verified Product Manager displays accurate nutrition values from database
+  - Added comprehensive debug logging for nutrition extraction process
+
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
   - Added ingredient processor for new products only (not price updates)
