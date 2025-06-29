@@ -301,17 +301,17 @@ def product_manager_tab():
                             st.metric("Protein", f"{protein}g" if protein is not None else "N/A")
                         
                         with col2:
-                            fat = nutrition.get('fat')
+                            fat = nutrition.get('fat_total')  # Fix field name mapping
                             st.metric("Fat", f"{fat}g" if fat is not None else "N/A")
                             
-                            saturated_fat = nutrition.get('saturated_fat')
+                            saturated_fat = nutrition.get('fat_saturated')  # Fix field name mapping
                             st.metric("Saturated Fat", f"{saturated_fat}g" if saturated_fat is not None else "N/A")
                         
                         with col3:
-                            carbs = nutrition.get('carbohydrates')
+                            carbs = nutrition.get('carbs_total')  # Fix field name mapping
                             st.metric("Carbohydrates", f"{carbs}g" if carbs is not None else "N/A")
                             
-                            sugar = nutrition.get('sugar')
+                            sugar = nutrition.get('carbs_sugars')  # Fix field name mapping
                             st.metric("Sugar", f"{sugar}g" if sugar is not None else "N/A")
                         
                         # Additional nutrition info
