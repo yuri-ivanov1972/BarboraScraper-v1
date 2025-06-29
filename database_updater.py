@@ -135,8 +135,8 @@ class DatabaseUpdater:
             existing_nutri_query = """
                 SELECT nutriscore_grade FROM product_nutrition WHERE sku = %s
             """
-            # Get SKU from product_id
-            sku_query = "SELECT sku FROM products WHERE product_id = %s"
+            # Get SKU from product id
+            sku_query = "SELECT sku FROM products WHERE id = %s"
             sku_result = self._execute_query(sku_query, (product_id,), fetch=True)
             if not sku_result:
                 raise Exception(f"Product with ID {product_id} not found")
@@ -203,22 +203,17 @@ class DatabaseUpdater:
             raise Exception(f"Failed to add nutrition data: {str(e)}")
     
     def add_product_photos(self, product_id: int, photo_urls: List[str]) -> bool:
-        """Add product photos"""
+        """Add product photo to products table"""
         try:
             if not photo_urls:
                 return True
             
-            # Clear existing photos
-            self._execute_query("DELETE FROM productphotos WHERE product_id = %s", (product_id,))
-            
-            # Add new photos
-            for i, url in enumerate(photo_urls):
-                is_primary = (i == 0)  # First photo is primary
-                photo_query = """
-                    INSERT INTO productphotos (product_id, photo_url, is_primary)
-                    VALUES (%s, %s, %s)
-                """
-                self._execute_query(photo_query, (product_id, url, is_primary))
+            # Update the image_url field in products table with the first (main) photo
+            main_photo_url = photo_urls[0]
+            photo_query = """
+                UPDATE products SET image_url = %s WHERE id = %s
+            """
+            self._execute_query(photo_query, (main_photo_url, product_id))
             
             # Commit the transaction
             self.conn.commit()
