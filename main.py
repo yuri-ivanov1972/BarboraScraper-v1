@@ -211,13 +211,20 @@ def product_manager_tab():
             try:
                 from update_coordinator import UpdateCoordinator
                 
-                # Status display
+                # Status display with real-time logging
                 status_container = st.container()
                 progress_bar = st.progress(0)
+                log_container = st.empty()
+                
+                processing_logs = []
                 
                 def status_callback(msg):
+                    processing_logs.append(msg)
                     with status_container:
-                        st.write(f"📊 {msg}")
+                        st.write(f"🔄 {msg}")
+                    # Update log display
+                    log_text = "\n".join([f"[{i+1:02d}] {log}" for i, log in enumerate(processing_logs)])
+                    log_container.text_area("Processing Log", log_text, height=150)
                 
                 coordinator = UpdateCoordinator(status_callback)
                 
@@ -233,69 +240,164 @@ def product_manager_tab():
                 if result['success']:
                     st.success("Product processed successfully!")
                     
+                    # Show detailed debug information
+                    with st.expander("Debug: Raw Result Data", expanded=False):
+                        st.json(result)
+                    
                     # Operation type
                     if result['operation'] == 'create':
-                        st.info("🆕 New product created in database")
+                        st.info("New product created in database")
                     else:
-                        st.info("📝 Existing product updated")
+                        st.info("Existing product updated")
                     
                     # Product information
                     st.subheader("Product Information")
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        st.write(f"**SKU**: {result['sku']}")
+                        st.write(f"**SKU**: {sku}")
                         st.write(f"**Name**: {result['product_data'].get('name', 'N/A')}")
                         st.write(f"**Price**: €{result['product_data'].get('price', '0.00')}")
-                        st.write(f"**Category**: {result['category_code']}")
+                        st.write(f"**Category**: {selected_category}")
+                        
+                        # Show quantity if available
+                        if result['product_data'].get('quantity_value'):
+                            st.write(f"**Quantity**: {result['product_data']['quantity_value']} {result['product_data'].get('quantity_unit', '')}")
                     
                     with col2:
                         # Product image
-                        if result['product_data'].get('image_url'):
+                        image_url = result['product_data'].get('image_url')
+                        if image_url:
+                            st.success("Product image found")
                             try:
-                                st.image(result['product_data']['image_url'], width=200, caption="Product Image")
-                            except:
-                                st.write(f"**Image URL**: {result['product_data']['image_url']}")
+                                st.image(image_url, width=200, caption="Product Image")
+                            except Exception as img_error:
+                                st.error(f"Error displaying image: {str(img_error)}")
+                                st.write(f"**Image URL**: {image_url}")
                         else:
-                            st.write("**Image**: Not available")
+                            st.warning("No product image found")
                     
-                    # Nutrition data
+                    # Nutrition data - fix field mapping
                     nutrition = result['product_data'].get('nutrition', {})
-                    if nutrition.get('has_nutrition'):
-                        st.subheader("Nutrition Information")
+                    st.subheader("Nutrition Information")
+                    
+                    if nutrition and nutrition.get('has_nutrition'):
+                        st.success("Nutrition data found and processed")
                         
+                        # Create nutrition display with correct field names
                         col1, col2, col3 = st.columns(3)
+                        
                         with col1:
-                            st.metric("Energy", f"{nutrition.get('energy_kcal', 0)} kcal")
-                            st.metric("Protein", f"{nutrition.get('protein', 0)}g")
+                            energy_kcal = nutrition.get('energy_kcal')
+                            energy_kj = nutrition.get('energy_kj')
+                            if energy_kcal:
+                                st.metric("Energy", f"{energy_kcal} kcal")
+                            elif energy_kj:
+                                st.metric("Energy", f"{energy_kj} kJ")
+                            else:
+                                st.metric("Energy", "N/A")
+                            
+                            protein = nutrition.get('protein')
+                            st.metric("Protein", f"{protein}g" if protein is not None else "N/A")
+                        
                         with col2:
-                            st.metric("Fat", f"{nutrition.get('fat_total', 0)}g")
-                            st.metric("Carbs", f"{nutrition.get('carbs_total', 0)}g")
+                            fat = nutrition.get('fat')
+                            st.metric("Fat", f"{fat}g" if fat is not None else "N/A")
+                            
+                            saturated_fat = nutrition.get('saturated_fat')
+                            st.metric("Saturated Fat", f"{saturated_fat}g" if saturated_fat is not None else "N/A")
+                        
                         with col3:
-                            st.metric("Sugar", f"{nutrition.get('carbs_sugars', 0)}g")
-                            st.metric("Salt", f"{nutrition.get('salt', 0)}g")
+                            carbs = nutrition.get('carbohydrates')
+                            st.metric("Carbohydrates", f"{carbs}g" if carbs is not None else "N/A")
+                            
+                            sugar = nutrition.get('sugar')
+                            st.metric("Sugar", f"{sugar}g" if sugar is not None else "N/A")
+                        
+                        # Additional nutrition info
+                        salt = nutrition.get('salt')
+                        if salt is not None:
+                            st.metric("Salt", f"{salt}g")
+                        
+                        fiber = nutrition.get('fiber')
+                        if fiber is not None:
+                            st.metric("Fiber", f"{fiber}g")
+                        
+                        # Nutri-score
+                        nutri_score = nutrition.get('nutri_score')
+                        if nutri_score:
+                            st.info(f"**Nutri-Score**: {nutri_score}")
                         
                         # Ingredients
-                        if nutrition.get('ingredients'):
-                            st.write(f"**Ingredients**: {nutrition['ingredients']}")
+                        ingredients = nutrition.get('ingredients')
+                        if ingredients:
+                            st.subheader("Ingredients")
+                            st.text(ingredients)
                     else:
-                        st.warning("No nutrition data found for this product")
+                        st.warning("No nutrition data found (may be fruits/vegetables without nutrition labels)")
+                        
+                        # Show what nutrition data was actually found
+                        if nutrition:
+                            st.write("Available nutrition fields:")
+                            for key, value in nutrition.items():
+                                st.write(f"- {key}: {value}")
                     
                     # Changes made
                     if result['changes']:
                         st.subheader("Changes Made")
                         changes = result['changes']
                         
-                        if changes.get('product_created'):
-                            st.write("✅ Product created in database")
-                        if changes.get('price_updated'):
-                            st.write("✅ Price updated")
-                        if changes.get('nutrition_updated') or changes.get('nutrition_added'):
-                            st.write("✅ Nutrition data added/updated")
-                        if changes.get('photo_updated') or changes.get('photo_added'):
-                            st.write("✅ Product photo added/updated")
-                        if changes.get('ingredients_processed'):
-                            st.write("✅ Ingredients processed")
+                        for change, status in changes.items():
+                            if status:
+                                st.write(f"✅ {change.replace('_', ' ').title()}")
+                    
+                    # Database verification
+                    st.subheader("Database Verification")
+                    try:
+                        from database_updater import DatabaseUpdater
+                        db_updater = DatabaseUpdater()
+                        
+                        # Verify product exists in database
+                        db_product = db_updater.get_product_by_sku(sku)
+                        if db_product:
+                            st.success(f"✅ Product verified in database (ID: {db_product['product_id']})")
+                            
+                            # Check for nutrition data
+                            nutrition_query = """
+                            SELECT energy_kcal, protein, fat, carbohydrates, sugar, salt, fiber, nutri_score
+                            FROM nutrition 
+                            WHERE product_id = %s
+                            """
+                            nutrition_data = db_updater._execute_query(nutrition_query, (db_product['product_id'],), fetch=True)
+                            
+                            if nutrition_data:
+                                st.info(f"✅ Nutrition data verified: {len(nutrition_data)} records")
+                                latest_nutrition = nutrition_data[0]
+                                st.write(f"Energy: {latest_nutrition.get('energy_kcal')} kcal, Protein: {latest_nutrition.get('protein')}g")
+                            else:
+                                st.warning("No nutrition data found in database")
+                            
+                            # Check for photos
+                            photo_query = """
+                            SELECT photo_url, is_main 
+                            FROM productphotos 
+                            WHERE product_id = %s
+                            """
+                            photo_data = db_updater._execute_query(photo_query, (db_product['product_id'],), fetch=True)
+                            
+                            if photo_data:
+                                st.info(f"✅ Photos verified: {len(photo_data)} images")
+                                for photo in photo_data:
+                                    if photo.get('is_main'):
+                                        st.write(f"Main photo: {photo['photo_url'][:60]}...")
+                            else:
+                                st.warning("No photos found in database")
+                        else:
+                            st.error("❌ Product not found in database after processing")
+                        
+                        db_updater.close()
+                    except Exception as db_error:
+                        st.error(f"Database verification failed: {str(db_error)}")
                 
                 else:
                     st.error("Product processing failed")
