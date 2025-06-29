@@ -162,43 +162,42 @@ class IngredientProcessor:
             return ingredient
     
     def _get_or_create_ingredient(self, ingredient_name: str) -> int:
-        """Get existing ingredient ID or create new one"""
+        """Get existing ingredient ID or create new one with robust conflict handling"""
         try:
-            # Check if ingredient exists (case insensitive)
-            check_query = "SELECT id FROM ingredient_analysis WHERE LOWER(ingredient) = LOWER(%s)"
-            result = self._execute_query(check_query, (ingredient_name,), fetch=True)
+            # Use a single UPSERT query that handles all cases
+            upsert_query = """
+                INSERT INTO ingredient_analysis (ingredient, frequency)
+                VALUES (%s, 1)
+                ON CONFLICT (ingredient) DO UPDATE SET
+                    frequency = ingredient_analysis.frequency + 1
+                RETURNING id
+            """
             
-            if result:
-                # Update frequency for existing ingredient
-                ingredient_id = result[0]['id']
-                update_query = """
-                    UPDATE ingredient_analysis 
-                    SET frequency = frequency + 1 
-                    WHERE id = %s
-                """
-                self._execute_query(update_query, (ingredient_id,))
-                return ingredient_id
-            else:
-                # Create new ingredient using INSERT ... ON CONFLICT to handle race conditions
-                insert_query = """
-                    INSERT INTO ingredient_analysis (ingredient, frequency)
-                    VALUES (%s, 1)
-                    ON CONFLICT (ingredient) DO UPDATE SET
-                        frequency = ingredient_analysis.frequency + 1
-                    RETURNING id
-                """
-                result = self._execute_query(insert_query, (ingredient_name,), fetch=True)
-                if result:
-                    return result[0]['id']
-                else:
-                    # Fallback: try to get the ID again
-                    fallback_result = self._execute_query(check_query, (ingredient_name,), fetch=True)
-                    if fallback_result:
-                        return fallback_result[0]['id']
-                    return None
+            result = self._execute_query(upsert_query, (ingredient_name,), fetch=True)
+            if result and len(result) > 0:
+                return result[0]['id']
+            
+            # If upsert failed, try to get existing record
+            fallback_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
+            fallback_result = self._execute_query(fallback_query, (ingredient_name,), fetch=True)
+            if fallback_result and len(fallback_result) > 0:
+                return fallback_result[0]['id']
+            
+            # If all else fails, return None
+            self.status_callback(f"Warning: Could not get/create ingredient ID for {ingredient_name}")
+            return None
                 
         except Exception as e:
+            # Log the error but don't fail the entire process
             self.status_callback(f"Error processing ingredient {ingredient_name}: {str(e)}")
+            # Try to get existing ingredient as fallback
+            try:
+                fallback_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
+                fallback_result = self._execute_query(fallback_query, (ingredient_name,), fetch=True)
+                if fallback_result and len(fallback_result) > 0:
+                    return fallback_result[0]['id']
+            except:
+                pass
             return None
     
     def _create_ingredient_mapping(self, ingredient_id: int, sku: str):
