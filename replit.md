@@ -118,6 +118,9 @@ The application uses a PostgreSQL database with the following key tables:
   - Implemented comprehensive quantity data population: 99.7% coverage preserving existing Latvian vocabulary
   - Products with fixed quantities show values and units in Latvian (e.g., "10 gab"), products sold by weight show unit only (kg)
   - Corrected field mapping between processing results and Streamlit display interface for quantity information
+  - Fixed nutri-score calculation for new products: Enhanced conditional logic to detect missing nutri-scores properly
+  - Integrated automatic nutri-score calculation using nutriscore_calculator module for products with complete nutrition data
+  - Product Manager now displays nutri-score information (grade and points) for products with nutrition facts
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module

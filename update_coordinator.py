@@ -607,6 +607,23 @@ class UpdateCoordinator:
             
             # Get nutrition data
             nutrition_data = self._get_nutrition_data(product_url)
+            
+            # Add nutri-score information for existing products
+            if results['operation'] == 'update' and existing_product:
+                product_id = existing_product['product_id']
+                nutri_query = """
+                    SELECT nutri_score_grade, nutri_score_points 
+                    FROM nutritionfacts 
+                    WHERE product_id = %s
+                """
+                nutri_result = self.db_updater._execute_query(nutri_query, (product_id,), fetch=True)
+                if nutri_result and nutri_result[0].get('nutri_score_grade'):
+                    grade = nutri_result[0]['nutri_score_grade']
+                    points = nutri_result[0]['nutri_score_points']
+                    nutrition_data['nutri_score'] = f"{grade} ({points} points)"
+                    nutrition_data['nutri_score_grade'] = grade
+                    nutrition_data['nutri_score_points'] = points
+            
             results['product_data']['nutrition'] = nutrition_data
             
             # Get product image
