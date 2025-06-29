@@ -572,11 +572,21 @@ class UpdateCoordinator:
                 price_elem = soup.select_one('.price-wrapper .price, .price-tag, .price')
                 if price_elem:
                     price_text = price_elem.get_text(strip=True)
-                    # Extract price number
+                    # Extract price number - handle newlines and spaces in price format
                     import re
-                    price_match = re.search(r'(\d+[.,]\d+)', price_text.replace(' ', ''))
+                    # Remove all whitespace including newlines, then look for price pattern
+                    clean_text = re.sub(r'\s+', '', price_text)
+                    price_match = re.search(r'(\d+[.,]?\d*)', clean_text)
                     if price_match:
-                        price = price_match.group(1).replace(',', '.')
+                        price_str = price_match.group(1)
+                        # Handle cases like "359" -> "3.59" for multi-digit prices
+                        if '.' not in price_str and ',' not in price_str and len(price_str) >= 3:
+                            # Insert decimal point before last 2 digits
+                            price = f"{price_str[:-2]}.{price_str[-2:]}"
+                        else:
+                            price = price_str.replace(',', '.')
+                    
+                    self.status_callback(f"Price extraction: '{price_text}' -> '€{price}'")
                 
                 results['product_data'] = {
                     'name': product_name,
@@ -660,6 +670,11 @@ class UpdateCoordinator:
                         self.db_updater.add_product_photos(product_id, [image_url])
                         self.status_callback("Updated product photo")
                     
+                    # Process ingredients for updated products
+                    if nutrition_data.get('ingredients'):
+                        self.db_updater.process_product_ingredients(sku, nutrition_data['ingredients'])
+                        self.status_callback("Processed product ingredients")
+                    
                     # Add quantity data from existing product to results
                     results['product_data']['quantity_value'] = existing_product.get('quantity_value')
                     results['product_data']['quantity_unit'] = existing_product.get('quantity_unit')
@@ -668,7 +683,8 @@ class UpdateCoordinator:
                     results['changes'] = {
                         'price_updated': True,
                         'nutrition_updated': nutrition_data['has_nutrition'],
-                        'photo_updated': bool(image_url)
+                        'photo_updated': bool(image_url),
+                        'ingredients_processed': bool(nutrition_data.get('ingredients'))
                     }
                     self.status_callback("Product updated successfully")
                 else:

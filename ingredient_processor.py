@@ -106,11 +106,21 @@ class IngredientProcessor:
             # Remove common prefixes (case insensitive)
             text = re.sub(r'^(ingredients?|sastāvs?|sastāvdaļas?)[:;]?\s*', '', text, flags=re.IGNORECASE)
             
-            # For single ingredient products (like "olas"), don't split
+            # For single ingredient products (like "olas"), don't split by commas
             if ',' not in text and ';' not in text and ' un ' not in text.lower() and ' and ' not in text.lower():
-                # Single ingredient case
+                # Single ingredient case - but may contain compound ingredients like "vistas OLAS"
+                # Check if it contains adjective + noun pattern (common in Latvian)
+                words = text.strip().split()
+                if len(words) == 2:
+                    # For compound ingredients like "vistas OLAS", try to find the main ingredient
+                    main_ingredient = words[1].lower()  # "OLAS" -> "olas"
+                    normalized_main = self._normalize_ingredient(main_ingredient)
+                    if normalized_main and len(normalized_main) > 1:
+                        return [normalized_main]
+                
+                # Fallback to treating as single ingredient
                 normalized = self._normalize_ingredient(text.strip())
-                if normalized and len(normalized) > 1:  # Allow shorter ingredients like "olas"
+                if normalized and len(normalized) > 1:
                     return [normalized]
                 return []
             
@@ -154,12 +164,12 @@ class IngredientProcessor:
     def _get_or_create_ingredient(self, ingredient_name: str) -> int:
         """Get existing ingredient ID or create new one"""
         try:
-            # Check if ingredient exists
-            check_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
+            # Check if ingredient exists (case insensitive)
+            check_query = "SELECT id FROM ingredient_analysis WHERE LOWER(ingredient) = LOWER(%s)"
             result = self._execute_query(check_query, (ingredient_name,), fetch=True)
             
             if result:
-                # Update frequency
+                # Update frequency for existing ingredient
                 ingredient_id = result[0]['id']
                 update_query = """
                     UPDATE ingredient_analysis 
@@ -169,14 +179,23 @@ class IngredientProcessor:
                 self._execute_query(update_query, (ingredient_id,))
                 return ingredient_id
             else:
-                # Create new ingredient
+                # Create new ingredient using INSERT ... ON CONFLICT to handle race conditions
                 insert_query = """
                     INSERT INTO ingredient_analysis (ingredient, frequency)
                     VALUES (%s, 1)
+                    ON CONFLICT (ingredient) DO UPDATE SET
+                        frequency = ingredient_analysis.frequency + 1
                     RETURNING id
                 """
                 result = self._execute_query(insert_query, (ingredient_name,), fetch=True)
-                return result[0]['id']
+                if result:
+                    return result[0]['id']
+                else:
+                    # Fallback: try to get the ID again
+                    fallback_result = self._execute_query(check_query, (ingredient_name,), fetch=True)
+                    if fallback_result:
+                        return fallback_result[0]['id']
+                    return None
                 
         except Exception as e:
             self.status_callback(f"Error processing ingredient {ingredient_name}: {str(e)}")
