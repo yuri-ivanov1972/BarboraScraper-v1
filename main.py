@@ -362,10 +362,10 @@ def product_manager_tab():
                         if db_product:
                             st.success(f"✅ Product verified in database (ID: {db_product['product_id']})")
                             
-                            # Check for nutrition data
+                            # Check for nutrition data - use correct table name
                             nutrition_query = """
-                            SELECT energy_kcal, protein, fat, carbohydrates, sugar, salt, fiber, nutri_score
-                            FROM nutrition 
+                            SELECT energy_kcal, protein, fat_total, carbs_total, carbs_sugars, salt, fiber, nutri_score_grade
+                            FROM nutritionfacts 
                             WHERE product_id = %s
                             """
                             nutrition_data = db_updater._execute_query(nutrition_query, (db_product['product_id'],), fetch=True)
@@ -374,12 +374,13 @@ def product_manager_tab():
                                 st.info(f"✅ Nutrition data verified: {len(nutrition_data)} records")
                                 latest_nutrition = nutrition_data[0]
                                 st.write(f"Energy: {latest_nutrition.get('energy_kcal')} kcal, Protein: {latest_nutrition.get('protein')}g")
+                                st.write(f"Nutri-Score: {latest_nutrition.get('nutri_score_grade', 'N/A')}")
                             else:
                                 st.warning("No nutrition data found in database")
                             
-                            # Check for photos
+                            # Check for photos - use correct field name
                             photo_query = """
-                            SELECT photo_url, is_main 
+                            SELECT photo_url, is_primary 
                             FROM productphotos 
                             WHERE product_id = %s
                             """
@@ -388,8 +389,8 @@ def product_manager_tab():
                             if photo_data:
                                 st.info(f"✅ Photos verified: {len(photo_data)} images")
                                 for photo in photo_data:
-                                    if photo.get('is_main'):
-                                        st.write(f"Main photo: {photo['photo_url'][:60]}...")
+                                    if photo.get('is_primary'):
+                                        st.write(f"Primary photo: {photo['photo_url'][:60]}...")
                             else:
                                 st.warning("No photos found in database")
                         else:

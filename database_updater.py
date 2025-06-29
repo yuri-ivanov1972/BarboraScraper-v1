@@ -117,17 +117,19 @@ class DatabaseUpdater:
             True if successful
         """
         try:
-            # Extract nutrition values with safe conversion
+            # Extract nutrition values with safe conversion - map from extracted data to schema fields
             ingredients_text = nutrition_data.get('ingredients', '')
-            energy_kcal = float(nutrition_data.get('energy_kcal', 0)) if nutrition_data.get('energy_kcal') else 0
-            energy_kj = float(nutrition_data.get('energy_kj', 0)) if nutrition_data.get('energy_kj') else 0
-            fat_total = float(nutrition_data.get('fat_total', 0)) if nutrition_data.get('fat_total') else 0
-            fat_saturated = float(nutrition_data.get('fat_saturated', 0)) if nutrition_data.get('fat_saturated') else 0
-            carbs_total = float(nutrition_data.get('carbs_total', 0)) if nutrition_data.get('carbs_total') else 0
-            carbs_sugars = float(nutrition_data.get('carbs_sugars', 0)) if nutrition_data.get('carbs_sugars') else 0
-            protein = float(nutrition_data.get('protein', 0)) if nutrition_data.get('protein') else 0
-            salt = float(nutrition_data.get('salt', 0)) if nutrition_data.get('salt') else 0
-            fiber = float(nutrition_data.get('fiber', 0)) if nutrition_data.get('fiber') else 0
+            energy_kcal = float(nutrition_data.get('energy_kcal', 0)) if nutrition_data.get('energy_kcal') else None
+            energy_kj = float(nutrition_data.get('energy_kj', 0)) if nutrition_data.get('energy_kj') else None
+            
+            # Map extracted field names to database field names
+            fat_total = float(nutrition_data.get('fat', 0)) if nutrition_data.get('fat') else None
+            fat_saturated = float(nutrition_data.get('saturated_fat', 0)) if nutrition_data.get('saturated_fat') else None
+            carbs_total = float(nutrition_data.get('carbohydrates', 0)) if nutrition_data.get('carbohydrates') else None
+            carbs_sugars = float(nutrition_data.get('sugar', 0)) if nutrition_data.get('sugar') else None
+            protein = float(nutrition_data.get('protein', 0)) if nutrition_data.get('protein') else None
+            salt = float(nutrition_data.get('salt', 0)) if nutrition_data.get('salt') else None
+            fiber = float(nutrition_data.get('fiber', 0)) if nutrition_data.get('fiber') else None
             
             # Check if product already has nutri-score
             existing_nutri_query = """
@@ -139,7 +141,7 @@ class DatabaseUpdater:
             nutri_score_grade = None
             nutri_score_points = None
             
-            if not existing_nutri and energy_kj > 0 and carbs_sugars is not None and fat_saturated is not None and salt is not None and protein is not None:
+            if not existing_nutri and energy_kj and energy_kj > 0 and carbs_sugars is not None and fat_saturated is not None and salt is not None and protein is not None:
                 nutri_result = self.nutri_calculator.calculate_single_product(
                     energy_kj=energy_kj,
                     sugars=carbs_sugars,
@@ -186,6 +188,8 @@ class DatabaseUpdater:
                 datetime.now(timezone.utc)
             ))
             
+            # Commit the transaction
+            self.conn.commit()
             self.status_callback(f"Added nutrition data for product ID {product_id}")
             return True
             
@@ -210,6 +214,8 @@ class DatabaseUpdater:
                 """
                 self._execute_query(photo_query, (product_id, url, is_primary))
             
+            # Commit the transaction
+            self.conn.commit()
             self.status_callback(f"Added {len(photo_urls)} photos for product ID {product_id}")
             return True
             
