@@ -335,6 +335,10 @@ class DatabaseUpdater:
                     unit = 'pcs'
                 return value, unit
             
+            # Check for products sold by weight (ending with " kg")
+            if product_name.lower().strip().endswith(' kg'):
+                return None, 'kg'  # Variable weight, no fixed quantity
+            
             return None, None
         except:
             return None, None
