@@ -126,6 +126,11 @@ The application uses a PostgreSQL database with the following key tables:
   - Integrated ingredient processing into database update workflow for all new products
   - Product Manager now displays ingredient analysis with mappings to ingredient_analysis table and frequency data
   - Successfully mapped product 4007406 ingredient "olas" to ingredient_analysis id=45 with frequency tracking
+  - Fixed price parsing for multi-line formats: Enhanced regex to handle newlines and reconstruct prices like "3\n59" → "€3.59"
+  - Fixed ingredient processing database constraint errors: Added ON CONFLICT handling and case-insensitive matching
+  - Enhanced ingredient extraction for compound ingredients: "vistas OLAS" now correctly maps to "olas" (main ingredient)
+  - Integrated ingredient processing into update workflow: Both new products and updates now process ingredients automatically
+  - Successfully resolved product 999409 issues: Price €3.59 (was €0.00), availability True (was False), ingredient "olas" mapped correctly
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
