@@ -147,6 +147,10 @@ The application uses a PostgreSQL database with the following key tables:
   - Cleaned database completely: All case variations and certification suffixes now map to existing base ingredients
   - System now handles all Latvian certification patterns: "Lauksaimniecība ES", "LV-BIO-XX", "bioloģisks" properly stripped during normalization
   - Final verification successful: Product 961367 shows perfect ingredient mapping (vājpiens→ID 2684, ieraugs→ID 566, LV-BIO-02→ID 15620)
+  - Implemented proper tokenization approach: Instead of string-based regex stripping, system now splits ingredients into tokens first
+  - Enhanced ingredient processing: "ieraugs. Lauksaimniecība ES" → ["ieraugs.", "Lauksaimniecība", "ES"] → filters certification tokens → keeps only "ieraugs"
+  - Token-based filtering system: Maintains comprehensive list of certification tokens (Lauksaimniecība, ES, bio, bioloģisks, etc.) for precise filtering
+  - Improved maintainability: Easy to extend with new certification patterns without complex regex modifications
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
