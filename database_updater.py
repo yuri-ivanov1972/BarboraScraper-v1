@@ -133,9 +133,16 @@ class DatabaseUpdater:
             
             # Check if product already has nutri-score
             existing_nutri_query = """
-                SELECT nutri_score_grade FROM nutritionfacts WHERE product_id = %s
+                SELECT nutriscore_grade FROM product_nutrition WHERE sku = %s
             """
-            existing_nutri = self._execute_query(existing_nutri_query, (product_id,), fetch=True)
+            # Get SKU from product_id
+            sku_query = "SELECT sku FROM products WHERE product_id = %s"
+            sku_result = self._execute_query(sku_query, (product_id,), fetch=True)
+            if not sku_result:
+                raise Exception(f"Product with ID {product_id} not found")
+            sku = sku_result[0]['sku']
+            
+            existing_nutri = self._execute_query(existing_nutri_query, (sku,), fetch=True)
             
             # Calculate nutri-score only if product doesn't have one and we have sufficient data
             nutri_score_grade = None
@@ -159,33 +166,32 @@ class DatabaseUpdater:
             elif existing_nutri:
                 self.status_callback(f"Product {product_id} already has nutri-score, skipping calculation")
             
-            # Insert nutrition data
+            # Insert nutrition data using correct table and field names
             nutrition_query = """
-                INSERT INTO nutritionfacts 
-                (product_id, ingredients_text, energy_kcal, energy_kj, fat_total, fat_saturated,
-                 carbs_total, carbs_sugars, protein, salt, fiber, nutri_score_grade, nutri_score_points,
-                 data_source_date)
+                INSERT INTO product_nutrition 
+                (sku, ingredients, energy_kcal, energy_kj, fat, saturated_fat,
+                 carbohydrates, sugars, protein, salt, nutriscore_grade, nutriscore_score,
+                 created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (product_id) DO UPDATE SET
-                    ingredients_text = EXCLUDED.ingredients_text,
+                ON CONFLICT (sku) DO UPDATE SET
+                    ingredients = EXCLUDED.ingredients,
                     energy_kcal = EXCLUDED.energy_kcal,
                     energy_kj = EXCLUDED.energy_kj,
-                    fat_total = EXCLUDED.fat_total,
-                    fat_saturated = EXCLUDED.fat_saturated,
-                    carbs_total = EXCLUDED.carbs_total,
-                    carbs_sugars = EXCLUDED.carbs_sugars,
+                    fat = EXCLUDED.fat,
+                    saturated_fat = EXCLUDED.saturated_fat,
+                    carbohydrates = EXCLUDED.carbohydrates,
+                    sugars = EXCLUDED.sugars,
                     protein = EXCLUDED.protein,
                     salt = EXCLUDED.salt,
-                    fiber = EXCLUDED.fiber,
-                    nutri_score_grade = EXCLUDED.nutri_score_grade,
-                    nutri_score_points = EXCLUDED.nutri_score_points,
-                    data_source_date = EXCLUDED.data_source_date
+                    nutriscore_grade = EXCLUDED.nutriscore_grade,
+                    nutriscore_score = EXCLUDED.nutriscore_score,
+                    updated_at = EXCLUDED.updated_at
             """
             
             self._execute_query(nutrition_query, (
-                product_id, ingredients_text, energy_kcal, energy_kj, fat_total, fat_saturated,
-                carbs_total, carbs_sugars, protein, salt, fiber, nutri_score_grade, nutri_score_points,
-                datetime.now(timezone.utc)
+                sku, ingredients_text, energy_kcal, energy_kj, fat_total, fat_saturated,
+                carbs_total, carbs_sugars, protein, salt, nutri_score_grade, nutri_score_points,
+                datetime.now(timezone.utc), datetime.now(timezone.utc)
             ))
             
             # Commit the transaction
