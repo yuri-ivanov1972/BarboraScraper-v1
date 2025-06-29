@@ -104,12 +104,12 @@ class DatabaseUpdater:
             self.conn.rollback()
             raise Exception(f"Failed to add product {sku}: {str(e)}")
     
-    def add_nutrition_data(self, product_id: int, nutrition_data: Dict, category_code: str = None) -> bool:
+    def add_nutrition_data(self, sku: str, nutrition_data: Dict, category_code: str = None) -> bool:
         """
         Add nutrition data for a product with conditional nutri-score calculation
         
         Args:
-            product_id: ID of the product
+            sku: Product SKU
             nutrition_data: Dictionary with nutrition information
             category_code: Product category for nutri-score calculation
             
@@ -135,13 +135,6 @@ class DatabaseUpdater:
             existing_nutri_query = """
                 SELECT nutriscore_grade FROM product_nutrition WHERE sku = %s
             """
-            # Get SKU from product id
-            sku_query = "SELECT sku FROM products WHERE id = %s"
-            sku_result = self._execute_query(sku_query, (product_id,), fetch=True)
-            if not sku_result:
-                raise Exception(f"Product with ID {product_id} not found")
-            sku = sku_result[0]['sku']
-            
             existing_nutri = self._execute_query(existing_nutri_query, (sku,), fetch=True)
             
             # Calculate nutri-score only if product doesn't have one and we have sufficient data
@@ -196,7 +189,7 @@ class DatabaseUpdater:
             
             # Commit the transaction
             self.conn.commit()
-            self.status_callback(f"Added nutrition data for product ID {product_id}")
+            self.status_callback(f"Added nutrition data for product SKU {sku}")
             return True
             
         except Exception as e:
