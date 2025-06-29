@@ -418,51 +418,51 @@ def main():
                         with st.spinner(f"Analyzing category {category_code}..."):
                             analyze_category(category_code.strip().upper())
                             st.success(f"Basic analysis complete for {category_code}")
-                
-                elif analysis_type == "Detailed Product Comparison":
-                    with st.spinner(f"Performing detailed comparison for {category_code}..."):
-                        result = compare_products_detailed(category_code.strip().upper())
-                        st.success(f"Detailed comparison complete for {category_code}")
-                        
-                        # Show download option for detailed results
-                        if result.new_products or result.missing_products:
-                            st.subheader("Export Results")
+                    
+                    elif analysis_type == "Detailed Product Comparison":
+                        with st.spinner(f"Performing detailed comparison for {category_code}..."):
+                            result = compare_products_detailed(category_code.strip().upper())
+                            st.success(f"Detailed comparison complete for {category_code}")
                             
-                            # Prepare CSV data
-                            csv_data = []
-                            
-                            # Add new products
-                            for product in result.new_products:
-                                csv_data.append({
-                                    'Status': 'New',
-                                    'SKU': product.sku,
-                                    'Name': product.name,
-                                    'Price': product.website_data.price if product.website_data and product.website_data.price else '',
-                                    'URL': product.website_data.url if product.website_data and product.website_data.url else ''
-                                })
-                            
-                            # Add missing products
-                            for product in result.missing_products:
-                                csv_data.append({
-                                    'Status': 'Missing',
-                                    'SKU': product.sku,
-                                    'Name': product.name,
-                                    'Price': product.database_data.get('price', '') if product.database_data else '',
-                                    'URL': product.database_data.get('rimi_url', '') if product.database_data else ''
-                                })
-                            
-                            if csv_data:
-                                import pandas as pd
-                                df = pd.DataFrame(csv_data)
-                                csv = df.to_csv(index=False)
+                            # Show download option for detailed results
+                            if result.new_products or result.missing_products:
+                                st.subheader("Export Results")
                                 
-                                st.download_button(
-                                    label="Download Results as CSV",
-                                    data=csv,
-                                    file_name=f"{category_code}_comparison.csv",
-                                    mime="text/csv"
-                                )
-                
+                                # Prepare CSV data
+                                csv_data = []
+                                
+                                # Add new products
+                                for product in result.new_products:
+                                    csv_data.append({
+                                        'Status': 'New',
+                                        'SKU': product.sku,
+                                        'Name': product.name,
+                                        'Price': product.website_data.price if product.website_data and product.website_data.price else '',
+                                        'URL': product.website_data.url if product.website_data and product.website_data.url else ''
+                                    })
+                                
+                                # Add missing products
+                                for product in result.missing_products:
+                                    csv_data.append({
+                                        'Status': 'Missing',
+                                        'SKU': product.sku,
+                                        'Name': product.name,
+                                        'Price': product.database_data.get('price', '') if product.database_data else '',
+                                        'URL': product.database_data.get('rimi_url', '') if product.database_data else ''
+                                    })
+                                
+                                if csv_data:
+                                    import pandas as pd
+                                    df = pd.DataFrame(csv_data)
+                                    csv = df.to_csv(index=False)
+                                    
+                                    st.download_button(
+                                        label="Download Results as CSV",
+                                        data=csv,
+                                        file_name=f"{category_code}_comparison.csv",
+                                        mime="text/csv"
+                                    )
+                    
                 except Exception as e:
                     st.error(f"Analysis failed: {str(e)}")
             else:
@@ -481,44 +481,6 @@ def main():
             from core_parser import DatabaseConnection
             db = DatabaseConnection()
             
-            categories = db.get_categories()
-            
-            if categories:
-                st.write(f"Found {len(categories)} categories in database:")
-                
-                # Group by main category
-                main_categories = {}
-                for cat in categories[:50]:  # Show first 50
-                    main_code = cat['rimi_category_code'].split('-')[1] if '-' in cat['rimi_category_code'] else cat['rimi_category_code']
-                    if main_code not in main_categories:
-                        main_categories[main_code] = []
-                    main_categories[main_code].append(cat)
-                
-                for main_code, cats in list(main_categories.items())[:10]:
-                    st.write(f"**SH-{main_code}**: {len(cats)} subcategories")
-                    for cat in cats[:3]:
-                        st.text(f"  - {cat['rimi_category_code']}: {cat.get('name_lv', 'N/A')}")
-                    if len(cats) > 3:
-                        st.text(f"  ... and {len(cats)-3} more")
-            else:
-                st.warning("No categories found in database")
-        except Exception as e:
-            st.error(f"Database connection error: {str(e)}")
-                                    data=csv,
-                                    file_name=f"{category_code}_product_comparison.csv",
-                                    mime="text/csv"
-                                )
-                
-            except Exception as e:
-                st.error(f"Analysis error: {str(e)}")
-                st.write("Please check the category code and try again.")
-        else:
-            st.error("Please enter a category code")
-    
-    # Show available categories
-    with st.expander("Available Categories"):
-        try:
-            db = DatabaseConnection()
             categories = db.get_categories()
             
             if categories:
