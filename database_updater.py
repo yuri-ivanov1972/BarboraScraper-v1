@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import re
 from decimal import Decimal
 from nutriscore_calculator import NutriscoreCalculator
+from ingredient_processor import IngredientProcessor
 
 class DatabaseUpdater:
     """Core database updater for PRODUCTS_DB_URL database"""
@@ -22,6 +23,7 @@ class DatabaseUpdater:
             raise ValueError("PRODUCTS_DB_URL environment variable not set")
         
         self.nutri_calculator = NutriscoreCalculator()
+        self.ingredient_processor = None
         self.conn = None
         self._connect()
     
@@ -202,6 +204,40 @@ class DatabaseUpdater:
             
         except Exception as e:
             raise Exception(f"Failed to add nutrition data: {str(e)}")
+    
+    def process_product_ingredients(self, sku: str, ingredients_text: str) -> bool:
+        """
+        Process ingredients for a product using ingredient processor
+        
+        Args:
+            sku: Product SKU
+            ingredients_text: Raw ingredients text
+            
+        Returns:
+            True if successful
+        """
+        try:
+            if not ingredients_text or ingredients_text.strip() == '':
+                self.status_callback(f"No ingredients to process for product {sku}")
+                return True
+            
+            # Initialize ingredient processor if not already done
+            if not self.ingredient_processor:
+                self.ingredient_processor = IngredientProcessor(self.status_callback)
+            
+            # Process ingredients
+            result = self.ingredient_processor.process_product_ingredients(sku, ingredients_text)
+            
+            if result.get('processed', 0) > 0:
+                self.status_callback(f"Processed {result['processed']} ingredients for product {sku}")
+                return True
+            else:
+                self.status_callback(f"No ingredients processed for product {sku}")
+                return True
+                
+        except Exception as e:
+            self.status_callback(f"Error processing ingredients for {sku}: {str(e)}")
+            return False
     
     def add_product_photos(self, product_id: int, photo_urls: List[str]) -> bool:
         """Add product photos to productphotos table"""

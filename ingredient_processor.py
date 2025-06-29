@@ -101,19 +101,27 @@ class IngredientProcessor:
         """Extract and normalize individual ingredients from text"""
         try:
             # Clean the text
-            text = ingredients_text.lower().strip()
+            text = ingredients_text.strip()
             
-            # Remove common prefixes
-            text = re.sub(r'^(ingredients?|sastāvs?|sastāvdaļas?)[:;]?\s*', '', text)
+            # Remove common prefixes (case insensitive)
+            text = re.sub(r'^(ingredients?|sastāvs?|sastāvdaļas?)[:;]?\s*', '', text, flags=re.IGNORECASE)
             
-            # Split by common delimiters
-            ingredients = re.split(r'[,;]|\band\b|\bun\b', text)
+            # For single ingredient products (like "olas"), don't split
+            if ',' not in text and ';' not in text and ' un ' not in text.lower() and ' and ' not in text.lower():
+                # Single ingredient case
+                normalized = self._normalize_ingredient(text.strip())
+                if normalized and len(normalized) > 1:  # Allow shorter ingredients like "olas"
+                    return [normalized]
+                return []
+            
+            # Split by common delimiters for multi-ingredient products
+            ingredients = re.split(r'[,;]|\band\b|\bun\b', text, flags=re.IGNORECASE)
             
             # Clean and normalize each ingredient
             normalized_ingredients = []
             for ingredient in ingredients:
                 normalized = self._normalize_ingredient(ingredient.strip())
-                if normalized and len(normalized) > 2:  # Minimum length filter
+                if normalized and len(normalized) > 1:  # Allow shorter ingredients
                     normalized_ingredients.append(normalized)
             
             return normalized_ingredients
@@ -137,9 +145,7 @@ class IngredientProcessor:
             # Remove leading/trailing punctuation
             ingredient = ingredient.strip('.,;:')
             
-            # Convert to title case for consistency
-            ingredient = ingredient.title()
-            
+            # Keep original case for database matching (don't convert to title case)
             return ingredient
             
         except Exception as e:
