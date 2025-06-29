@@ -432,6 +432,286 @@ class UpdateCoordinator:
         
         return "\n".join(csv_lines)
     
+    def extract_main_product_image(self, product_url: str) -> str:
+        """
+        Extract main product image URL from JSON-LD schema on product page
+        """
+        import requests
+        import json
+        import html
+        import re
+        from bs4 import BeautifulSoup
+        
+        try:
+            if not product_url:
+                return ""
+            
+            self.status_callback(f"Extracting product image from: {product_url}")
+            
+            # Create session with proper headers
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'lv,en-US;q=0.7,en;q=0.3',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            })
+            
+            response = session.get(product_url)
+            if response.status_code != 200:
+                self.status_callback(f"Failed to fetch product page: {response.status_code}")
+                return ""
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Look for JSON-LD script with Product schema
+            for script in soup.find_all('script', type='application/ld+json'):
+                try:
+                    if script.string:
+                        # Clean and parse JSON
+                        json_str = html.unescape(script.string)
+                        json_str = re.sub(r'\s+', ' ', json_str.replace('\\n', ' '))
+                        json_str = re.sub(r'\\(["\'])', r'\1', json_str)
+                        
+                        data = json.loads(json_str)
+                        if isinstance(data, dict) and data.get('@type') == 'Product':
+                            self.status_callback("Found product data in JSON-LD schema")
+                            
+                            # Extract image URL from array
+                            image_data = data.get('image', [])
+                            if isinstance(image_data, list) and len(image_data) > 0:
+                                image_url = image_data[0]
+                                if image_url:
+                                    self.status_callback(f"Found main product image: {image_url[:50]}...")
+                                    return image_url
+                            elif isinstance(image_data, str):
+                                self.status_callback(f"Found main product image: {image_data[:50]}...")
+                                return image_data
+                
+                except json.JSONDecodeError as e:
+                    self.status_callback(f"Error parsing JSON-LD: {str(e)}")
+                    continue
+                except Exception as e:
+                    self.status_callback(f"Error processing JSON-LD script: {str(e)}")
+                    continue
+            
+            # Fallback: try to find image in HTML
+            img_elem = soup.select_one('.gallery-image img, .card__image-wrapper img, .product-image img')
+            if img_elem:
+                image_url = img_elem.get('data-src') or img_elem.get('src')
+                if image_url:
+                    self.status_callback(f"Found fallback image: {image_url[:50]}...")
+                    return image_url
+            
+            self.status_callback("No product image found")
+            return ""
+            
+        except Exception as e:
+            self.status_callback(f"Error extracting product image: {str(e)}")
+            return ""
+    
+    def process_single_product(self, sku: str, category_code: str) -> Dict:
+        """
+        Process a single product by SKU - either update existing or create new
+        """
+        try:
+            results = {
+                'success': False,
+                'sku': sku,
+                'category_code': category_code,
+                'operation': '',
+                'product_data': {},
+                'changes': {},
+                'errors': []
+            }
+            
+            self.status_callback(f"=== Processing Product SKU: {sku} ===")
+            
+            # Step 1: Check if product exists on website
+            self.status_callback("Step 1: Checking product on Rimi website...")
+            
+            # Build product URL from SKU
+            product_url = f"https://www.rimi.lv/e-veikals/lv/produkti/p/{sku}"
+            
+            # Try to fetch the product page
+            try:
+                import requests
+                session = requests.Session()
+                session.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                
+                response = session.get(product_url)
+                if response.status_code == 404:
+                    results['errors'].append("Product not found on Rimi website")
+                    self.status_callback("Product not found on website")
+                    return results
+                elif response.status_code != 200:
+                    results['errors'].append(f"Website error: {response.status_code}")
+                    self.status_callback(f"Website error: {response.status_code}")
+                    return results
+                
+                self.status_callback("Product found on website")
+                
+                # Extract basic product info from page
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Get product name
+                name_elem = soup.find('h1', class_='name') or soup.find('h1')
+                product_name = name_elem.get_text(strip=True) if name_elem else "Unknown Product"
+                
+                # Get price from various possible locations
+                price = "0.00"
+                price_elem = soup.select_one('.price-wrapper .price, .price-tag, .price')
+                if price_elem:
+                    price_text = price_elem.get_text(strip=True)
+                    # Extract price number
+                    import re
+                    price_match = re.search(r'(\d+[.,]\d+)', price_text.replace(' ', ''))
+                    if price_match:
+                        price = price_match.group(1).replace(',', '.')
+                
+                results['product_data'] = {
+                    'name': product_name,
+                    'price': price,
+                    'url': product_url
+                }
+                
+                self.status_callback(f"Product: {product_name} - €{price}")
+                
+            except Exception as e:
+                results['errors'].append(f"Error fetching product: {str(e)}")
+                self.status_callback(f"Error fetching product: {str(e)}")
+                return results
+            
+            # Step 2: Check if product exists in database
+            self.status_callback("Step 2: Checking product in database...")
+            
+            existing_product = self.db_updater.get_product_by_sku(sku)
+            if existing_product:
+                results['operation'] = 'update'
+                self.status_callback("Product exists in database - will update")
+            else:
+                results['operation'] = 'create'
+                self.status_callback("New product - will create")
+            
+            # Step 3: Extract additional product information
+            self.status_callback("Step 3: Extracting product information...")
+            
+            # Get nutrition data
+            nutrition_data = self._get_nutrition_data(product_url)
+            results['product_data']['nutrition'] = nutrition_data
+            
+            # Get product image
+            image_url = self.extract_main_product_image(product_url)
+            results['product_data']['image_url'] = image_url
+            
+            # Get category ID
+            category_id = self._get_category_id(category_code)
+            if not category_id:
+                results['errors'].append(f"Invalid category code: {category_code}")
+                self.status_callback(f"Invalid category code: {category_code}")
+                return results
+            
+            results['product_data']['category_id'] = category_id
+            
+            # Step 4: Database operation
+            self.status_callback("Step 4: Database operation...")
+            
+            if results['operation'] == 'update':
+                # Update existing product
+                success = self.db_updater.update_product_price(sku, price, True)
+                if success:
+                    # Update nutrition data if available
+                    if nutrition_data['has_nutrition']:
+                        product_id = existing_product['product_id']
+                        self.db_updater.add_nutrition_data(product_id, nutrition_data, category_code)
+                        self.status_callback("Updated nutrition data")
+                    
+                    # Update photo if available
+                    if image_url:
+                        product_id = existing_product['product_id']
+                        self.db_updater.add_product_photos(product_id, [image_url])
+                        self.status_callback("Updated product photo")
+                    
+                    results['success'] = True
+                    results['changes'] = {
+                        'price_updated': True,
+                        'nutrition_updated': nutrition_data['has_nutrition'],
+                        'photo_updated': bool(image_url)
+                    }
+                    self.status_callback("Product updated successfully")
+                else:
+                    results['errors'].append("Failed to update product price")
+                    self.status_callback("Failed to update product")
+            
+            else:  # Create new product
+                # Prepare product data for creation
+                product_data = {
+                    'sku': sku,
+                    'name': product_name,
+                    'price': price,
+                    'rimi_url': product_url,
+                    'category_id': category_id,
+                    'is_available': True
+                }
+                
+                # Add quantity parsing
+                quantity_value, quantity_unit = self.db_updater._parse_quantity(product_name)
+                if quantity_value:
+                    product_data['quantity_value'] = quantity_value
+                    product_data['quantity_unit'] = quantity_unit
+                
+                # Create new product
+                product_id = self.db_updater.add_new_product(product_data)
+                if product_id:
+                    # Add nutrition data if available
+                    if nutrition_data['has_nutrition']:
+                        self.db_updater.add_nutrition_data(product_id, nutrition_data, category_code)
+                        self.status_callback("Added nutrition data")
+                    
+                    # Add photo if available
+                    if image_url:
+                        self.db_updater.add_product_photos(product_id, [image_url])
+                        self.status_callback("Added product photo")
+                    
+                    # Process ingredients for new products
+                    if nutrition_data.get('ingredients'):
+                        ingredient_result = self.ingredient_processor.process_product_ingredients(
+                            sku, nutrition_data['ingredients']
+                        )
+                        self.status_callback(f"Processed {ingredient_result.get('ingredients_added', 0)} ingredients")
+                    
+                    results['success'] = True
+                    results['product_data']['product_id'] = product_id
+                    results['changes'] = {
+                        'product_created': True,
+                        'nutrition_added': nutrition_data['has_nutrition'],
+                        'photo_added': bool(image_url),
+                        'ingredients_processed': bool(nutrition_data.get('ingredients'))
+                    }
+                    self.status_callback("New product created successfully")
+                else:
+                    results['errors'].append("Failed to create new product")
+                    self.status_callback("Failed to create product")
+            
+            return results
+            
+        except Exception as e:
+            self.status_callback(f"Error processing product: {str(e)}")
+            return {
+                'success': False,
+                'sku': sku,
+                'category_code': category_code,
+                'operation': '',
+                'product_data': {},
+                'changes': {},
+                'errors': [f"Processing error: {str(e)}"]
+            }
+
     def close(self):
         """Close all connections"""
         self.db_updater.close()
