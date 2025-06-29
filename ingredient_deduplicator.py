@@ -23,17 +23,30 @@ class IngredientDeduplicator:
             self.status_callback(f"Database connection failed: {str(e)}")
     
     def _normalize_for_comparison(self, ingredient: str) -> str:
-        """Normalize ingredient for comparison"""
-        # Convert to lowercase
-        normalized = ingredient.lower().strip()
-        
-        # Remove extra whitespace
-        normalized = re.sub(r'\s+', ' ', normalized)
-        
-        # Remove common punctuation variations
-        normalized = re.sub(r'[.,;:!?]$', '', normalized)
-        
-        return normalized
+        """Normalize ingredient for comparison - should match the processor normalization"""
+        # Use the same normalization as ingredient processor
+        try:
+            # Remove parenthetical information
+            ingredient = re.sub(r'\([^)]*\)', '', ingredient)
+            
+            # Remove percentages
+            ingredient = re.sub(r'\d+%', '', ingredient)
+            
+            # Remove certification and origin information (case insensitive)
+            ingredient = re.sub(r'\.\s*(lauksaimniecība\s+es|lv-bio-\d+|es|eu|organic|bio).*', '', ingredient, flags=re.IGNORECASE)
+            ingredient = re.sub(r'\s+(lauksaimniecība\s+es|lv-bio-\d+|es|eu|organic|bio).*', '', ingredient, flags=re.IGNORECASE)
+            
+            # Remove extra whitespace
+            ingredient = re.sub(r'\s+', ' ', ingredient).strip()
+            
+            # Remove leading/trailing punctuation
+            ingredient = ingredient.strip('.,;:')
+            
+            # Convert to lowercase for consistent matching
+            return ingredient.lower()
+            
+        except Exception as e:
+            return ingredient.lower().strip()
     
     def find_duplicate_groups(self) -> List[Dict]:
         """Find groups of ingredients that are likely duplicates"""
