@@ -163,13 +163,18 @@ class IngredientProcessor:
     
     def _get_or_create_ingredient(self, ingredient_name: str) -> int:
         """Get existing ingredient ID or create new one with robust handling"""
+        # Normalize ingredient name first
+        normalized_name = self._normalize_ingredient(ingredient_name)
+        if not normalized_name:
+            return None
+            
         max_retries = 3
         
         for attempt in range(max_retries):
             try:
-                # First, try to find existing ingredient
-                select_query = "SELECT id FROM ingredient_analysis WHERE ingredient = %s"
-                result = self._execute_query(select_query, (ingredient_name,), fetch=True)
+                # First, try to find existing ingredient (case-insensitive)
+                select_query = "SELECT id FROM ingredient_analysis WHERE LOWER(ingredient) = LOWER(%s)"
+                result = self._execute_query(select_query, (normalized_name,), fetch=True)
                 
                 if result and len(result) > 0:
                     # Ingredient exists, update frequency
@@ -188,7 +193,7 @@ class IngredientProcessor:
                     max_result = self._execute_query(max_id_query, fetch=True)
                     next_id = max_result[0]['next_id'] if max_result else 1
                     
-                    # Insert with explicit ID
+                    # Insert with explicit ID using normalized name
                     insert_query = """
                         INSERT INTO ingredient_analysis (id, ingredient, frequency) 
                         VALUES (%s, %s, 1)
@@ -196,7 +201,7 @@ class IngredientProcessor:
                             frequency = ingredient_analysis.frequency + 1
                         RETURNING id
                     """
-                    insert_result = self._execute_query(insert_query, (next_id, ingredient_name), fetch=True)
+                    insert_result = self._execute_query(insert_query, (next_id, normalized_name), fetch=True)
                     if insert_result and len(insert_result) > 0:
                         # Update sequence to match
                         self._execute_query("SELECT setval('ingredient_analysis_id_seq', %s)", (next_id,))
@@ -204,7 +209,7 @@ class IngredientProcessor:
                 
                 except Exception as insert_error:
                     # If insert fails, try one more time to get existing
-                    retry_result = self._execute_query(select_query, (ingredient_name,), fetch=True)
+                    retry_result = self._execute_query(select_query, (normalized_name,), fetch=True)
                     if retry_result and len(retry_result) > 0:
                         return retry_result[0]['id']
                     
