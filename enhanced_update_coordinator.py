@@ -282,6 +282,14 @@ class EnhancedUpdateCoordinator:
             if nutrition_data.get('ingredients'):
                 self.db_updater.force_update_ingredients(sku, nutrition_data['ingredients'])
             
+            # Update photos if available
+            if product_data.get('photos'):
+                existing_product = self.db_updater.get_product_by_sku(sku)
+                if existing_product:
+                    self.db_updater.add_product_photos(
+                        existing_product['product_id'], product_data['photos']
+                    )
+            
             return True
             
         except Exception as e:

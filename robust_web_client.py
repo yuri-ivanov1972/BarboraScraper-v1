@@ -6,7 +6,7 @@ Implements exponential backoff and user-friendly notifications for connection is
 import requests
 import time
 import random
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from bs4 import BeautifulSoup
 
 class RobustWebClient:
@@ -209,7 +209,7 @@ class RobustWebClient:
             images = soup.select(selector)
             for img in images:
                 src = img.get('src') or img.get('data-src') or img.get('data-lazy')
-                if src and any(x in src for x in ['product', 'rimi', '.jpg', '.png', '.webp']):
+                if src and isinstance(src, str) and any(x in src for x in ['product', 'rimi', '.jpg', '.png', '.webp']):
                     # Clean up the URL
                     if src.startswith('//'):
                         src = 'https:' + src
