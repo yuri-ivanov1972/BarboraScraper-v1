@@ -93,9 +93,22 @@ class EnhancedUpdateCoordinator:
             # Step 3: Extract additional data
             self.status_callback("Extracting nutrition and additional data...")
             
-            # Get nutrition data
+            # Get nutrition data with detailed parsing output
+            self.status_callback("=== NUTRITION DATA PARSING ===")
             nutrition_data = self.web_client.extract_nutrition_data(product_data['soup'], product_data['url'])
+            
+            # Show detailed nutrition parsing results
+            if nutrition_data.get('has_nutrition'):
+                self.status_callback(f"✓ Nutrition data found with {len([k for k, v in nutrition_data.items() if v is not None and k != 'has_nutrition'])} values:")
+                for key, value in nutrition_data.items():
+                    if key != 'has_nutrition' and value is not None:
+                        self.status_callback(f"  - {key}: {value}")
+            else:
+                self.status_callback("○ No nutrition labels found on product page")
+                self.status_callback("  (Normal for oils, single ingredients, etc.)")
+            
             product_data['nutrition_data'] = nutrition_data
+            self.status_callback("=" * 35)
             
             # Get category ID
             category_id = self._get_category_id(category_code)

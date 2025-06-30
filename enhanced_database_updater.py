@@ -246,7 +246,14 @@ class EnhancedDatabaseUpdater:
                     update_values.append(product_id)
                     
                     self._execute_query(update_query, tuple(update_values))
-                    self.status_callback(f"Updated {len(update_fields)-1} nutrition fields")
+                    self.status_callback(f"✓ Successfully updated {len(update_fields)-1} nutrition fields in nutritionfacts table")
+                    
+                    # Show detailed save results
+                    self.status_callback("=== NUTRITIONFACTS TABLE SAVE RESULTS ===")
+                    for field in update_fields[:-1]:  # Exclude timestamp field
+                        field_name = field.split(' = ')[0]
+                        self.status_callback(f"  ✓ {field_name} saved to database")
+                    self.status_callback("=" * 45)
                 
                 # Force recalculate nutri-score if nutrition data was updated
                 if update_fields and len(update_fields) > 1:  # More than just timestamp
@@ -282,11 +289,33 @@ class EnhancedDatabaseUpdater:
             nutrition = nutrition_result[0]
             
             # Check if we have required fields for nutri-score calculation
+            self.status_callback("=== NUTRI-SCORE CALCULATION ANALYSIS ===")
             required_fields = ['energy_kcal', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt']
-            has_required_data = all(nutrition.get(field) is not None for field in required_fields)
+            
+            # Show detailed field analysis
+            missing_fields = []
+            present_fields = []
+            for field in required_fields:
+                value = nutrition.get(field)
+                if value is not None:
+                    present_fields.append(f"{field}: {value}")
+                else:
+                    missing_fields.append(field)
+            
+            self.status_callback(f"Present fields ({len(present_fields)}):")
+            for field in present_fields:
+                self.status_callback(f"  ✓ {field}")
+            
+            if missing_fields:
+                self.status_callback(f"Missing fields ({len(missing_fields)}):")
+                for field in missing_fields:
+                    self.status_callback(f"  ✗ {field}")
+            
+            has_required_data = len(missing_fields) == 0
             
             if not has_required_data:
-                self.status_callback("Insufficient nutrition data for nutri-score calculation")
+                self.status_callback("✗ NUTRI-SCORE CALCULATION FAILED: Insufficient nutrition data")
+                self.status_callback("=" * 50)
                 return False
             
             # Calculate nutri-score using the calculator
