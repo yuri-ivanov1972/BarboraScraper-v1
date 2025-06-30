@@ -4,6 +4,7 @@ Ingredient Processor - Handles ingredient analysis for new products only
 Maintains ingredient frequency tracking and product-ingredient mapping
 """
 import os
+import time
 import psycopg2
 import psycopg2.extras
 import re
@@ -23,25 +24,60 @@ class IngredientProcessor:
         self._connect()
     
     def _connect(self):
-        """Establish database connection"""
+        """Establish database connection with retry logic"""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                if self.conn:
+                    self.conn.close()
+                self.conn = psycopg2.connect(self.db_url)
+                self.conn.autocommit = False
+                self.status_callback("Ingredient processor connected to database")
+                return
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    self.status_callback(f"Connection attempt {attempt + 1} failed, retrying...")
+                    time.sleep(1)
+                else:
+                    raise Exception(f"Database connection failed after {max_retries} attempts: {str(e)}")
+
+    def _ensure_connection(self):
+        """Ensure database connection is active"""
         try:
-            self.conn = psycopg2.connect(self.db_url)
-            self.conn.autocommit = False
-            self.status_callback("Ingredient processor connected to database")
-        except Exception as e:
-            raise Exception(f"Database connection failed: {str(e)}")
+            if not self.conn or self.conn.closed:
+                self._connect()
+            else:
+                # Test connection with a simple query
+                with self.conn.cursor() as cursor:
+                    cursor.execute("SELECT 1")
+        except Exception:
+            self._connect()
     
     def _execute_query(self, query: str, params: Tuple = None, fetch: bool = False):
-        """Execute query with error handling"""
-        try:
-            with self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-                cursor.execute(query, params)
-                if fetch:
-                    return cursor.fetchall()
-                return None
-        except Exception as e:
-            self.conn.rollback()
-            raise Exception(f"Query execution failed: {str(e)}")
+        """Execute query with robust connection handling"""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                self._ensure_connection()
+                with self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                    cursor.execute(query, params)
+                    if fetch:
+                        return cursor.fetchall()
+                    return None
+            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if attempt < max_retries - 1:
+                    self.status_callback(f"Query attempt {attempt + 1} failed due to connection issue, reconnecting...")
+                    self._connect()
+                    time.sleep(0.5)
+                else:
+                    raise Exception(f"Query execution failed after {max_retries} attempts: {str(e)}")
+            except Exception as e:
+                if self.conn:
+                    try:
+                        self.conn.rollback()
+                    except:
+                        pass
+                raise Exception(f"Query execution failed: {str(e)}")
     
     def process_product_ingredients(self, sku: str, ingredients_text: str) -> Dict:
         """
