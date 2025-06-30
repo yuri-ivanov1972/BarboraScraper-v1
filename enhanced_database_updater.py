@@ -119,7 +119,7 @@ class EnhancedDatabaseUpdater:
             
             # Always update rimi_url if provided (fixes NULL urls)
             if 'rimi_url' in product_data and product_data['rimi_url']:
-                update_fields.append("rumi_url = %s")
+                update_fields.append("rimi_url = %s")
                 update_values.append(product_data['rimi_url'])
                 self.status_callback(f"Updating rimi_url: {product_data['rimi_url']}")
             
@@ -293,15 +293,16 @@ class EnhancedDatabaseUpdater:
             try:
                 from nutriscore_calculator import calculate_nutriscore
                 
+                # Convert salt to sodium (mg/100g) for nutri-score calculation
+                sodium_mg = nutrition['salt'] * 400 if nutrition['salt'] else 0
+                
                 nutri_result = calculate_nutriscore(
-                    energy_kcal=nutrition['energy_kcal'],
-                    fat_total=nutrition['fat_total'],
-                    fat_saturated=nutrition['fat_saturated'],
-                    carbs_total=nutrition['carbs_total'],
-                    carbs_sugars=nutrition['carbs_sugars'],
-                    protein=nutrition['protein'],
-                    salt=nutrition['salt'],
-                    fiber=nutrition.get('fiber', 0)
+                    energy_kj=nutrition['energy_kj'] or 0,
+                    sugars=nutrition['carbs_sugars'] or 0,
+                    saturated_fat=nutrition['fat_saturated'] or 0,
+                    sodium=sodium_mg,
+                    protein=nutrition['protein'] or 0,
+                    fiber=int(nutrition.get('fiber', 0))
                 )
                 
                 if nutri_result and 'grade' in nutri_result and 'points' in nutri_result:
@@ -394,7 +395,7 @@ class EnhancedDatabaseUpdater:
         """Add price history record"""
         try:
             history_query = """
-                INSERT INTO pricehistory (product_id, price, is_available, data_source, recorded_at)
+                INSERT INTO price_history (product_id, price, is_available, data_source, recorded_at)
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
             self._execute_query(history_query, (product_id, price, is_available, data_source))
