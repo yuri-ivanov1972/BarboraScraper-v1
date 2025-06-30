@@ -68,7 +68,7 @@ class DatabaseUpdater:
             # Extract basic product info
             sku = product_data['sku']
             name = product_data['name']
-            rimi_url = product_data.get('url', '')
+            product_url = product_data.get('product_url', '')
             category_id = product_data.get('category_id', 1)  # Default category
             price = product_data.get('price', '')
             
