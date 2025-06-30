@@ -180,7 +180,7 @@ class RobustWebClient:
     
     def extract_nutrition_data(self, soup: BeautifulSoup, product_url: str) -> Dict[str, Any]:
         """
-        Extract nutrition data from product page with robust parsing
+        Extract nutrition data from product page with robust HTML table parsing
         
         Args:
             soup: BeautifulSoup object of the product page
@@ -208,69 +208,151 @@ class RobustWebClient:
         }
         
         try:
-            page_text = soup.get_text()
-            
             # Helper function to extract decimal values
             def extract_decimal(text: str) -> float:
                 try:
-                    # Replace comma with dot and extract number
-                    clean_text = text.replace(',', '.').strip()
-                    return float(clean_text)
+                    # Extract numbers from text, handling various formats
+                    numbers = re.findall(r'\d+(?:[.,]\d+)?', text.replace(',', '.'))
+                    return float(numbers[0]) if numbers else 0.0
                 except (ValueError, AttributeError):
                     return 0.0
             
-            # Extract ingredients (Sastāvdaļas)
-            ingredients_patterns = [
-                r'Sastāvdaļas[:\s]*([^.]+(?:\.[^.]*)*)',
-                r'Ingredients[:\s]*([^.]+(?:\.[^.]*)*)',
-                r'Sastāvs[:\s]*([^.]+(?:\.[^.]*)*)'
-            ]
-            
-            for pattern in ingredients_patterns:
-                match = re.search(pattern, page_text, re.IGNORECASE | re.DOTALL)
-                if match:
-                    ingredients_text = match.group(1).strip()
-                    # Clean up ingredients text
-                    ingredients_text = re.sub(r'\s+', ' ', ingredients_text)
-                    if len(ingredients_text) > 10:  # Reasonable minimum length
-                        nutrition_data['ingredients'] = ingredients_text
-                        self.status_callback(f"Found ingredients: {ingredients_text[:50]}...")
-                        break
-            
-            # Extract nutrition values with Latvian labels
-            nutrition_patterns = {
-                'energy_kcal': [r'Enerģētiskā vērtība[:\s]*(\d+(?:[.,]\d+)?)\s*kcal', r'Energy[:\s]*(\d+(?:[.,]\d+)?)\s*kcal'],
-                'energy_kj': [r'Enerģētiskā vērtība[:\s]*(\d+(?:[.,]\d+)?)\s*kJ', r'Energy[:\s]*(\d+(?:[.,]\d+)?)\s*kJ'],
-                'fat_total': [r'Tauki[:\s]*(\d+(?:[.,]\d+)?)\s*g', r'Fat[:\s]*(\d+(?:[.,]\d+)?)\s*g'],
-                'fat_saturated': [r'tostarp piesātinātās taukskābes[:\s]*(\d+(?:[.,]\d+)?)\s*g', r'saturated[:\s]*(\d+(?:[.,]\d+)?)\s*g'],
-                'carbs_total': [r'Oglhidrāti[:\s]*(\d+(?:[.,]\d+)?)\s*g', r'Carbohydrates[:\s]*(\d+(?:[.,]\d+)?)\s*g'],
-                'carbs_sugars': [r'tostarp cukuri[:\s]*(\d+(?:[.,]\d+)?)\s*g', r'sugars[:\s]*(\d+(?:[.,]\d+)?)\s*g'],
-                'protein': [r'Olbaltumvielas[:\s]*(\d+(?:[.,]\d+)?)\s*g', r'Protein[:\s]*(\d+(?:[.,]\d+)?)\s*g'],
-                'salt': [r'Sāls[:\s]*(\d+(?:[.,]\d+)?)\s*g', r'Salt[:\s]*(\d+(?:[.,]\d+)?)\s*g'],
-                'fiber': [r'Šķiedrvielas[:\s]*(\d+(?:[.,]\d+)?)\s*g', r'Fiber[:\s]*(\d+(?:[.,]\d+)?)\s*g']
-            }
-            
-            found_nutrition_count = 0
-            
-            for nutrient, patterns in nutrition_patterns.items():
-                for pattern in patterns:
-                    match = re.search(pattern, page_text, re.IGNORECASE)
+            # Helper function to extract energy values (kJ and kcal)
+            def extract_energy_values(text: str) -> tuple:
+                try:
+                    # Match patterns like "3700 kJ/ 900 kcal" or "3700 kJ / 900 kcal"
+                    pattern = r'(\d+(?:[.,]\d+)?)\s*kJ\s*[/\\]\s*(\d+(?:[.,]\d+)?)\s*kcal'
+                    match = re.search(pattern, text, re.IGNORECASE)
                     if match:
-                        value = extract_decimal(match.group(1))
-                        nutrition_data[nutrient] = value
-                        found_nutrition_count += 1
-                        self.status_callback(f"Found {nutrient}: {value}g")
-                        break
+                        kj = extract_decimal(match.group(1))
+                        kcal = extract_decimal(match.group(2))
+                        return kj, kcal
+                    return 0.0, 0.0
+                except Exception:
+                    return 0.0, 0.0
             
-            # Consider nutrition data complete if we found at least 3 nutrition values
-            if found_nutrition_count >= 3:
-                nutrition_data['has_nutrition'] = True
-                self.status_callback(f"Complete nutrition data found ({found_nutrition_count} values)")
+            # First, try to extract from JavaScript content (existing product details)
+            script_tag = None
+            for script in soup.find_all('script'):
+                if script.string and 'Storefront.product_details_page' in script.string:
+                    script_tag = script
+                    break
+            
+            if script_tag and script_tag.string:
+                script_content = script_tag.string
+                self.status_callback("Found product details script - extracting HTML content")
+                
+                # Extract the details tab HTML content
+                details_match = re.search(
+                    r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']',
+                    script_content, re.DOTALL
+                )
+                
+                if details_match:
+                    # Decode the HTML content
+                    details_html = details_match.group(1)
+                    details_html = details_html.replace('\\/', '/').replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                    details_soup = BeautifulSoup(details_html, 'html.parser')
+                    self.status_callback("Successfully parsed product details HTML")
+                    
+                    # Extract ingredients
+                    for section in details_soup.find_all('div', class_='product__list-wrapper'):
+                        heading = section.find('p', class_='heading')
+                        if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
+                            text_div = section.find('div', class_='text')
+                            if text_div and text_div.p:
+                                nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
+                                self.status_callback(f"Found ingredients: {nutrition_data['ingredients'][:50]}...")
+                            break
+                    
+                    # Find nutrition table with proper HTML parsing
+                    tables = details_soup.find_all('table')
+                    nutrition_table = None
+                    for table in tables:
+                        headers = table.find_all('th')
+                        if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
+                            nutrition_table = table
+                            self.status_callback("Found nutrition table with structured data")
+                            break
+                    
+                    if nutrition_table:
+                        nutrition_data['has_nutrition'] = True
+                        found_nutrition_count = 0
+                        
+                        for row in nutrition_table.find_all('tr'):
+                            cells = row.find_all(['td'])
+                            if len(cells) >= 2:
+                                label = cells[0].get_text(strip=True).lower()
+                                value = cells[1].get_text(strip=True)
+                                
+                                self.status_callback(f"Processing nutrition row: '{label}' -> '{value}'")
+                                
+                                if 'enerģētiskā vērtība' in label:
+                                    kj, kcal = extract_energy_values(value)
+                                    if kj > 0 or kcal > 0:
+                                        nutrition_data['energy_kj'] = kj
+                                        nutrition_data['energy_kcal'] = kcal
+                                        found_nutrition_count += 2
+                                        self.status_callback(f"✓ Energy: {kcal} kcal ({kj} kJ)")
+                                
+                                elif 'tauki' in label and 'piesātinātās' not in label and 'tostarp' not in label:
+                                    fat_total = extract_decimal(value)
+                                    if fat_total > 0:
+                                        nutrition_data['fat_total'] = fat_total
+                                        found_nutrition_count += 1
+                                        self.status_callback(f"✓ Fat total: {fat_total}g")
+                                
+                                elif 'piesātinātās taukskābes' in label or 'tostarp piesātinātās' in label:
+                                    fat_saturated = extract_decimal(value)
+                                    nutrition_data['fat_saturated'] = fat_saturated
+                                    found_nutrition_count += 1
+                                    self.status_callback(f"✓ Saturated fat: {fat_saturated}g")
+                                
+                                elif 'ogļhidrāti' in label and 'cukuri' not in label and 'tostarp' not in label:
+                                    carbs_total = extract_decimal(value)
+                                    nutrition_data['carbs_total'] = carbs_total
+                                    found_nutrition_count += 1
+                                    self.status_callback(f"✓ Carbohydrates: {carbs_total}g")
+                                
+                                elif 'cukuri' in label or 'tostarp cukuri' in label:
+                                    carbs_sugars = extract_decimal(value)
+                                    nutrition_data['carbs_sugars'] = carbs_sugars
+                                    found_nutrition_count += 1
+                                    self.status_callback(f"✓ Sugars: {carbs_sugars}g")
+                                
+                                elif 'olbaltumvielas' in label:
+                                    protein = extract_decimal(value)
+                                    nutrition_data['protein'] = protein
+                                    found_nutrition_count += 1
+                                    self.status_callback(f"✓ Protein: {protein}g")
+                                
+                                elif 'sāls' in label:
+                                    salt = extract_decimal(value)
+                                    nutrition_data['salt'] = salt
+                                    found_nutrition_count += 1
+                                    self.status_callback(f"✓ Salt: {salt}g")
+                                
+                                elif 'šķiedrvielas' in label:
+                                    fiber = extract_decimal(value)
+                                    nutrition_data['fiber'] = fiber
+                                    found_nutrition_count += 1
+                                    self.status_callback(f"✓ Fiber: {fiber}g")
+                        
+                        self.status_callback(f"Nutrition table parsing complete: {found_nutrition_count} values extracted")
+                        
+                        if found_nutrition_count >= 3:
+                            self.status_callback(f"✓ Complete nutrition data found ({found_nutrition_count} values)")
+                        else:
+                            self.status_callback(f"○ Partial nutrition data ({found_nutrition_count} values found)")
+                    else:
+                        self.status_callback("○ No nutrition table found in product details")
+                else:
+                    self.status_callback("○ Could not extract details HTML from script")
             else:
-                self.status_callback(f"Incomplete nutrition data ({found_nutrition_count} values found)")
-            
+                self.status_callback("○ No product details script found")
+                
         except Exception as e:
-            self.status_callback(f"Error extracting nutrition data: {str(e)}")
+            self.status_callback(f"✗ Error extracting nutrition data: {str(e)}")
         
         return nutrition_data
     
