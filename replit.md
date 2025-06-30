@@ -105,6 +105,15 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
+- **June 30, 2025**: Successfully implemented complete photo extraction and database storage functionality
+  - Fixed photo extraction from Rimi's cloudinary CDN with robust CSS selectors targeting `img[src*="cloudinary"]`
+  - Implemented proper database schema integration using `productphotos` table in PRODUCTS_DB_URL with fields: `photo_id`, `product_id`, `photo_url`, `is_primary`
+  - Enhanced error handling with explicit debug messages distinguishing between photo parsing failures and database saving failures
+  - Photo processing now continues product workflow even when photo extraction fails, ensuring robust operation
+  - Successfully tested complete workflow: photo extraction → database saving → verification for SKU 815963
+  - System extracts only primary product photo as requested, avoiding unnecessary multiple photo processing
+  - Integrated photo functionality into both regular database updater and enhanced database updater for consistency
+
 - **June 29, 2025**: Fixed nutrition data parsing and database storage issues
   - Identified and resolved Latvian nutrition label parsing problems with "tostarp" (including) prefixes
   - Fixed field name mapping between extraction code and Streamlit display interface
@@ -151,6 +160,27 @@ The application uses a PostgreSQL database with the following key tables:
   - Enhanced ingredient processing: "ieraugs. Lauksaimniecība ES" → ["ieraugs.", "Lauksaimniecība", "ES"] → filters certification tokens → keeps only "ieraugs"
   - Token-based filtering system: Maintains comprehensive list of certification tokens (Lauksaimniecība, ES, bio, bioloģisks, etc.) for precise filtering
   - Improved maintainability: Easy to extend with new certification patterns without complex regex modifications
+  - Resolved database connection reliability issues: Implemented robust connection management with automatic reconnection and retry logic
+  - Fixed "connection already closed" errors during batch processing: Added connection health checks and graceful error recovery
+  - Enhanced database connection handling: All components (DatabaseUpdater, IngredientProcessor, UpdateCoordinator) now use robust connection patterns
+  - Implemented batch processing system: Created BatchProcessor with thread-safe connection pooling for processing multiple products simultaneously
+  - Added comprehensive Streamlit batch processing interface: Users can now process multiple products with progress tracking and error handling
+  - Connection reliability features: Automatic reconnection on failures, retry logic with exponential backoff, connection health validation before queries
+  - Implemented comprehensive corruption fix system: Created RobustWebClient with exponential backoff retry logic for website unavailability
+  - Added EnhancedDatabaseUpdater with force update capabilities to overwrite corrupted NULL values and wrong category assignments
+  - Created EnhancedUpdateCoordinator integrating retry logic with forced data updates for complete corruption recovery
+  - Enhanced Streamlit interface with three processing modes: Regular Processing, Force Update (Fix Corrupted Data), and Corruption Detection
+  - Added specific fix for SKU 147762 issues: missing rimi_url, incorrect category_id (1→298), NULL nutrition values blocking nutri-score calculation
+  - Force Update mode overwrites existing corrupted data completely with fresh website data ensuring complete data integrity restoration
+  - Enhanced Force Update with comprehensive nutrition debugging: Added detailed output showing nutrition data parsing, nutritionfacts table saving results, and exact nutri-score calculation errors
+  - Fixed database schema compatibility issues: Updated all table/column names to match actual schema (products, nutritionfacts, product_price_history)
+  - Resolved nutri-score calculation errors: Fixed KeyError issues with safe field access and proper handling of calculator return format (tuple vs dictionary)
+  - Completed nutrition data processing transparency: System now provides complete visibility into website extraction, database storage, and calculation processes
+  - CRITICAL FIX: Resolved nutrition data extraction failure - Fixed Unicode character encoding issues in HTML parsing for Latvian nutrition labels
+  - Fixed nutrition table detection: Enhanced parsing logic to handle both normal and Unicode-escaped Latvian characters (e.g., "enerģētiskā vērtība" vs "ener\u0123\u0113tisk\u0101 v\u0113rt\u012bba")
+  - Successfully extracted complete olive oil nutrition data: Energy 900 kcal/3700 kJ, Fat 100g, Saturated fat 16g, Carbs 0g, Protein 0g, Salt 0g
+  - Enhanced nutrition label matching: Added pattern recognition for Unicode escape sequences in product details HTML extraction
+  - Verified complete nutrition processing pipeline: Website extraction → database storage → nutri-score calculation (E grade, 20 points for olive oil)
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
