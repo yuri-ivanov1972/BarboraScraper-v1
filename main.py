@@ -228,11 +228,11 @@ def enhanced_product_manager_tab():
         )
     
     with col2:
-        category_code = st.selectbox(
+        category_code = st.text_input(
             "Category Code",
-            ["SH-4-3-15", "SH-1-1-1", "SH-2-1-1", "SH-11", "SH-12", "SH-13"],
-            index=0 if sku == "147762" else 1,
-            help="SH-4-3-15 = Olive Oil (correct for 147762)"
+            value="SH-4-3-15" if sku == "147762" else "SH-1-1-1",
+            placeholder="e.g., SH-13-10-24, SH-4-3-15",
+            help="Enter any valid Rimi category code (SH-4-3-15 = Olive Oil for SKU 147762)"
         )
     
     # Processing options
