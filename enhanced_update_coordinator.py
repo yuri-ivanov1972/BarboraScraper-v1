@@ -227,10 +227,22 @@ class EnhancedUpdateCoordinator:
                 
                 if success:
                     result.success = True
+                    
+                    # Process photos for regular updates too
+                    photos_saved = False
+                    if product_data.get('photos'):
+                        try:
+                            photos_saved = self.db_updater.add_product_photos(
+                                existing_product['product_id'], product_data['photos']
+                            )
+                        except Exception as e:
+                            self.status_callback(f"Photo processing failed: {str(e)}")
+                    
                     result.changes = {
                         'price_updated': True,
                         'nutrition_updated': nutrition_data.get('has_nutrition', False),
-                        'availability_updated': True
+                        'availability_updated': True,
+                        'photos_saved': photos_saved
                     }
                 else:
                     result.errors.append("Regular update failed")
@@ -244,10 +256,25 @@ class EnhancedUpdateCoordinator:
                 
                 if success:
                     result.success = True
+                    
+                    # Process photos for new products too
+                    photos_saved = False
+                    if product_data.get('photos'):
+                        # Get the newly created product
+                        new_product = self.db_updater.get_product_by_sku(sku)
+                        if new_product:
+                            try:
+                                photos_saved = self.db_updater.add_product_photos(
+                                    new_product['product_id'], product_data['photos']
+                                )
+                            except Exception as e:
+                                self.status_callback(f"Photo processing failed: {str(e)}")
+                    
                     result.changes = {
                         'product_created': True,
                         'nutrition_added': nutrition_data.get('has_nutrition', False),
-                        'ingredients_added': bool(nutrition_data.get('ingredients'))
+                        'ingredients_added': bool(nutrition_data.get('ingredients')),
+                        'photos_saved': photos_saved
                     }
                 else:
                     result.errors.append("Product creation failed")
