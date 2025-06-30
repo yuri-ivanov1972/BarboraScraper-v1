@@ -184,44 +184,176 @@ class RobustWebClient:
     
     def _extract_photos(self, soup: BeautifulSoup) -> List[str]:
         """
-        Extract product photo URLs from the page
+        Extract primary product photo URL from the page
         
         Args:
             soup: BeautifulSoup object of the product page
             
         Returns:
-            List of photo URLs
+            List containing primary photo URL (single item) or empty list if not found
         """
-        photos = []
+        self.status_callback("Starting primary photo extraction...")
         
-        # Look for various image selectors
-        image_selectors = [
-            'img[src*="product"]',
-            'img[src*="rimi"]', 
-            'img[src*="rimibaltic"]',
-            '.product-image img',
-            '.product__image img',
-            '[data-src*="rimi"]',
-            'img[data-lazy*="rimi"]'
-        ]
-        
-        for selector in image_selectors:
-            images = soup.select(selector)
-            for img in images:
-                src = img.get('src') or img.get('data-src') or img.get('data-lazy')
-                if src and isinstance(src, str) and any(x in src for x in ['product', 'rimi', '.jpg', '.png', '.webp']):
-                    # Clean up the URL
-                    if src.startswith('//'):
-                        src = 'https:' + src
-                    elif src.startswith('/'):
-                        src = 'https://www.rimi.lv' + src
+        try:
+            # Priority order for finding the main product image
+            primary_image_selectors = [
+                # Main product image containers (highest priority)
+                '.product-image img',
+                '.product__image img',
+                '.product-gallery img:first-child',
+                '.product-main-image img',
+                
+                # Cloudinary and CDN images
+                'img[src*="cloudinary"]',
+                'img[data-src*="cloudinary"]',
+                
+                # Rimi-specific image patterns
+                'img[src*="rimibaltic.com"]',
+                'img[src*="rimi.lv"][src*="product"]',
+                'img[data-src*="rimibaltic.com"]',
+                'img[data-src*="rimi.lv"][data-src*="product"]',
+                
+                # Lazy-loaded images
+                'img[data-lazy*="product"]',
+                'img[data-lazy*="rimi"]',
+                
+                # Generic product images (lower priority)
+                'img[src*="product"]',
+                'img[alt*="product" i]',
+                'img[title*="product" i]'
+            ]
+            
+            for selector in primary_image_selectors:
+                self.status_callback(f"Trying selector: {selector}")
+                
+                images = soup.select(selector)
+                if not images:
+                    continue
+                
+                self.status_callback(f"Found {len(images)} images with selector '{selector}'")
+                
+                for img in images:
+                    # Try multiple attribute sources for image URL
+                    src_candidates = [
+                        img.get('src'),
+                        img.get('data-src'), 
+                        img.get('data-lazy'),
+                        img.get('data-original'),
+                        img.get('data-url')
+                    ]
                     
-                    if src not in photos:  # Avoid duplicates
-                        photos.append(src)
-                        self.status_callback(f"Found product photo: {src}")
+                    for src in src_candidates:
+                        if not src or not isinstance(src, str):
+                            continue
+                            
+                        # Check if this looks like a product image
+                        if self._is_valid_product_image(src):
+                            # Clean up the URL
+                            cleaned_url = self._clean_image_url(src)
+                            if cleaned_url:
+                                self.status_callback(f"Successfully extracted primary photo: {cleaned_url}")
+                                return [cleaned_url]  # Return only primary photo
+                            else:
+                                self.status_callback(f"Failed to clean image URL: {src}")
+                
+                self.status_callback(f"No valid images found with selector '{selector}'")
+            
+            # If no primary image found, log detailed failure
+            self.status_callback("Failed to parse photo URL: No primary product image found with any selector")
+            return []
+            
+        except Exception as e:
+            self.status_callback(f"Failed to parse photo URL: Exception during extraction - {str(e)}")
+            return []
+    
+    def _is_valid_product_image(self, src: str) -> bool:
+        """
+        Check if image URL appears to be a valid product image
         
-        self.status_callback(f"Total photos extracted: {len(photos)}")
-        return photos
+        Args:
+            src: Image source URL
+            
+        Returns:
+            True if URL appears to be a product image
+        """
+        if not src:
+            return False
+            
+        # Convert to lowercase for case-insensitive matching
+        src_lower = src.lower()
+        
+        # Valid image file extensions
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.avif']
+        has_valid_extension = any(ext in src_lower for ext in valid_extensions)
+        
+        # Valid product image indicators
+        product_indicators = [
+            'product',
+            'rimi',
+            'rimibaltic',
+            'cloudinary',
+            '/images/',
+            '/media/'
+        ]
+        has_product_indicator = any(indicator in src_lower for indicator in product_indicators)
+        
+        # Exclude obvious non-product images
+        exclude_patterns = [
+            'logo',
+            'icon',
+            'banner',
+            'background',
+            'sprite',
+            'placeholder',
+            'loading',
+            'error',
+            'default'
+        ]
+        is_excluded = any(pattern in src_lower for pattern in exclude_patterns)
+        
+        result = has_valid_extension and has_product_indicator and not is_excluded
+        
+        if not result:
+            self.status_callback(f"Image rejected - Extension: {has_valid_extension}, Product: {has_product_indicator}, Excluded: {is_excluded}, URL: {src[:100]}")
+        
+        return result
+    
+    def _clean_image_url(self, src: str) -> str:
+        """
+        Clean and normalize image URL
+        
+        Args:
+            src: Raw image URL
+            
+        Returns:
+            Cleaned URL or empty string if invalid
+        """
+        if not src:
+            return ""
+            
+        try:
+            # Handle protocol-relative URLs
+            if src.startswith('//'):
+                src = 'https:' + src
+            # Handle relative URLs
+            elif src.startswith('/'):
+                src = 'https://www.rimi.lv' + src
+            
+            # Basic URL validation - must start with http
+            if not src.startswith(('http://', 'https://')):
+                self.status_callback(f"Invalid URL protocol: {src}")
+                return ""
+            
+            # Remove any trailing parameters that might cause issues
+            # But keep necessary CDN parameters
+            if '?' in src and 'cloudinary' not in src.lower():
+                src = src.split('?')[0]
+            
+            return src.strip()
+            
+        except Exception as e:
+            self.status_callback(f"Error cleaning URL '{src}': {str(e)}")
+            return ""
     
     def extract_nutrition_data(self, soup: BeautifulSoup, product_url: str) -> Dict[str, Any]:
         """

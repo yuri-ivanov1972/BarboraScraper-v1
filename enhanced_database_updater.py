@@ -444,31 +444,72 @@ class EnhancedDatabaseUpdater:
             return False
     
     def add_product_photos(self, product_id: int, photo_urls: List[str]) -> bool:
-        """Add product photos to productphotos table"""
+        """
+        Add product photos to productphotos table with enhanced error handling
+        
+        Args:
+            product_id: Product ID to associate photos with
+            photo_urls: List of photo URLs (typically one primary photo)
+            
+        Returns:
+            True if successful, False if failed
+        """
         try:
             if not photo_urls:
-                return True  # No photos to add
+                self.status_callback(f"No photos to save for product ID {product_id}")
+                return True
             
-            self.status_callback(f"Adding {len(photo_urls)} photos for product {product_id}")
+            if not isinstance(photo_urls, list):
+                self.status_callback(f"Failed to save in database: photo_urls must be a list, got {type(photo_urls)}")
+                return False
+            
+            self.status_callback(f"Attempting to save {len(photo_urls)} photo(s) for product ID {product_id}")
+            
+            # Ensure database connection
+            self._ensure_connection()
             
             # Clear existing photos for this product
-            delete_query = "DELETE FROM productphotos WHERE product_id = %s"
-            self._execute_query(delete_query, (product_id,))
+            try:
+                delete_query = "DELETE FROM productphotos WHERE product_id = %s"
+                self._execute_query(delete_query, (product_id,))
+                self.status_callback(f"Cleared existing photos for product ID {product_id}")
+            except Exception as e:
+                self.status_callback(f"Failed to save in database: Error clearing existing photos - {str(e)}")
+                return False
             
-            # Add new photos
-            for i, photo_url in enumerate(photo_urls):
-                insert_query = """
-                    INSERT INTO productphotos (product_id, photo_url, is_primary) 
-                    VALUES (%s, %s, %s)
-                """
+            # Add new photos (primary photo first)
+            photos_saved = 0
+            for i, url in enumerate(photo_urls):
+                if not url or not isinstance(url, str):
+                    self.status_callback(f"Skipping invalid photo URL at index {i}: {repr(url)}")
+                    continue
+                
                 is_primary = (i == 0)  # First photo is primary
-                self._execute_query(insert_query, (product_id, photo_url, is_primary))
+                
+                try:
+                    insert_query = """
+                        INSERT INTO productphotos (product_id, photo_url, is_primary) 
+                        VALUES (%s, %s, %s)
+                    """
+                    self._execute_query(insert_query, (product_id, url.strip(), is_primary))
+                    
+                    photo_status = "primary" if is_primary else "secondary"
+                    self.status_callback(f"Successfully saved {photo_status} photo: {url}")
+                    photos_saved += 1
+                    
+                except Exception as e:
+                    self.status_callback(f"Failed to save in database: Error inserting photo {i+1} ({url}) - {str(e)}")
+                    # Continue trying to save other photos rather than failing completely
             
-            self.status_callback(f"✓ Successfully added {len(photo_urls)} photos")
+            if photos_saved == 0:
+                self.status_callback(f"Failed to save in database: No valid photos could be saved for product ID {product_id}")
+                return False
+            
+            self.status_callback(f"Successfully saved {photos_saved} photo(s) to database for product ID {product_id}")
             return True
             
         except Exception as e:
-            self.status_callback(f"Error adding photos: {str(e)}")
+            self.status_callback(f"Failed to save in database: Unexpected error in add_product_photos - {str(e)}")
             return False
 
     def get_product_by_sku(self, sku: str) -> Optional[Dict]:

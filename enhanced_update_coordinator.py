@@ -145,23 +145,45 @@ class EnhancedUpdateCoordinator:
                 success = self.db_updater.force_update_product_data(sku, update_data, force_overwrite=True)
                 
                 if success:
-                    # Save photos if available
+                    # Save photos if available - continue processing even if photos fail
                     photos_saved = False
+                    photo_error = None
                     if product_data.get('photos'):
                         existing_product = self.db_updater.get_product_by_sku(sku)
                         if existing_product:
-                            photos_saved = self.db_updater.add_product_photos(
-                                existing_product['product_id'], product_data['photos']
-                            )
-                            self.status_callback(f"Photos saved: {photos_saved}")
+                            try:
+                                photos_saved = self.db_updater.add_product_photos(
+                                    existing_product['product_id'], product_data['photos']
+                                )
+                                if photos_saved:
+                                    self.status_callback(f"Photos processing: Successfully saved photo for product {sku}")
+                                else:
+                                    self.status_callback(f"Photos processing: Failed to save photo for product {sku} - check logs above for specific error")
+                            except Exception as e:
+                                photo_error = str(e)
+                                self.status_callback(f"Photos processing: Exception during photo save for product {sku} - {photo_error}")
+                        else:
+                            self.status_callback(f"Photos processing: Product {sku} not found in database for photo association")
+                    else:
+                        self.status_callback(f"Photos processing: No photos extracted for product {sku}")
                     
-                    # Save ingredients if available
+                    # Save ingredients if available - continue processing even if ingredients fail
                     ingredients_saved = False
+                    ingredient_error = None
                     if nutrition_data.get('ingredients'):
-                        ingredients_saved = self.db_updater.force_update_ingredients(
-                            sku, nutrition_data['ingredients']
-                        )
-                        self.status_callback(f"Ingredients saved: {ingredients_saved}")
+                        try:
+                            ingredients_saved = self.db_updater.force_update_ingredients(
+                                sku, nutrition_data['ingredients']
+                            )
+                            if ingredients_saved:
+                                self.status_callback(f"Ingredients processing: Successfully saved for product {sku}")
+                            else:
+                                self.status_callback(f"Ingredients processing: Failed to save for product {sku}")
+                        except Exception as e:
+                            ingredient_error = str(e)
+                            self.status_callback(f"Ingredients processing: Exception during save for product {sku} - {ingredient_error}")
+                    else:
+                        self.status_callback(f"Ingredients processing: No ingredients extracted for product {sku}")
                     
                     result.success = True
                     result.changes = {
@@ -172,9 +194,23 @@ class EnhancedUpdateCoordinator:
                         'ingredients_updated': bool(nutrition_data.get('ingredients')),
                         'price_updated': True,
                         'photos_saved': photos_saved,
-                        'ingredients_saved': ingredients_saved
+                        'ingredients_saved': ingredients_saved,
+                        'photo_error': photo_error,
+                        'ingredient_error': ingredient_error
                     }
-                    self.status_callback("Force update completed successfully")
+                    
+                    # Overall success message
+                    success_parts = []
+                    if photos_saved:
+                        success_parts.append("photos saved")
+                    if ingredients_saved:
+                        success_parts.append("ingredients saved")
+                    
+                    additional_info = ""
+                    if success_parts:
+                        additional_info = f" with {' and '.join(success_parts)}"
+                    
+                    self.status_callback(f"Force update completed successfully{additional_info}")
                 else:
                     result.errors.append("Force update failed")
                     
