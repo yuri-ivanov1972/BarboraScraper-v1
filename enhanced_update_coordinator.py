@@ -1,0 +1,455 @@
+"""
+Enhanced Update Coordinator - Integrates robust web client and enhanced database updater
+Fixes corrupted data by force-updating all fields and handling website unavailability
+"""
+
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
+import time
+
+@dataclass
+class ProcessingResult:
+    """Result of single product processing"""
+    success: bool
+    sku: str
+    operation: str  # 'create', 'update', 'force_update'
+    changes: Dict
+    errors: List[str]
+    product_data: Dict
+
+class EnhancedUpdateCoordinator:
+    """Enhanced coordinator with retry logic and forced data updates"""
+    
+    def __init__(self, status_callback=None):
+        self.status_callback = status_callback or (lambda msg: print(msg))
+        self.web_client = None
+        self.db_updater = None
+        self._initialize_components()
+    
+    def _initialize_components(self):
+        """Initialize web client and database updater"""
+        try:
+            from robust_web_client import RobustWebClient
+            from enhanced_database_updater import EnhancedDatabaseUpdater
+            
+            self.web_client = RobustWebClient(self.status_callback)
+            self.db_updater = EnhancedDatabaseUpdater(self.status_callback)
+            self.status_callback("Enhanced coordinator initialized with robust components")
+            
+        except Exception as e:
+            self.status_callback(f"Error initializing components: {str(e)}")
+            raise
+    
+    def process_single_product_enhanced(self, sku: str, category_code: str, force_update: bool = False) -> ProcessingResult:
+        """
+        Process a single product with enhanced retry logic and data corruption handling
+        
+        Args:
+            sku: Product SKU
+            category_code: Category code for the product
+            force_update: Whether to force update even if product exists with complete data
+            
+        Returns:
+            ProcessingResult with detailed operation results
+        """
+        start_time = time.time()
+        
+        result = ProcessingResult(
+            success=False,
+            sku=sku,
+            operation='',
+            changes={},
+            errors=[],
+            product_data={}
+        )
+        
+        try:
+            self.status_callback(f"=== Enhanced Processing: SKU {sku} ===")
+            
+            # Step 1: Check existing product and determine if force update needed
+            existing_product = self.db_updater.get_product_by_sku(sku)
+            needs_force_update = False
+            
+            if existing_product:
+                needs_force_update = self._check_data_corruption(existing_product)
+                if needs_force_update:
+                    self.status_callback(f"Detected corrupted data for SKU {sku} - will force update")
+                elif force_update:
+                    self.status_callback(f"Force update requested for SKU {sku}")
+                    needs_force_update = True
+                else:
+                    self.status_callback(f"Product {sku} exists with valid data")
+            
+            # Step 2: Fetch product data with retry logic
+            self.status_callback("Fetching product data with retry logic...")
+            product_data = self.web_client.get_product_data(sku)
+            
+            if not product_data:
+                result.errors.append("Product not found on website after retry attempts")
+                self.status_callback("Product not accessible on website")
+                return result
+            
+            # Step 3: Extract additional data
+            self.status_callback("Extracting nutrition and additional data...")
+            
+            # Get nutrition data
+            nutrition_data = self.web_client.extract_nutrition_data(product_data['soup'], product_data['url'])
+            product_data['nutrition_data'] = nutrition_data
+            
+            # Get category ID
+            category_id = self._get_category_id(category_code)
+            if not category_id:
+                result.errors.append(f"Invalid category code: {category_code}")
+                return result
+            
+            product_data['category_id'] = category_id
+            
+            # Parse quantity from name
+            quantity_value, quantity_unit = self._parse_quantity(product_data['name'])
+            if quantity_value or quantity_unit:
+                product_data['quantity_value'] = quantity_value
+                product_data['quantity_unit'] = quantity_unit
+            
+            # Step 4: Database operation
+            if existing_product and (needs_force_update or force_update):
+                # Force update existing corrupted product
+                result.operation = 'force_update'
+                self.status_callback("Performing force update of corrupted data...")
+                
+                # Prepare complete product data for force update
+                update_data = {
+                    'rimi_url': product_data['url'],
+                    'category_id': category_id,
+                    'name': product_data['name'],
+                    'price': product_data['price'],
+                    'nutrition_data': nutrition_data,
+                    'ingredients': nutrition_data.get('ingredients', ''),
+                    'quantity_value': quantity_value,
+                    'quantity_unit': quantity_unit
+                }
+                
+                success = self.db_updater.force_update_product_data(sku, update_data, force_overwrite=True)
+                
+                if success:
+                    result.success = True
+                    result.changes = {
+                        'forced_update': True,
+                        'rimi_url_updated': bool(product_data['url']),
+                        'category_updated': True,
+                        'nutrition_updated': nutrition_data.get('has_nutrition', False),
+                        'ingredients_updated': bool(nutrition_data.get('ingredients')),
+                        'price_updated': True
+                    }
+                    self.status_callback("Force update completed successfully")
+                else:
+                    result.errors.append("Force update failed")
+                    
+            elif existing_product:
+                # Regular update for existing product
+                result.operation = 'update'
+                self.status_callback("Performing regular update...")
+                
+                # Update price and availability
+                price_decimal = self._parse_price(product_data['price'])
+                is_available = price_decimal > 0 if price_decimal else False
+                
+                success = self._update_existing_product(sku, product_data, is_available)
+                
+                if success:
+                    result.success = True
+                    result.changes = {
+                        'price_updated': True,
+                        'nutrition_updated': nutrition_data.get('has_nutrition', False),
+                        'availability_updated': True
+                    }
+                else:
+                    result.errors.append("Regular update failed")
+                    
+            else:
+                # Create new product
+                result.operation = 'create'
+                self.status_callback("Creating new product...")
+                
+                success = self._create_new_product(sku, product_data, category_id)
+                
+                if success:
+                    result.success = True
+                    result.changes = {
+                        'product_created': True,
+                        'nutrition_added': nutrition_data.get('has_nutrition', False),
+                        'ingredients_added': bool(nutrition_data.get('ingredients'))
+                    }
+                else:
+                    result.errors.append("Product creation failed")
+            
+            # Store processed data for display
+            result.product_data = {
+                'name': product_data['name'],
+                'price': product_data['price'],
+                'url': product_data['url'],
+                'category_id': category_id,
+                'quantity_value': quantity_value,
+                'quantity_unit': quantity_unit,
+                'nutrition': nutrition_data
+            }
+            
+            processing_time = time.time() - start_time
+            self.status_callback(f"Processing completed in {processing_time:.2f}s")
+            
+            return result
+            
+        except Exception as e:
+            result.errors.append(f"Processing error: {str(e)}")
+            self.status_callback(f"Processing failed: {str(e)}")
+            return result
+    
+    def _check_data_corruption(self, product: Dict) -> bool:
+        """Check if product has corrupted or incomplete data"""
+        corruption_indicators = [
+            not product.get('rimi_url'),  # Missing URL
+            product.get('category_id') == 1,  # Default wrong category
+        ]
+        
+        # Check nutrition data corruption
+        try:
+            nutrition_query = """
+                SELECT carbs_total, carbs_sugars, protein, salt, nutri_score_grade
+                FROM nutritionfacts WHERE product_id = %s
+            """
+            nutrition_result = self.db_updater._execute_query(
+                nutrition_query, (product['product_id'],), fetch=True
+            )
+            
+            if nutrition_result:
+                nutrition = nutrition_result[0]
+                # Check for NULL nutrition values where they shouldn't be
+                null_nutrition = [
+                    nutrition.get('carbs_total') is None,
+                    nutrition.get('carbs_sugars') is None,
+                    nutrition.get('protein') is None,
+                    nutrition.get('salt') is None,
+                    nutrition.get('nutri_score_grade') is None
+                ]
+                corruption_indicators.extend(null_nutrition)
+                
+        except Exception as e:
+            self.status_callback(f"Error checking nutrition corruption: {str(e)}")
+        
+        is_corrupted = any(corruption_indicators)
+        if is_corrupted:
+            corruption_count = sum(corruption_indicators)
+            self.status_callback(f"Found {corruption_count} corruption indicators for SKU {product.get('sku')}")
+        
+        return is_corrupted
+    
+    def _update_existing_product(self, sku: str, product_data: Dict, is_available: bool) -> bool:
+        """Update existing product with new data"""
+        try:
+            # Update price and availability
+            price_decimal = self._parse_price(product_data['price'])
+            if price_decimal is not None:
+                # Add price history record
+                existing_product = self.db_updater.get_product_by_sku(sku)
+                if existing_product:
+                    self.db_updater._add_price_history_record(
+                        existing_product['product_id'], price_decimal, is_available, 'enhanced_update'
+                    )
+            
+            # Update nutrition data if available
+            nutrition_data = product_data.get('nutrition_data', {})
+            if nutrition_data.get('has_nutrition'):
+                existing_product = self.db_updater.get_product_by_sku(sku)
+                if existing_product:
+                    self.db_updater.force_update_nutrition_data(
+                        existing_product['product_id'], nutrition_data, force_overwrite=False
+                    )
+            
+            # Update ingredients if available
+            if nutrition_data.get('ingredients'):
+                self.db_updater.force_update_ingredients(sku, nutrition_data['ingredients'])
+            
+            return True
+            
+        except Exception as e:
+            self.status_callback(f"Error updating existing product: {str(e)}")
+            return False
+    
+    def _create_new_product(self, sku: str, product_data: Dict, category_id: int) -> bool:
+        """Create new product with complete data"""
+        try:
+            # Use enhanced updater's force update method for new products too
+            # This ensures all data is properly set from the start
+            new_product_data = {
+                'sku': sku,
+                'name': product_data['name'],
+                'rimi_url': product_data['url'],
+                'category_id': category_id,
+                'price': product_data['price'],
+                'quantity_value': product_data.get('quantity_value'),
+                'quantity_unit': product_data.get('quantity_unit'),
+                'nutrition_data': product_data.get('nutrition_data', {}),
+                'ingredients': product_data.get('nutrition_data', {}).get('ingredients', '')
+            }
+            
+            # First create basic product record
+            basic_data = {
+                'sku': sku,
+                'name': product_data['name'],
+                'url': product_data['url'],
+                'category_id': category_id,
+                'price': product_data['price']
+            }
+            
+            from database_updater import DatabaseUpdater
+            basic_updater = DatabaseUpdater(self.status_callback)
+            try:
+                product_id = basic_updater.add_new_product(basic_data)
+                basic_updater.close()
+                
+                if product_id:
+                    # Now use enhanced updater to complete all data
+                    return self.db_updater.force_update_product_data(sku, new_product_data, force_overwrite=True)
+                    
+            except Exception as e:
+                basic_updater.close()
+                raise e
+            
+            return False
+            
+        except Exception as e:
+            self.status_callback(f"Error creating new product: {str(e)}")
+            return False
+    
+    def _get_category_id(self, category_code: str) -> Optional[int]:
+        """Get category ID from category code"""
+        try:
+            from database_integration import ExternalDatabaseManager
+            ext_db = ExternalDatabaseManager()
+            categories = ext_db.get_all_categories()
+            
+            for category in categories:
+                if category.rimi_category_code == category_code:
+                    return category.category_id
+            
+            self.status_callback(f"Category code {category_code} not found")
+            return None
+            
+        except Exception as e:
+            self.status_callback(f"Error getting category ID: {str(e)}")
+            return None
+    
+    def _parse_quantity(self, product_name: str) -> tuple:
+        """Parse quantity from product name"""
+        import re
+        from decimal import Decimal
+        
+        if not product_name:
+            return None, None
+        
+        # Enhanced patterns for quantity extraction
+        patterns = [
+            # Standard patterns with various units
+            r'(\d+(?:[.,]\d+)?)\s*(l|kg|g|ml|gb|gab|tk|tükk|m)\b',
+            # Patterns for ranges or complex quantities
+            r'(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(g|ml|l)',
+            # Patterns for products sold by piece
+            r'(\d+)\s*(gab\.?|tk\.?|tükk)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, product_name.lower())
+            if match:
+                try:
+                    quantity_str = match.group(1).replace(',', '.')
+                    quantity_value = Decimal(quantity_str)
+                    quantity_unit = match.group(2) if len(match.groups()) >= 2 else match.group(-1)
+                    
+                    # Normalize unit to database format
+                    unit_mapping = {
+                        'gb': 'gab',
+                        'tk': 'gab', 
+                        'tükk': 'gab'
+                    }
+                    quantity_unit = unit_mapping.get(quantity_unit, quantity_unit)
+                    
+                    return quantity_value, quantity_unit
+                except:
+                    continue
+        
+        return None, None
+    
+    def _parse_price(self, price_str: str) -> Optional[float]:
+        """Parse price string to float"""
+        if not price_str or price_str == 'N/A':
+            return None
+        
+        try:
+            import re
+            # Remove currency symbols and spaces
+            clean_price = re.sub(r'[€$\s]', '', str(price_str))
+            # Replace comma with dot
+            clean_price = clean_price.replace(',', '.')
+            # Extract number
+            price_match = re.search(r'(\d+\.?\d*)', clean_price)
+            if price_match:
+                return float(price_match.group(1))
+        except:
+            pass
+        
+        return None
+    
+    def fix_corrupted_products(self, limit: int = 10) -> Dict:
+        """Find and fix products with corrupted data"""
+        try:
+            self.status_callback("Identifying corrupted products...")
+            
+            corrupted_products = self.db_updater.identify_corrupted_products()
+            
+            if not corrupted_products:
+                return {'success': True, 'message': 'No corrupted products found', 'fixed': 0}
+            
+            fixed_count = 0
+            errors = []
+            
+            for product in corrupted_products[:limit]:
+                try:
+                    sku = product['sku']
+                    self.status_callback(f"Fixing corrupted product: {sku}")
+                    
+                    # Attempt to reprocess with force update
+                    result = self.process_single_product_enhanced(sku, 'SH-1-1-1', force_update=True)
+                    
+                    if result.success:
+                        fixed_count += 1
+                        self.status_callback(f"Successfully fixed product {sku}")
+                    else:
+                        errors.extend(result.errors)
+                        
+                except Exception as e:
+                    error_msg = f"Error fixing product {product.get('sku', 'unknown')}: {str(e)}"
+                    errors.append(error_msg)
+                    self.status_callback(error_msg)
+            
+            return {
+                'success': True,
+                'found': len(corrupted_products),
+                'fixed': fixed_count,
+                'errors': errors,
+                'message': f'Fixed {fixed_count} of {len(corrupted_products)} corrupted products'
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'message': f'Error fixing corrupted products: {str(e)}'
+            }
+    
+    def close(self):
+        """Close all connections"""
+        if self.web_client:
+            self.web_client.close()
+        if self.db_updater:
+            self.db_updater.close()
+        self.status_callback("Enhanced coordinator closed")

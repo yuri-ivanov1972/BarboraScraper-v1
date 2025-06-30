@@ -1,0 +1,485 @@
+"""
+Enhanced Database Updater - Fixes corrupted data by force-updating all fields
+Handles proper data overwriting for products with partial or corrupted information
+"""
+
+import psycopg2
+import psycopg2.extras
+import os
+from typing import Dict, List, Optional, Tuple
+from decimal import Decimal
+import re
+import time
+
+class EnhancedDatabaseUpdater:
+    """Enhanced database updater with forced update capabilities for corrupted data"""
+    
+    def __init__(self, status_callback=None):
+        self.status_callback = status_callback or (lambda msg: print(msg))
+        self.conn = None
+        self.products_db_url = os.environ.get('PRODUCTS_DB_URL')
+        
+        if not self.products_db_url:
+            raise Exception("PRODUCTS_DB_URL environment variable not found")
+        
+        self._connect()
+    
+    def _connect(self):
+        """Establish database connection with retry logic"""
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                self.conn = psycopg2.connect(
+                    self.products_db_url,
+                    cursor_factory=psycopg2.extras.RealDictCursor
+                )
+                self.conn.autocommit = False
+                self.status_callback("Connected to PRODUCTS_DB_URL database")
+                return
+            except Exception as e:
+                if attempt < max_attempts - 1:
+                    self.status_callback(f"Database connection attempt {attempt + 1} failed, retrying...")
+                    time.sleep(2 ** attempt)
+                else:
+                    raise Exception(f"Failed to connect to database after {max_attempts} attempts: {str(e)}")
+    
+    def _ensure_connection(self):
+        """Ensure database connection is active"""
+        try:
+            if self.conn is None or self.conn.closed:
+                self._connect()
+            else:
+                # Test connection
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+        except Exception:
+            self._connect()
+    
+    def _execute_query(self, query: str, params: Tuple = None, fetch: bool = False):
+        """Execute query with robust connection handling"""
+        self._ensure_connection()
+        
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute(query, params)
+                
+                if fetch:
+                    result = cursor.fetchall()
+                    cursor.close()
+                    return result
+                else:
+                    cursor.close()
+                    return None
+                    
+            except Exception as e:
+                if cursor:
+                    cursor.close()
+                
+                if "connection" in str(e).lower() and attempt < max_attempts - 1:
+                    self.status_callback(f"Connection error, reconnecting (attempt {attempt + 1})")
+                    self._connect()
+                    continue
+                else:
+                    if self.conn:
+                        try:
+                            self.conn.rollback()
+                        except:
+                            pass
+                    raise Exception(f"Query execution failed: {str(e)}")
+    
+    def force_update_product_data(self, sku: str, product_data: Dict, force_overwrite: bool = True) -> bool:
+        """
+        Force update product data, overwriting existing corrupted/NULL values
+        
+        Args:
+            sku: Product SKU
+            product_data: Complete product data to update
+            force_overwrite: Whether to overwrite existing non-NULL values
+            
+        Returns:
+            True if successful
+        """
+        try:
+            self.status_callback(f"Force updating product data for SKU: {sku}")
+            
+            # Get existing product
+            existing_product = self.get_product_by_sku(sku)
+            if not existing_product:
+                self.status_callback(f"Product {sku} not found - cannot force update")
+                return False
+            
+            product_id = existing_product['product_id']
+            
+            # Prepare update fields
+            update_fields = []
+            update_values = []
+            
+            # Always update rimi_url if provided (fixes NULL urls)
+            if 'rimi_url' in product_data and product_data['rimi_url']:
+                update_fields.append("rumi_url = %s")
+                update_values.append(product_data['rimi_url'])
+                self.status_callback(f"Updating rimi_url: {product_data['rimi_url']}")
+            
+            # Always update category_id if provided (fixes wrong categories)
+            if 'category_id' in product_data and product_data['category_id']:
+                update_fields.append("category_id = %s")
+                update_values.append(product_data['category_id'])
+                self.status_callback(f"Updating category_id: {product_data['category_id']}")
+            
+            # Update name if provided and different
+            if 'name' in product_data and product_data['name']:
+                if force_overwrite or not existing_product.get('name'):
+                    update_fields.append("name = %s")
+                    update_values.append(product_data['name'])
+                    self.status_callback(f"Updating name: {product_data['name'][:50]}...")
+            
+            # Update quantity fields if provided
+            if 'quantity_value' in product_data:
+                update_fields.append("quantity_value = %s")
+                update_values.append(product_data['quantity_value'])
+                self.status_callback(f"Updating quantity_value: {product_data['quantity_value']}")
+            
+            if 'quantity_unit' in product_data:
+                update_fields.append("quantity_unit = %s")
+                update_values.append(product_data['quantity_unit'])
+                self.status_callback(f"Updating quantity_unit: {product_data['quantity_unit']}")
+            
+            # Execute product table update if there are fields to update
+            if update_fields:
+                update_fields.append("updated_at = CURRENT_TIMESTAMP")
+                update_query = f"""
+                    UPDATE products 
+                    SET {', '.join(update_fields)}
+                    WHERE product_id = %s
+                """
+                update_values.append(product_id)
+                
+                self._execute_query(update_query, tuple(update_values))
+                self.status_callback(f"Updated {len(update_fields)} product fields")
+            
+            # Force update nutrition data if provided
+            if 'nutrition_data' in product_data and product_data['nutrition_data']:
+                self.force_update_nutrition_data(product_id, product_data['nutrition_data'], force_overwrite)
+            
+            # Force update price if provided
+            if 'price' in product_data:
+                price_decimal = self._parse_price(product_data['price'])
+                if price_decimal is not None:
+                    is_available = price_decimal > 0
+                    self._add_price_history_record(product_id, price_decimal, is_available, 'force_update')
+                    self.status_callback(f"Updated price: €{price_decimal} (available: {is_available})")
+            
+            # Process ingredients if provided
+            if 'ingredients' in product_data and product_data['ingredients']:
+                self.force_update_ingredients(sku, product_data['ingredients'])
+            
+            self.conn.commit()
+            self.status_callback(f"Successfully force-updated product {sku}")
+            return True
+            
+        except Exception as e:
+            self.conn.rollback()
+            self.status_callback(f"Error force-updating product {sku}: {str(e)}")
+            return False
+    
+    def force_update_nutrition_data(self, product_id: int, nutrition_data: Dict, force_overwrite: bool = True) -> bool:
+        """
+        Force update nutrition data, overwriting NULL or corrupted values
+        
+        Args:
+            product_id: Product ID
+            nutrition_data: Nutrition data dictionary
+            force_overwrite: Whether to overwrite existing non-NULL values
+            
+        Returns:
+            True if successful
+        """
+        try:
+            self.status_callback(f"Force updating nutrition data for product ID: {product_id}")
+            
+            # Check if nutrition record exists
+            existing_nutrition = self._execute_query(
+                "SELECT * FROM nutritionfacts WHERE product_id = %s",
+                (product_id,),
+                fetch=True
+            )
+            
+            if existing_nutrition:
+                # Update existing record - build dynamic UPDATE query
+                update_fields = []
+                update_values = []
+                
+                nutrition_fields = [
+                    'ingredients_text', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated',
+                    'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber'
+                ]
+                
+                existing_record = existing_nutrition[0]
+                
+                for field in nutrition_fields:
+                    if field in nutrition_data:
+                        current_value = existing_record.get(field)
+                        new_value = nutrition_data[field]
+                        
+                        # Update if: force_overwrite=True, current value is NULL, or new value is not zero/empty
+                        should_update = (
+                            force_overwrite or 
+                            current_value is None or 
+                            (new_value and new_value != 0)
+                        )
+                        
+                        if should_update:
+                            update_fields.append(f"{field} = %s")
+                            update_values.append(new_value)
+                            self.status_callback(f"Updating {field}: {current_value} -> {new_value}")
+                
+                if update_fields:
+                    update_fields.append("data_source_date = CURRENT_TIMESTAMP")
+                    update_query = f"""
+                        UPDATE nutritionfacts 
+                        SET {', '.join(update_fields)}
+                        WHERE product_id = %s
+                    """
+                    update_values.append(product_id)
+                    
+                    self._execute_query(update_query, tuple(update_values))
+                    self.status_callback(f"Updated {len(update_fields)-1} nutrition fields")
+                
+                # Force recalculate nutri-score if nutrition data was updated
+                if update_fields and len(update_fields) > 1:  # More than just timestamp
+                    self.force_recalculate_nutriscore(product_id)
+                    
+            else:
+                # Create new nutrition record
+                self.status_callback("Creating new nutrition record")
+                self.add_nutrition_data(product_id, nutrition_data)
+            
+            return True
+            
+        except Exception as e:
+            self.status_callback(f"Error force-updating nutrition data: {str(e)}")
+            return False
+    
+    def force_recalculate_nutriscore(self, product_id: int) -> bool:
+        """Force recalculate nutri-score for a product"""
+        try:
+            # Get nutrition data
+            nutrition_query = """
+                SELECT energy_kcal, fat_total, fat_saturated, carbs_total, carbs_sugars, 
+                       protein, salt, fiber
+                FROM nutritionfacts 
+                WHERE product_id = %s
+            """
+            nutrition_result = self._execute_query(nutrition_query, (product_id,), fetch=True)
+            
+            if not nutrition_result:
+                self.status_callback("No nutrition data found for nutri-score calculation")
+                return False
+            
+            nutrition = nutrition_result[0]
+            
+            # Check if we have required fields for nutri-score calculation
+            required_fields = ['energy_kcal', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt']
+            has_required_data = all(nutrition.get(field) is not None for field in required_fields)
+            
+            if not has_required_data:
+                self.status_callback("Insufficient nutrition data for nutri-score calculation")
+                return False
+            
+            # Calculate nutri-score using the calculator
+            try:
+                from nutriscore_calculator import calculate_nutriscore
+                
+                nutri_result = calculate_nutriscore(
+                    energy_kcal=nutrition['energy_kcal'],
+                    fat_total=nutrition['fat_total'],
+                    fat_saturated=nutrition['fat_saturated'],
+                    carbs_total=nutrition['carbs_total'],
+                    carbs_sugars=nutrition['carbs_sugars'],
+                    protein=nutrition['protein'],
+                    salt=nutrition['salt'],
+                    fiber=nutrition.get('fiber', 0)
+                )
+                
+                if nutri_result and 'grade' in nutri_result and 'points' in nutri_result:
+                    # Update nutri-score in database
+                    update_query = """
+                        UPDATE nutritionfacts 
+                        SET nutri_score_grade = %s, nutri_score_points = %s, data_source_date = CURRENT_TIMESTAMP
+                        WHERE product_id = %s
+                    """
+                    self._execute_query(update_query, (nutri_result['grade'], nutri_result['points'], product_id))
+                    self.status_callback(f"Updated nutri-score: {nutri_result['grade']} ({nutri_result['points']} points)")
+                    return True
+                
+            except ImportError:
+                self.status_callback("Nutri-score calculator not available")
+            except Exception as e:
+                self.status_callback(f"Error calculating nutri-score: {str(e)}")
+            
+            return False
+            
+        except Exception as e:
+            self.status_callback(f"Error recalculating nutri-score: {str(e)}")
+            return False
+    
+    def force_update_ingredients(self, sku: str, ingredients_text: str) -> bool:
+        """Force update ingredients, removing old mappings and creating new ones"""
+        try:
+            self.status_callback(f"Force updating ingredients for SKU: {sku}")
+            
+            # Get product ID
+            product = self.get_product_by_sku(sku)
+            if not product:
+                return False
+            
+            product_id = product['product_id']
+            
+            # Remove existing ingredient mappings
+            delete_query = "DELETE FROM productingredients WHERE product_id = %s"
+            self._execute_query(delete_query, (product_id,))
+            self.status_callback("Removed existing ingredient mappings")
+            
+            # Process ingredients using the ingredient processor
+            try:
+                from ingredient_processor import IngredientProcessor
+                processor = IngredientProcessor(self.status_callback)
+                result = processor.process_product_ingredients(sku, ingredients_text)
+                processor.close()
+                
+                if result.get('success'):
+                    self.status_callback(f"Successfully processed {result.get('ingredients_processed', 0)} ingredients")
+                    return True
+                else:
+                    self.status_callback(f"Ingredient processing failed: {result.get('error', 'Unknown error')}")
+                    return False
+                    
+            except ImportError:
+                self.status_callback("Ingredient processor not available")
+                return False
+            
+        except Exception as e:
+            self.status_callback(f"Error force-updating ingredients: {str(e)}")
+            return False
+    
+    def get_product_by_sku(self, sku: str) -> Optional[Dict]:
+        """Get existing product by SKU"""
+        query = "SELECT * FROM products WHERE sku = %s"
+        result = self._execute_query(query, (sku,), fetch=True)
+        return dict(result[0]) if result else None
+    
+    def _parse_price(self, price_str: str) -> Optional[Decimal]:
+        """Parse price string to Decimal"""
+        if not price_str or price_str == 'N/A':
+            return None
+        
+        try:
+            # Remove currency symbols and spaces
+            clean_price = re.sub(r'[€$\s]', '', str(price_str))
+            # Replace comma with dot
+            clean_price = clean_price.replace(',', '.')
+            # Extract number
+            price_match = re.search(r'(\d+\.?\d*)', clean_price)
+            if price_match:
+                return Decimal(price_match.group(1))
+        except:
+            pass
+        
+        return None
+    
+    def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str):
+        """Add price history record"""
+        try:
+            history_query = """
+                INSERT INTO pricehistory (product_id, price, is_available, data_source, recorded_at)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """
+            self._execute_query(history_query, (product_id, price, is_available, data_source))
+        except Exception as e:
+            self.status_callback(f"Error adding price history: {str(e)}")
+    
+    def add_nutrition_data(self, product_id: int, nutrition_data: Dict) -> bool:
+        """Add new nutrition data record"""
+        try:
+            nutrition_query = """
+                INSERT INTO nutritionfacts (
+                    product_id, ingredients_text, energy_kcal, energy_kj, fat_total, fat_saturated,
+                    carbs_total, carbs_sugars, protein, salt, fiber, data_source_date
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                RETURNING nutrition_id
+            """
+            
+            result = self._execute_query(nutrition_query, (
+                product_id,
+                nutrition_data.get('ingredients', ''),
+                nutrition_data.get('energy_kcal', 0),
+                nutrition_data.get('energy_kj', 0),
+                nutrition_data.get('fat_total', 0),
+                nutrition_data.get('fat_saturated', 0),
+                nutrition_data.get('carbs_total', 0),
+                nutrition_data.get('carbs_sugars', 0),
+                nutrition_data.get('protein', 0),
+                nutrition_data.get('salt', 0),
+                nutrition_data.get('fiber', 0)
+            ), fetch=True)
+            
+            if result:
+                nutrition_id = result[0]['nutrition_id']
+                self.status_callback(f"Added nutrition data with ID: {nutrition_id}")
+                
+                # Calculate nutri-score
+                self.force_recalculate_nutriscore(product_id)
+                return True
+            
+            return False
+            
+        except Exception as e:
+            self.status_callback(f"Error adding nutrition data: {str(e)}")
+            return False
+    
+    def identify_corrupted_products(self) -> List[Dict]:
+        """Identify products with corrupted or incomplete data"""
+        try:
+            self.status_callback("Identifying products with corrupted data...")
+            
+            corrupted_query = """
+                SELECT p.product_id, p.sku, p.name, p.rimi_url, p.category_id,
+                       nf.carbs_total, nf.carbs_sugars, nf.protein, nf.salt,
+                       nf.nutri_score_grade, nf.nutri_score_points
+                FROM products p
+                LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
+                WHERE p.rimi_url IS NULL 
+                   OR p.rimi_url = '' 
+                   OR p.category_id = 1  -- Default wrong category
+                   OR (nf.nutrition_id IS NOT NULL AND (
+                       nf.carbs_total IS NULL OR 
+                       nf.carbs_sugars IS NULL OR 
+                       nf.protein IS NULL OR 
+                       nf.salt IS NULL OR
+                       nf.nutri_score_grade IS NULL
+                   ))
+                ORDER BY p.updated_at DESC
+                LIMIT 50
+            """
+            
+            result = self._execute_query(corrupted_query, fetch=True)
+            
+            if result:
+                self.status_callback(f"Found {len(result)} products with corrupted data")
+                return [dict(row) for row in result]
+            else:
+                self.status_callback("No corrupted products found")
+                return []
+                
+        except Exception as e:
+            self.status_callback(f"Error identifying corrupted products: {str(e)}")
+            return []
+    
+    def close(self):
+        """Close database connection"""
+        if self.conn:
+            self.conn.close()
+            self.status_callback("Database connection closed")
