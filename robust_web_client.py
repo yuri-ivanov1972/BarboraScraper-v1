@@ -207,8 +207,6 @@ class RobustWebClient:
             'fiber': 0
         }
         
-
-        
         try:
             page_text = soup.get_text()
             

@@ -105,8 +105,6 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
-
-
 - **June 29, 2025**: Fixed nutrition data parsing and database storage issues
   - Identified and resolved Latvian nutrition label parsing problems with "tostarp" (including) prefixes
   - Fixed field name mapping between extraction code and Streamlit display interface
