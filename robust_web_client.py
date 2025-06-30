@@ -207,30 +207,7 @@ class RobustWebClient:
             'fiber': 0
         }
         
-        # Check if this is an olive oil product
-        product_name = soup.find('h1')
-        if product_name:
-            name_text = product_name.get_text().lower()
-            oil_keywords = ['olīveļļa', 'olive oil', 'eļļa', 'oil']
-            is_oil = any(keyword in name_text for keyword in oil_keywords)
-            
-            if is_oil:
-                self.status_callback("Detected olive oil product - applying standard nutrition values")
-                # Standard olive oil nutrition values per 100g
-                nutrition_data.update({
-                    'has_nutrition': True,
-                    'energy_kcal': 900,
-                    'energy_kj': 3700,
-                    'fat_total': 100.0,
-                    'fat_saturated': 16.0,
-                    'carbs_total': 0.0,
-                    'carbs_sugars': 0.0,
-                    'protein': 0.0,
-                    'salt': 0.0,
-                    'fiber': 0.0,
-                    'ingredients': 'olīveļļa'
-                })
-                return nutrition_data
+
         
         try:
             page_text = soup.get_text()

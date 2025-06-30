@@ -1,10 +1,13 @@
 """
 Debug Nutrition Data for SKU 147762 - Identify why nutrition extraction is failing
+Using correct database schema: products (product_id) and nutritionfacts tables
 """
 
 import requests
 from bs4 import BeautifulSoup
 import re
+import psycopg2
+import os
 
 def debug_nutrition_147762():
     """Debug nutrition data extraction for SKU 147762"""
