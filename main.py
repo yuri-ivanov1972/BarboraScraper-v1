@@ -166,10 +166,6 @@ def enhanced_product_manager_tab():
     st.header("🔧 Enhanced Product Manager")
     st.markdown("Process individual products with robust retry logic and corruption fix")
     
-    # Force cache clear to ensure fresh results
-    st.cache_data.clear()
-    st.cache_resource.clear()
-    
     # Processing mode selection
     processing_mode = st.radio(
         "Processing Mode:",
@@ -491,41 +487,17 @@ def product_manager_tab():
                             st.write("**Quantity**: Not specified")
                     
                     with col2:
-                        # Product photo - get from database to show actual saved photo
-                        if 'photos_saved' in result['changes'] and result['changes']['photos_saved']:
+                        # Product image
+                        image_url = result['product_data'].get('image_url')
+                        if image_url:
+                            st.success("Product image found")
                             try:
-                                from enhanced_database_updater import EnhancedDatabaseUpdater
-                                temp_updater = EnhancedDatabaseUpdater()
-                                
-                                # Get product ID first
-                                db_product = temp_updater.get_product_by_sku(sku)
-                                if db_product:
-                                    # Get photo from database
-                                    photo_query = """
-                                    SELECT photo_url, is_primary 
-                                    FROM productphotos 
-                                    WHERE product_id = %s AND is_primary = true
-                                    """
-                                    photo_data = temp_updater._execute_query(photo_query, (db_product['product_id'],), fetch=True)
-                                    
-                                    if photo_data and photo_data[0]:
-                                        photo_url = photo_data[0]['photo_url']
-                                        st.success("Product photo saved successfully")
-                                        try:
-                                            st.image(photo_url, width=200, caption="Product Photo")
-                                        except Exception as img_error:
-                                            st.error(f"Error displaying photo: {str(img_error)}")
-                                            st.write(f"**Photo URL**: {photo_url}")
-                                    else:
-                                        st.warning("Photo saved but not found in database")
-                                else:
-                                    st.error("Product not found for photo verification")
-                                    
-                                temp_updater.close()
-                            except Exception as photo_error:
-                                st.error(f"Photo verification failed: {str(photo_error)}")
+                                st.image(image_url, width=200, caption="Product Image")
+                            except Exception as img_error:
+                                st.error(f"Error displaying image: {str(img_error)}")
+                                st.write(f"**Image URL**: {image_url}")
                         else:
-                            st.warning("No product photo available")
+                            st.warning("No product image found")
                     
                     # Nutrition data - fix field mapping
                     nutrition = result['product_data'].get('nutrition', {})
@@ -633,8 +605,8 @@ def product_manager_tab():
                     # Database verification
                     st.subheader("Database Verification")
                     try:
-                        from enhanced_database_updater import EnhancedDatabaseUpdater
-                        db_updater = EnhancedDatabaseUpdater()
+                        from database_updater import DatabaseUpdater
+                        db_updater = DatabaseUpdater()
                         
                         # Verify product exists in database
                         db_product = db_updater.get_product_by_sku(sku)
@@ -657,7 +629,21 @@ def product_manager_tab():
                             else:
                                 st.warning("No nutrition data found in database")
                             
-
+                            # Check for photos - use productphotos table from schema export
+                            photo_query = """
+                            SELECT photo_url, is_primary 
+                            FROM productphotos 
+                            WHERE product_id = %s
+                            """
+                            photo_data = db_updater._execute_query(photo_query, (db_product['product_id'],), fetch=True)
+                            
+                            if photo_data:
+                                st.info(f"✅ Photos verified: {len(photo_data)} images")
+                                for photo in photo_data:
+                                    if photo.get('is_primary'):
+                                        st.write(f"Primary photo: {photo['photo_url'][:60]}...")
+                            else:
+                                st.warning("No photos found in database")
                         else:
                             st.error("❌ Product not found in database after processing")
                         
