@@ -161,8 +161,223 @@ def load_categories():
         st.error(f"Error loading categories: {str(e)}")
         return []
 
+def enhanced_product_manager_tab():
+    """Enhanced Product Management Tab with corruption fix capabilities"""
+    st.header("🔧 Enhanced Product Manager")
+    st.markdown("Process individual products with robust retry logic and corruption fix")
+    
+    # Processing mode selection
+    processing_mode = st.radio(
+        "Processing Mode:",
+        ["Regular Processing", "Force Update (Fix Corrupted Data)", "Corruption Detection"],
+        help="Regular: Standard processing. Force Update: Overwrites corrupted data. Detection: Identifies products needing fixes."
+    )
+    
+    if processing_mode == "Corruption Detection":
+        st.subheader("🔍 Detect Corrupted Products")
+        st.markdown("Find products with missing URLs, wrong categories, or incomplete nutrition data")
+        
+        if st.button("🔍 Scan for Corrupted Products", type="primary"):
+            try:
+                from enhanced_database_updater import EnhancedDatabaseUpdater
+                
+                def status_callback(msg):
+                    st.text(f"[SCAN] {msg}")
+                
+                with st.spinner("Scanning for corrupted products..."):
+                    db_updater = EnhancedDatabaseUpdater(status_callback)
+                    corrupted_products = db_updater.identify_corrupted_products()
+                    db_updater.close()
+                
+                if corrupted_products:
+                    st.error(f"Found {len(corrupted_products)} products with corrupted data:")
+                    
+                    for product in corrupted_products[:10]:  # Show first 10
+                        with st.expander(f"SKU {product.get('sku', 'Unknown')} - {product.get('name', 'Unknown')[:50]}..."):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write(f"**Product ID:** {product.get('product_id', 'N/A')}")
+                                st.write(f"**SKU:** {product.get('sku', 'N/A')}")
+                                st.write(f"**Category ID:** {product.get('category_id', 'N/A')}")
+                            with col2:
+                                st.write(f"**Rimi URL:** {'Missing' if not product.get('rimi_url') else 'Present'}")
+                                st.write(f"**Carbs Total:** {product.get('carbs_total', 'NULL')}")
+                                st.write(f"**Nutri-Score:** {product.get('nutri_score_grade', 'NULL')}")
+                    
+                    if len(corrupted_products) > 10:
+                        st.info(f"... and {len(corrupted_products) - 10} more corrupted products")
+                    
+                    st.markdown("**Use Force Update mode to fix these products**")
+                else:
+                    st.success("No corrupted products found!")
+                    
+            except Exception as e:
+                st.error(f"Error scanning for corrupted products: {str(e)}")
+        
+        return  # End corruption detection mode
+    
+    # SKU input and category selection for processing modes
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        sku = st.text_input(
+            "Product SKU",
+            value="147762" if processing_mode == "Force Update (Fix Corrupted Data)" else "",
+            placeholder="Enter product SKU (e.g., 147762)",
+            help="SKU 147762 is known to have corrupted data and can be used for testing"
+        )
+    
+    with col2:
+        category_code = st.selectbox(
+            "Category Code",
+            ["SH-4-3-15", "SH-1-1-1", "SH-2-1-1", "SH-11", "SH-12", "SH-13"],
+            index=0 if sku == "147762" else 1,
+            help="SH-4-3-15 = Olive Oil (correct for 147762)"
+        )
+    
+    # Processing options
+    if processing_mode == "Force Update (Fix Corrupted Data)":
+        st.warning("⚠️ Force Update will overwrite existing data even if not corrupted")
+        st.info("💡 This mode fixes: missing URLs, wrong categories, NULL nutrition values, missing nutri-scores")
+    
+    # Process button
+    force_update = processing_mode == "Force Update (Fix Corrupted Data)"
+    button_text = "🔧 Force Fix Product" if force_update else "🚀 Process Product"
+    button_type = "secondary" if force_update else "primary"
+    
+    if sku and st.button(button_text, type=button_type):
+        try:
+            progress_container = st.container()
+            status_container = st.container()
+            
+            with progress_container:
+                progress_bar = st.progress(0)
+                progress_text = st.empty()
+            
+            with status_container:
+                status_text = st.empty()
+            
+            messages = []
+            
+            def enhanced_status_callback(msg):
+                messages.append(msg)
+                status_text.text(f"Latest: {msg}")
+                
+                # Update progress based on message content
+                if "Step 1" in msg:
+                    progress_bar.progress(0.2)
+                    progress_text.text("Checking website...")
+                elif "Step 2" in msg:
+                    progress_bar.progress(0.4)
+                    progress_text.text("Checking database...")
+                elif "Step 3" in msg:
+                    progress_bar.progress(0.6)
+                    progress_text.text("Extracting data...")
+                elif "Step 4" in msg or "Force updating" in msg:
+                    progress_bar.progress(0.8)
+                    progress_text.text("Updating database...")
+                elif "completed" in msg.lower() or "successful" in msg.lower():
+                    progress_bar.progress(1.0)
+                    progress_text.text("Completed!")
+            
+            # Use enhanced coordinator for robust processing
+            from enhanced_update_coordinator import EnhancedUpdateCoordinator
+            
+            coordinator = EnhancedUpdateCoordinator(enhanced_status_callback)
+            result = coordinator.process_single_product_enhanced(sku, category_code, force_update=force_update)
+            coordinator.close()
+            
+            # Display results
+            if result.success:
+                st.success(f"✅ Product {sku} processed successfully!")
+                
+                # Results summary
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Operation", result.operation.title())
+                with col2:
+                    st.metric("Changes Made", len([k for k, v in result.changes.items() if v]))
+                with col3:
+                    st.metric("Processing", "Success" if result.success else "Failed")
+                
+                # Detailed results
+                if result.product_data:
+                    st.subheader("📋 Product Information")
+                    
+                    data_col1, data_col2 = st.columns(2)
+                    
+                    with data_col1:
+                        st.write(f"**Name:** {result.product_data.get('name', 'N/A')}")
+                        st.write(f"**Price:** €{result.product_data.get('price', 'N/A')}")
+                        st.write(f"**URL:** {result.product_data.get('url', 'N/A')[:50]}...")
+                        if result.product_data.get('quantity_value'):
+                            st.write(f"**Quantity:** {result.product_data.get('quantity_value')} {result.product_data.get('quantity_unit', '')}")
+                    
+                    with data_col2:
+                        st.write(f"**Category ID:** {result.product_data.get('category_id', 'N/A')}")
+                        nutrition = result.product_data.get('nutrition', {})
+                        if nutrition:
+                            st.write(f"**Nutrition Data:** {'✓' if nutrition.get('has_nutrition') else '✗'}")
+                            if nutrition.get('ingredients'):
+                                st.write(f"**Ingredients:** {nutrition['ingredients'][:30]}...")
+                            if nutrition.get('nutri_score_grade'):
+                                st.write(f"**Nutri-Score:** {nutrition['nutri_score_grade']} ({nutrition.get('nutri_score_points', 'N/A')} points)")
+                
+                # Changes made
+                if result.changes:
+                    st.subheader("🔄 Changes Made")
+                    changes_col1, changes_col2 = st.columns(2)
+                    
+                    with changes_col1:
+                        for change, made in list(result.changes.items())[:len(result.changes)//2]:
+                            st.write(f"**{change.replace('_', ' ').title()}:** {'✅' if made else '❌'}")
+                    
+                    with changes_col2:
+                        for change, made in list(result.changes.items())[len(result.changes)//2:]:
+                            st.write(f"**{change.replace('_', ' ').title()}:** {'✅' if made else '❌'}")
+                
+                # Special message for force updates
+                if force_update:
+                    st.info("🔧 **Force Update Completed**: All corrupted data has been overwritten with fresh data from the website")
+                
+            else:
+                st.error(f"❌ Processing failed for product {sku}")
+                if result.errors:
+                    for error in result.errors:
+                        st.error(f"• {error}")
+                        
+        except Exception as e:
+            st.error(f"Processing error: {str(e)}")
+    
+    # Help section
+    with st.expander("ℹ️ Enhanced Product Manager Help"):
+        st.markdown("""
+        **Enhanced Product Manager** provides robust product processing with corruption fixes:
+        
+        **Processing Modes:**
+        - **Regular Processing**: Standard product processing with retry logic
+        - **Force Update**: Overwrites corrupted data completely (use for fixing broken products)
+        - **Corruption Detection**: Scans database for products needing fixes
+        
+        **Enhanced Features:**
+        - **Retry Logic**: Handles temporary website unavailability (3 attempts with exponential backoff)
+        - **Data Corruption Detection**: Identifies missing URLs, wrong categories, NULL nutrition values
+        - **Force Update Capability**: Overwrites corrupted data with fresh website data
+        - **Complete Data Refresh**: Updates all fields including URLs, categories, nutrition, ingredients
+        
+        **Known Issues Fixed:**
+        - Missing rimi_url (NULL values)
+        - Incorrect category_id (default category 1 instead of correct category)
+        - NULL nutrition values preventing nutri-score calculation
+        - Incomplete ingredient processing
+        
+        **Example: SKU 147762**
+        - Had missing rimi_url, wrong category (1 vs 298), NULL nutrition values
+        - Use Force Update mode to completely fix this product
+        """)
+
 def product_manager_tab():
-    """Individual Product Management Tab"""
+    """Original Product Management Tab - kept for compatibility"""
     st.header("🎯 Product Manager")
     st.markdown("Process individual products by SKU - create new or update existing products")
     
@@ -608,8 +823,8 @@ def main():
                 st.error("Please enter a category code")
     
     with tab2:
-        # Product Manager Tab
-        product_manager_tab()
+        # Product Manager Tab with Enhanced Fix
+        enhanced_product_manager_tab()
     
     with tab3:
         # Batch Processing Tab

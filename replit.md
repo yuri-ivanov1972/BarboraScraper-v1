@@ -157,6 +157,12 @@ The application uses a PostgreSQL database with the following key tables:
   - Implemented batch processing system: Created BatchProcessor with thread-safe connection pooling for processing multiple products simultaneously
   - Added comprehensive Streamlit batch processing interface: Users can now process multiple products with progress tracking and error handling
   - Connection reliability features: Automatic reconnection on failures, retry logic with exponential backoff, connection health validation before queries
+  - Implemented comprehensive corruption fix system: Created RobustWebClient with exponential backoff retry logic for website unavailability
+  - Added EnhancedDatabaseUpdater with force update capabilities to overwrite corrupted NULL values and wrong category assignments
+  - Created EnhancedUpdateCoordinator integrating retry logic with forced data updates for complete corruption recovery
+  - Enhanced Streamlit interface with three processing modes: Regular Processing, Force Update (Fix Corrupted Data), and Corruption Detection
+  - Added specific fix for SKU 147762 issues: missing rimi_url, incorrect category_id (1→298), NULL nutrition values blocking nutri-score calculation
+  - Force Update mode overwrites existing corrupted data completely with fresh website data ensuring complete data integrity restoration
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
