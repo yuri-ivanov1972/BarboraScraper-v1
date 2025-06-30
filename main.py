@@ -605,8 +605,8 @@ def product_manager_tab():
                     # Database verification
                     st.subheader("Database Verification")
                     try:
-                        from database_updater import DatabaseUpdater
-                        db_updater = DatabaseUpdater()
+                        from enhanced_database_updater import EnhancedDatabaseUpdater
+                        db_updater = EnhancedDatabaseUpdater()
                         
                         # Verify product exists in database
                         db_product = db_updater.get_product_by_sku(sku)
