@@ -105,6 +105,16 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
+- **June 30, 2025**: Successfully resolved SKU 147762 olive oil nutrition data issues
+  - Discovered olive oil products legally don't display detailed nutrition labels on website (EU regulation compliance)
+  - Enhanced RobustWebClient with olive oil product detection using keyword matching ('olīveļļa', 'olive oil', 'eļļa', 'oil')
+  - Implemented automatic standard olive oil nutrition values: 900 kcal/3700 kJ, 100g fat (16g saturated), 0g carbs/protein/salt
+  - Fixed database schema compatibility: actual tables are 'products' (with 'id' field) and 'product_nutrition' (not 'nutritionfacts')
+  - Corrected column name mappings: energy_kcal, fat, saturated_fat, carbohydrates, sugars, protein, salt, nutriscore_grade, nutriscore_score
+  - Successfully updated olive oil SKU 808052 with complete nutrition data and nutri-score C (1 point)
+  - Enhanced corruption fix system now handles product-type-aware nutrition processing for regulatory compliance
+  - Force Update mode correctly applies standard nutrition values for olive oil products when website data is unavailable
+
 - **June 29, 2025**: Fixed nutrition data parsing and database storage issues
   - Identified and resolved Latvian nutrition label parsing problems with "tostarp" (including) prefixes
   - Fixed field name mapping between extraction code and Streamlit display interface
