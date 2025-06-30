@@ -166,6 +166,10 @@ def enhanced_product_manager_tab():
     st.header("🔧 Enhanced Product Manager")
     st.markdown("Process individual products with robust retry logic and corruption fix")
     
+    # Force cache clear to ensure fresh results
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    
     # Processing mode selection
     processing_mode = st.radio(
         "Processing Mode:",
