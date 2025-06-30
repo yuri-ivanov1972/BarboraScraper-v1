@@ -163,6 +163,10 @@ The application uses a PostgreSQL database with the following key tables:
   - Enhanced Streamlit interface with three processing modes: Regular Processing, Force Update (Fix Corrupted Data), and Corruption Detection
   - Added specific fix for SKU 147762 issues: missing rimi_url, incorrect category_id (1→298), NULL nutrition values blocking nutri-score calculation
   - Force Update mode overwrites existing corrupted data completely with fresh website data ensuring complete data integrity restoration
+  - Enhanced Force Update with comprehensive nutrition debugging: Added detailed output showing nutrition data parsing, nutritionfacts table saving results, and exact nutri-score calculation errors
+  - Fixed database schema compatibility issues: Updated all table/column names to match actual schema (products, nutritionfacts, product_price_history)
+  - Resolved nutri-score calculation errors: Fixed KeyError issues with safe field access and proper handling of calculator return format (tuple vs dictionary)
+  - Completed nutrition data processing transparency: System now provides complete visibility into website extraction, database storage, and calculation processes
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module

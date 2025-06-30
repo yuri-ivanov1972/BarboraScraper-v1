@@ -319,36 +319,84 @@ class EnhancedDatabaseUpdater:
                 return False
             
             # Calculate nutri-score using the calculator
+            self.status_callback("✓ All required fields present - proceeding with calculation")
             try:
                 from nutriscore_calculator import calculate_nutriscore
                 
                 # Convert salt to sodium (mg/100g) for nutri-score calculation
-                sodium_mg = nutrition['salt'] * 400 if nutrition['salt'] else 0
+                sodium_mg = nutrition.get('salt', 0) * 400 if nutrition.get('salt') else 0
+                
+                # Convert kcal to kj if needed (1 kcal = 4.184 kj)
+                energy_kj = nutrition.get('energy_kj', 0) or (nutrition.get('energy_kcal', 0) * 4.184 if nutrition.get('energy_kcal') else 0)
+                
+                # Show input values for calculation
+                self.status_callback("Input values for nutri-score calculation:")
+                self.status_callback(f"  - energy_kj: {energy_kj} (converted from kcal if needed)")
+                self.status_callback(f"  - sugars: {nutrition.get('carbs_sugars', 0) or 0}")
+                self.status_callback(f"  - saturated_fat: {nutrition.get('fat_saturated', 0) or 0}")
+                self.status_callback(f"  - sodium: {sodium_mg} (from salt: {nutrition.get('salt', 0)})")
+                self.status_callback(f"  - protein: {nutrition.get('protein', 0) or 0}")
+                self.status_callback(f"  - fiber: {int(nutrition.get('fiber', 0))}")
                 
                 nutri_result = calculate_nutriscore(
-                    energy_kj=nutrition['energy_kj'] or 0,
-                    sugars=nutrition['carbs_sugars'] or 0,
-                    saturated_fat=nutrition['fat_saturated'] or 0,
+                    energy_kj=energy_kj,
+                    sugars=nutrition.get('carbs_sugars', 0) or 0,
+                    saturated_fat=nutrition.get('fat_saturated', 0) or 0,
                     sodium=sodium_mg,
-                    protein=nutrition['protein'] or 0,
+                    protein=nutrition.get('protein', 0) or 0,
                     fiber=int(nutrition.get('fiber', 0))
                 )
                 
-                if nutri_result and 'grade' in nutri_result and 'points' in nutri_result:
-                    # Update nutri-score in database
-                    update_query = """
-                        UPDATE nutritionfacts 
-                        SET nutri_score_grade = %s, nutri_score_points = %s, data_source_date = CURRENT_TIMESTAMP
-                        WHERE product_id = %s
-                    """
-                    self._execute_query(update_query, (nutri_result['grade'], nutri_result['points'], product_id))
-                    self.status_callback(f"Updated nutri-score: {nutri_result['grade']} ({nutri_result['points']} points)")
-                    return True
+                # Handle different return formats from nutri-score calculator
+                if nutri_result:
+                    # Calculator returns tuple: (points, grade, details)
+                    if isinstance(nutri_result, tuple) and len(nutri_result) >= 2:
+                        points, grade = nutri_result[0], nutri_result[1]
+                        self.status_callback(f"Nutri-score calculated: {grade} ({points} points)")
+                        
+                        # Update nutri-score in database
+                        update_query = """
+                            UPDATE nutritionfacts 
+                            SET nutri_score_grade = %s, nutri_score_points = %s, data_source_date = CURRENT_TIMESTAMP
+                            WHERE product_id = %s
+                        """
+                        self._execute_query(update_query, (grade, points, product_id))
+                        self.status_callback(f"✓ NUTRI-SCORE CALCULATION SUCCESS: {grade} ({points} points)")
+                        self.status_callback("=" * 50)
+                        return True
+                    
+                    # Alternative: dictionary format
+                    elif isinstance(nutri_result, dict) and 'grade' in nutri_result and 'points' in nutri_result:
+                        grade, points = nutri_result['grade'], nutri_result['points']
+                        
+                        # Update nutri-score in database
+                        update_query = """
+                            UPDATE nutritionfacts 
+                            SET nutri_score_grade = %s, nutri_score_points = %s, data_source_date = CURRENT_TIMESTAMP
+                            WHERE product_id = %s
+                        """
+                        self._execute_query(update_query, (grade, points, product_id))
+                        self.status_callback(f"✓ NUTRI-SCORE CALCULATION SUCCESS: {grade} ({points} points)")
+                        self.status_callback("=" * 50)
+                        return True
+                    
+                    else:
+                        self.status_callback("✗ NUTRI-SCORE CALCULATION FAILED: Unexpected result format")
+                        self.status_callback(f"Calculator returned: {nutri_result}")
+                        self.status_callback(f"Result type: {type(nutri_result)}")
+                        self.status_callback("=" * 50)
+                else:
+                    self.status_callback("✗ NUTRI-SCORE CALCULATION FAILED: No result from calculator")
+                    self.status_callback("=" * 50)
                 
-            except ImportError:
-                self.status_callback("Nutri-score calculator not available")
+            except ImportError as e:
+                self.status_callback(f"✗ NUTRI-SCORE CALCULATION FAILED: Calculator module not available")
+                self.status_callback(f"Import error: {str(e)}")
+                self.status_callback("=" * 50)
             except Exception as e:
-                self.status_callback(f"Error calculating nutri-score: {str(e)}")
+                self.status_callback(f"✗ NUTRI-SCORE CALCULATION FAILED: {str(e)}")
+                self.status_callback(f"Error type: {type(e).__name__}")
+                self.status_callback("=" * 50)
             
             return False
             
