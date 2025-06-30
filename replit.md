@@ -105,6 +105,15 @@ The application uses a PostgreSQL database with the following key tables:
 
 ## Recent Changes
 
+- **June 30, 2025**: Successfully implemented complete photo extraction and database storage functionality
+  - Fixed photo extraction from Rimi's cloudinary CDN with robust CSS selectors targeting `img[src*="cloudinary"]`
+  - Implemented proper database schema integration using `productphotos` table in PRODUCTS_DB_URL with fields: `photo_id`, `product_id`, `photo_url`, `is_primary`
+  - Enhanced error handling with explicit debug messages distinguishing between photo parsing failures and database saving failures
+  - Photo processing now continues product workflow even when photo extraction fails, ensuring robust operation
+  - Successfully tested complete workflow: photo extraction → database saving → verification for SKU 815963
+  - System extracts only primary product photo as requested, avoiding unnecessary multiple photo processing
+  - Integrated photo functionality into both regular database updater and enhanced database updater for consistency
+
 - **June 29, 2025**: Fixed nutrition data parsing and database storage issues
   - Identified and resolved Latvian nutrition label parsing problems with "tostarp" (including) prefixes
   - Fixed field name mapping between extraction code and Streamlit display interface
