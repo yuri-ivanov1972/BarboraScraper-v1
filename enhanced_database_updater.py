@@ -443,6 +443,34 @@ class EnhancedDatabaseUpdater:
             self.status_callback(f"Error force-updating ingredients: {str(e)}")
             return False
     
+    def add_product_photos(self, product_id: int, photo_urls: List[str]) -> bool:
+        """Add product photos to productphotos table"""
+        try:
+            if not photo_urls:
+                return True  # No photos to add
+            
+            self.status_callback(f"Adding {len(photo_urls)} photos for product {product_id}")
+            
+            # Clear existing photos for this product
+            delete_query = "DELETE FROM productphotos WHERE product_id = %s"
+            self._execute_query(delete_query, (product_id,))
+            
+            # Add new photos
+            for i, photo_url in enumerate(photo_urls):
+                insert_query = """
+                    INSERT INTO productphotos (product_id, photo_url, is_primary) 
+                    VALUES (%s, %s, %s)
+                """
+                is_primary = (i == 0)  # First photo is primary
+                self._execute_query(insert_query, (product_id, photo_url, is_primary))
+            
+            self.status_callback(f"✓ Successfully added {len(photo_urls)} photos")
+            return True
+            
+        except Exception as e:
+            self.status_callback(f"Error adding photos: {str(e)}")
+            return False
+
     def get_product_by_sku(self, sku: str) -> Optional[Dict]:
         """Get existing product by SKU"""
         query = "SELECT * FROM products WHERE sku = %s"

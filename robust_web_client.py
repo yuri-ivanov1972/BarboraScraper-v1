@@ -126,8 +126,12 @@ class RobustWebClient:
                 # Extract price with robust parsing
                 price = self._extract_price(soup)
                 
+                # Extract product photos
+                photos = self._extract_photos(soup)
+                
                 return {
                     'name': product_name,
+                    'photos': photos,
                     'price': price,
                     'url': pattern,
                     'soup': soup  # Include soup for further processing
@@ -177,6 +181,47 @@ class RobustWebClient:
                     break
         
         return price
+    
+    def _extract_photos(self, soup: BeautifulSoup) -> List[str]:
+        """
+        Extract product photo URLs from the page
+        
+        Args:
+            soup: BeautifulSoup object of the product page
+            
+        Returns:
+            List of photo URLs
+        """
+        photos = []
+        
+        # Look for various image selectors
+        image_selectors = [
+            'img[src*="product"]',
+            'img[src*="rimi"]', 
+            'img[src*="rimibaltic"]',
+            '.product-image img',
+            '.product__image img',
+            '[data-src*="rimi"]',
+            'img[data-lazy*="rimi"]'
+        ]
+        
+        for selector in image_selectors:
+            images = soup.select(selector)
+            for img in images:
+                src = img.get('src') or img.get('data-src') or img.get('data-lazy')
+                if src and any(x in src for x in ['product', 'rimi', '.jpg', '.png', '.webp']):
+                    # Clean up the URL
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/'):
+                        src = 'https://www.rimi.lv' + src
+                    
+                    if src not in photos:  # Avoid duplicates
+                        photos.append(src)
+                        self.status_callback(f"Found product photo: {src}")
+        
+        self.status_callback(f"Total photos extracted: {len(photos)}")
+        return photos
     
     def extract_nutrition_data(self, soup: BeautifulSoup, product_url: str) -> Dict[str, Any]:
         """
@@ -255,15 +300,46 @@ class RobustWebClient:
                     details_soup = BeautifulSoup(details_html, 'html.parser')
                     self.status_callback("Successfully parsed product details HTML")
                     
-                    # Extract ingredients
-                    for section in details_soup.find_all('div', class_='product__list-wrapper'):
-                        heading = section.find('p', class_='heading')
-                        if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
-                            text_div = section.find('div', class_='text')
+                    # Extract ingredients with enhanced HTML structure detection
+                    ingredients_found = False
+                    
+                    # Method 1: Look in list items with spans
+                    for item in details_soup.find_all('li', class_='item'):
+                        span = item.find('span')
+                        if span and 'Sastāvdaļas' in span.get_text(strip=True):
+                            text_div = item.find('div', class_='text')
                             if text_div and text_div.p:
                                 nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
-                                self.status_callback(f"Found ingredients: {nutrition_data['ingredients'][:50]}...")
-                            break
+                                self.status_callback(f"Found ingredients (method 1): {nutrition_data['ingredients'][:50]}...")
+                                ingredients_found = True
+                                break
+                    
+                    # Method 2: Look in product list wrappers (original method)
+                    if not ingredients_found:
+                        for section in details_soup.find_all('div', class_='product__list-wrapper'):
+                            heading = section.find('p', class_='heading')
+                            if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
+                                text_div = section.find('div', class_='text')
+                                if text_div and text_div.p:
+                                    nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
+                                    self.status_callback(f"Found ingredients (method 2): {nutrition_data['ingredients'][:50]}...")
+                                    ingredients_found = True
+                                    break
+                    
+                    # Method 3: Search all text content for ingredients pattern
+                    if not ingredients_found:
+                        all_text = details_soup.get_text()
+                        if 'Sastāvdaļas' in all_text:
+                            # Find ingredients section in text
+                            import re
+                            pattern = r'Sastāvdaļas\s*([^.]*(?:\.[^.]*)*?)(?:\s*Izcelsmes valsts|$)'
+                            match = re.search(pattern, all_text, re.DOTALL | re.IGNORECASE)
+                            if match:
+                                ingredients_text = match.group(1).strip()
+                                if len(ingredients_text) > 10:  # Meaningful content
+                                    nutrition_data['ingredients'] = ingredients_text
+                                    self.status_callback(f"Found ingredients (method 3): {ingredients_text[:50]}...")
+                                    ingredients_found = True
                     
                     # Find nutrition table with proper HTML parsing and character encoding handling
                     tables = details_soup.find_all('table')
