@@ -395,7 +395,7 @@ class EnhancedDatabaseUpdater:
         """Add price history record"""
         try:
             history_query = """
-                INSERT INTO price_history (product_id, price, is_available, data_source, recorded_at)
+                INSERT INTO product_price_history (product_id, price, is_available, data_source, recorded_at)
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
             self._execute_query(history_query, (product_id, price, is_available, data_source))
