@@ -478,7 +478,7 @@ def main():
     st.markdown("Analyze and compare Rimi product categories with database data")
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["Category Analysis", "Product Manager", "Database Info"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Category Analysis", "Product Manager", "Batch Processing", "Database Info"])
     
     with tab1:
         # Category input
@@ -612,6 +612,165 @@ def main():
         product_manager_tab()
     
     with tab3:
+        # Batch Processing Tab
+        st.header("📦 Batch Processing")
+        st.markdown("Process multiple products with robust connection management")
+        
+        # Input methods
+        input_method = st.radio(
+            "Input Method:",
+            ["Manual SKU List", "Text Area Input", "Test Batch"],
+            help="Choose how to provide product SKUs for batch processing"
+        )
+        
+        skus_to_process = []
+        
+        if input_method == "Manual SKU List":
+            st.subheader("Enter SKUs")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                sku1 = st.text_input("SKU 1", placeholder="147762")
+                sku2 = st.text_input("SKU 2", placeholder="961367")
+                sku3 = st.text_input("SKU 3", placeholder="999409")
+            
+            with col2:
+                sku4 = st.text_input("SKU 4", placeholder="Optional")
+                sku5 = st.text_input("SKU 5", placeholder="Optional")
+                sku6 = st.text_input("SKU 6", placeholder="Optional")
+            
+            skus_to_process = [sku for sku in [sku1, sku2, sku3, sku4, sku5, sku6] if sku.strip()]
+        
+        elif input_method == "Text Area Input":
+            sku_text = st.text_area(
+                "Enter SKUs (one per line or comma-separated):",
+                placeholder="147762\n961367\n999409",
+                height=100
+            )
+            if sku_text:
+                # Handle both newline and comma separated
+                sku_text = sku_text.replace(',', '\n')
+                skus_to_process = [sku.strip() for sku in sku_text.split('\n') if sku.strip()]
+        
+        else:  # Test Batch
+            st.info("Test batch with known products")
+            skus_to_process = ["147762", "961367", "999409"]
+            st.write("Test SKUs:", skus_to_process)
+        
+        # Category selection
+        category_code = st.selectbox(
+            "Category Code:",
+            ["SH-1-1-1", "SH-2-1-1", "SH-11", "SH-12", "SH-13"],
+            help="Category to assign to all products in batch"
+        )
+        
+        # Batch processing options
+        col1, col2 = st.columns(2)
+        with col1:
+            max_workers = st.slider("Concurrent Workers", 1, 5, 2, help="Number of products to process simultaneously")
+        with col2:
+            show_details = st.checkbox("Show Detailed Progress", value=True)
+        
+        if skus_to_process:
+            st.write(f"Ready to process {len(skus_to_process)} products:")
+            st.code(", ".join(skus_to_process))
+            
+            if st.button("🚀 Start Batch Processing", type="primary"):
+                try:
+                    from batch_processor import BatchProcessor
+                    
+                    # Progress tracking
+                    progress_container = st.container()
+                    status_container = st.container()
+                    
+                    with progress_container:
+                        progress_bar = st.progress(0)
+                        progress_text = st.empty()
+                    
+                    with status_container:
+                        status_text = st.empty()
+                    
+                    messages = []
+                    
+                    def batch_status_callback(msg):
+                        messages.append(msg)
+                        if show_details:
+                            status_text.text(f"Latest: {msg}")
+                        
+                        # Update progress
+                        if "Processing product" in msg:
+                            current = len([m for m in messages if "Processing product" in m])
+                            progress = min(current / len(skus_to_process), 1.0)
+                            progress_bar.progress(progress)
+                            progress_text.text(f"Processing {current}/{len(skus_to_process)} products...")
+                    
+                    processor = BatchProcessor(batch_status_callback, max_workers=max_workers)
+                    
+                    start_time = time.time()
+                    results = processor.process_sku_list(skus_to_process, category_code)
+                    processor.close()
+                    
+                    # Final progress
+                    progress_bar.progress(1.0)
+                    progress_text.text(f"Completed in {results['processing_time']:.2f}s")
+                    
+                    # Results summary
+                    st.success("Batch processing completed!")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Total Products", results['total_products'])
+                    with col2:
+                        st.metric("Successful", results['successful'])
+                    with col3:
+                        st.metric("Failed", results['failed'])
+                    with col4:
+                        st.metric("Processing Time", f"{results['processing_time']:.1f}s")
+                    
+                    # Detailed results
+                    if results['products_processed']:
+                        st.subheader("Processing Details")
+                        for product in results['products_processed']:
+                            if product['status'] == 'success':
+                                st.success(f"✓ {product['sku']}: Successfully processed")
+                            else:
+                                st.error(f"✗ {product['sku']}: {product['error']}")
+                    
+                    # Connection reliability info
+                    st.info("✅ **Robust Connection Management Active**: Automatic reconnection, retry logic, and connection pooling ensure reliable batch processing even with network issues.")
+                    
+                except Exception as e:
+                    st.error(f"Batch processing error: {str(e)}")
+        else:
+            st.warning("Please enter at least one SKU to process")
+        
+        # Help section
+        with st.expander("ℹ️ About Batch Processing"):
+            st.markdown("""
+            **Batch Processing** allows you to process multiple products efficiently:
+            
+            **Features:**
+            - **Robust Connection Management**: Automatic reconnection and retry logic
+            - **Concurrent Processing**: Process multiple products simultaneously
+            - **Progress Tracking**: Real-time progress updates
+            - **Error Handling**: Individual product failures don't stop the batch
+            - **Connection Pooling**: Optimized database connections
+            
+            **Connection Reliability Improvements:**
+            - Automatic reconnection when connections are lost
+            - Retry logic with exponential backoff
+            - Connection health checks before queries
+            - Thread-safe connection management
+            - Graceful error recovery
+            
+            **Use Cases:**
+            - Process multiple new products at once
+            - Update existing product information
+            - Bulk nutrition data extraction
+            - Category-wide product updates
+            """)
+    
+    with tab4:
         # Database Info Tab
         st.header("📊 Database Information")
         st.markdown("View information about connected databases")

@@ -151,6 +151,12 @@ The application uses a PostgreSQL database with the following key tables:
   - Enhanced ingredient processing: "ieraugs. Lauksaimniecība ES" → ["ieraugs.", "Lauksaimniecība", "ES"] → filters certification tokens → keeps only "ieraugs"
   - Token-based filtering system: Maintains comprehensive list of certification tokens (Lauksaimniecība, ES, bio, bioloģisks, etc.) for precise filtering
   - Improved maintainability: Easy to extend with new certification patterns without complex regex modifications
+  - Resolved database connection reliability issues: Implemented robust connection management with automatic reconnection and retry logic
+  - Fixed "connection already closed" errors during batch processing: Added connection health checks and graceful error recovery
+  - Enhanced database connection handling: All components (DatabaseUpdater, IngredientProcessor, UpdateCoordinator) now use robust connection patterns
+  - Implemented batch processing system: Created BatchProcessor with thread-safe connection pooling for processing multiple products simultaneously
+  - Added comprehensive Streamlit batch processing interface: Users can now process multiple products with progress tracking and error handling
+  - Connection reliability features: Automatic reconnection on failures, retry logic with exponential backoff, connection health validation before queries
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
