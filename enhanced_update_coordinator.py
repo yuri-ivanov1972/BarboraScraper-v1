@@ -153,6 +153,15 @@ class EnhancedUpdateCoordinator:
                             photos_saved = self.db_updater.add_product_photos(
                                 existing_product['product_id'], product_data['photos']
                             )
+                            self.status_callback(f"Photos saved: {photos_saved}")
+                    
+                    # Save ingredients if available
+                    ingredients_saved = False
+                    if nutrition_data.get('ingredients'):
+                        ingredients_saved = self.db_updater.force_update_ingredients(
+                            sku, nutrition_data['ingredients']
+                        )
+                        self.status_callback(f"Ingredients saved: {ingredients_saved}")
                     
                     result.success = True
                     result.changes = {
@@ -162,7 +171,8 @@ class EnhancedUpdateCoordinator:
                         'nutrition_updated': nutrition_data.get('has_nutrition', False),
                         'ingredients_updated': bool(nutrition_data.get('ingredients')),
                         'price_updated': True,
-                        'photos_saved': photos_saved
+                        'photos_saved': photos_saved,
+                        'ingredients_saved': ingredients_saved
                     }
                     self.status_callback("Force update completed successfully")
                 else:
