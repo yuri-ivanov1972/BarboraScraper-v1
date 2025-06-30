@@ -4,7 +4,6 @@ Database Updater - Core functionality for updating PRODUCTS_DB_URL database
 Handles product CRUD operations, nutrition data, price history, and photos
 """
 import os
-import time
 import psycopg2
 import psycopg2.extras
 from typing import Dict, List, Optional, Tuple, Any
@@ -29,60 +28,25 @@ class DatabaseUpdater:
         self._connect()
     
     def _connect(self):
-        """Establish database connection with retry logic"""
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                if self.conn:
-                    self.conn.close()
-                self.conn = psycopg2.connect(self.db_url)
-                self.conn.autocommit = False
-                self.status_callback("Database connection established")
-                return
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    self.status_callback(f"Connection attempt {attempt + 1} failed, retrying...")
-                    time.sleep(1)
-                else:
-                    raise Exception(f"Database connection failed after {max_retries} attempts: {str(e)}")
-
-    def _ensure_connection(self):
-        """Ensure database connection is active"""
+        """Establish database connection"""
         try:
-            if not self.conn or self.conn.closed:
-                self._connect()
-            else:
-                # Test connection with a simple query
-                with self.conn.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-        except Exception:
-            self._connect()
+            self.conn = psycopg2.connect(self.db_url)
+            self.conn.autocommit = False  # Use transactions
+            self.status_callback("Database connection established")
+        except Exception as e:
+            raise Exception(f"Database connection failed: {str(e)}")
     
     def _execute_query(self, query: str, params: Tuple = None, fetch: bool = False) -> Optional[List]:
-        """Execute query with robust connection handling"""
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                self._ensure_connection()
-                with self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
-                    cursor.execute(query, params)
-                    if fetch:
-                        return cursor.fetchall()
-                    return None
-            except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
-                if attempt < max_retries - 1:
-                    self.status_callback(f"Query attempt {attempt + 1} failed due to connection issue, reconnecting...")
-                    self._connect()
-                    time.sleep(0.5)
-                else:
-                    raise Exception(f"Query execution failed after {max_retries} attempts: {str(e)}")
-            except Exception as e:
-                if self.conn:
-                    try:
-                        self.conn.rollback()
-                    except:
-                        pass
-                raise Exception(f"Query execution failed: {str(e)}")
+        """Execute query with error handling"""
+        try:
+            with self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                cursor.execute(query, params)
+                if fetch:
+                    return cursor.fetchall()
+                return None
+        except Exception as e:
+            self.conn.rollback()
+            raise Exception(f"Query execution failed: {str(e)}")
     
     def get_product_by_sku(self, sku: str) -> Optional[Dict]:
         """Get existing product by SKU"""
@@ -276,89 +240,30 @@ class DatabaseUpdater:
             return False
     
     def add_product_photos(self, product_id: int, photo_urls: List[str]) -> bool:
-        """
-        Add product photos to productphotos table with enhanced error handling
-        
-        Args:
-            product_id: Product ID to associate photos with
-            photo_urls: List of photo URLs (typically one primary photo)
-            
-        Returns:
-            True if successful, False if failed
-        """
+        """Add product photos to productphotos table"""
         try:
             if not photo_urls:
-                self.status_callback(f"No photos to save for product ID {product_id}")
                 return True
             
-            if not isinstance(photo_urls, list):
-                self.status_callback(f"Failed to save in database: photo_urls must be a list, got {type(photo_urls)}")
-                return False
+            # Clear existing photos
+            self._execute_query("DELETE FROM productphotos WHERE product_id = %s", (product_id,))
             
-            self.status_callback(f"Attempting to save {len(photo_urls)} photo(s) for product ID {product_id}")
-            
-            # Ensure database connection
-            self._ensure_connection()
-            
-            # Clear existing photos for this product
-            try:
-                delete_query = "DELETE FROM productphotos WHERE product_id = %s"
-                self._execute_query(delete_query, (product_id,))
-                self.status_callback(f"Cleared existing photos for product ID {product_id}")
-            except Exception as e:
-                self.status_callback(f"Failed to save in database: Error clearing existing photos - {str(e)}")
-                return False
-            
-            # Add new photos (primary photo first)
-            photos_saved = 0
+            # Add new photos
             for i, url in enumerate(photo_urls):
-                if not url or not isinstance(url, str):
-                    self.status_callback(f"Skipping invalid photo URL at index {i}: {repr(url)}")
-                    continue
-                
                 is_primary = (i == 0)  # First photo is primary
-                
-                try:
-                    insert_query = """
-                        INSERT INTO productphotos (product_id, photo_url, is_primary) 
-                        VALUES (%s, %s, %s)
-                    """
-                    self._execute_query(insert_query, (product_id, url.strip(), is_primary))
-                    
-                    photo_status = "primary" if is_primary else "secondary"
-                    self.status_callback(f"Successfully saved {photo_status} photo: {url}")
-                    photos_saved += 1
-                    
-                except Exception as e:
-                    self.status_callback(f"Failed to save in database: Error inserting photo {i+1} ({url}) - {str(e)}")
-                    # Continue trying to save other photos rather than failing completely
-            
-            if photos_saved == 0:
-                self.status_callback(f"Failed to save in database: No valid photos could be saved for product ID {product_id}")
-                return False
+                photo_query = """
+                    INSERT INTO productphotos (product_id, photo_url, is_primary)
+                    VALUES (%s, %s, %s)
+                """
+                self._execute_query(photo_query, (product_id, url, is_primary))
             
             # Commit the transaction
-            try:
-                self.conn.commit()
-                self.status_callback(f"Successfully committed {photos_saved} photo(s) to database for product ID {product_id}")
-                return True
-            except Exception as e:
-                self.status_callback(f"Failed to save in database: Error committing transaction - {str(e)}")
-                try:
-                    self.conn.rollback()
-                    self.status_callback("Database transaction rolled back")
-                except:
-                    pass
-                return False
+            self.conn.commit()
+            self.status_callback(f"Added {len(photo_urls)} photos for product ID {product_id}")
+            return True
             
         except Exception as e:
-            self.status_callback(f"Failed to save in database: Unexpected error in add_product_photos - {str(e)}")
-            try:
-                if self.conn:
-                    self.conn.rollback()
-            except:
-                pass
-            return False
+            raise Exception(f"Failed to add photos: {str(e)}")
     
     def update_product_price(self, sku: str, price: str, is_available: bool = True) -> bool:
         """Update product price and availability"""
