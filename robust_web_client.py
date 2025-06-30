@@ -265,14 +265,20 @@ class RobustWebClient:
                                 self.status_callback(f"Found ingredients: {nutrition_data['ingredients'][:50]}...")
                             break
                     
-                    # Find nutrition table with proper HTML parsing
+                    # Find nutrition table with proper HTML parsing and character encoding handling
                     tables = details_soup.find_all('table')
                     nutrition_table = None
                     for table in tables:
                         headers = table.find_all('th')
-                        if any('Uzturvērtība' in header.get_text(strip=True) for header in headers):
-                            nutrition_table = table
-                            self.status_callback("Found nutrition table with structured data")
+                        # Check for nutrition headers with proper Unicode handling
+                        for header in headers:
+                            header_text = header.get_text(strip=True)
+                            # Handle both Unicode escaped and normal Latvian characters
+                            if any(pattern in header_text.lower() for pattern in ['uzturvērtība', 'uzturv\\u0113rt\\u012bba', 'nutrition']):
+                                nutrition_table = table
+                                self.status_callback("Found nutrition table with structured data")
+                                break
+                        if nutrition_table:
                             break
                     
                     if nutrition_table:
@@ -287,7 +293,8 @@ class RobustWebClient:
                                 
                                 self.status_callback(f"Processing nutrition row: '{label}' -> '{value}'")
                                 
-                                if 'enerģētiskā vērtība' in label:
+                                # Handle Unicode escape sequences in Latvian text
+                                if any(pattern in label for pattern in ['enerģētiskā vērtība', 'ener\\u0123\\u0113tisk\\u0101 v\\u0113rt\\u012bba', 'energy']):
                                     kj, kcal = extract_energy_values(value)
                                     if kj > 0 or kcal > 0:
                                         nutrition_data['energy_kj'] = kj
@@ -295,44 +302,43 @@ class RobustWebClient:
                                         found_nutrition_count += 2
                                         self.status_callback(f"✓ Energy: {kcal} kcal ({kj} kJ)")
                                 
-                                elif 'tauki' in label and 'piesātinātās' not in label and 'tostarp' not in label:
+                                elif ('tauki' in label or 'fat' in label) and not any(x in label for x in ['piesātinātās', 'pies\\u0101tin\\u0101t\\u0101s', 'tostarp', 'saturated']):
                                     fat_total = extract_decimal(value)
-                                    if fat_total > 0:
-                                        nutrition_data['fat_total'] = fat_total
-                                        found_nutrition_count += 1
-                                        self.status_callback(f"✓ Fat total: {fat_total}g")
+                                    nutrition_data['fat_total'] = fat_total
+                                    found_nutrition_count += 1
+                                    self.status_callback(f"✓ Fat total: {fat_total}g")
                                 
-                                elif 'piesātinātās taukskābes' in label or 'tostarp piesātinātās' in label:
+                                elif any(pattern in label for pattern in ['piesātinātās taukskābes', 'pies\\u0101tin\\u0101t\\u0101s tauksk\\u0101bes', 'tostarp piesātinātās', 'saturated']):
                                     fat_saturated = extract_decimal(value)
                                     nutrition_data['fat_saturated'] = fat_saturated
                                     found_nutrition_count += 1
                                     self.status_callback(f"✓ Saturated fat: {fat_saturated}g")
                                 
-                                elif 'ogļhidrāti' in label and 'cukuri' not in label and 'tostarp' not in label:
+                                elif any(pattern in label for pattern in ['ogļhidrāti', 'og\\u013chidr\\u0101ti', 'carbohydrate']) and not any(x in label for x in ['cukuri', 'tostarp', 'sugar']):
                                     carbs_total = extract_decimal(value)
                                     nutrition_data['carbs_total'] = carbs_total
                                     found_nutrition_count += 1
                                     self.status_callback(f"✓ Carbohydrates: {carbs_total}g")
                                 
-                                elif 'cukuri' in label or 'tostarp cukuri' in label:
+                                elif any(pattern in label for pattern in ['cukuri', 'tostarp cukuri', 'sugar']):
                                     carbs_sugars = extract_decimal(value)
                                     nutrition_data['carbs_sugars'] = carbs_sugars
                                     found_nutrition_count += 1
                                     self.status_callback(f"✓ Sugars: {carbs_sugars}g")
                                 
-                                elif 'olbaltumvielas' in label:
+                                elif any(pattern in label for pattern in ['olbaltumvielas', 'protein']):
                                     protein = extract_decimal(value)
                                     nutrition_data['protein'] = protein
                                     found_nutrition_count += 1
                                     self.status_callback(f"✓ Protein: {protein}g")
                                 
-                                elif 'sāls' in label:
+                                elif any(pattern in label for pattern in ['sāls', 's\\u0101ls', 'salt']):
                                     salt = extract_decimal(value)
                                     nutrition_data['salt'] = salt
                                     found_nutrition_count += 1
                                     self.status_callback(f"✓ Salt: {salt}g")
                                 
-                                elif 'šķiedrvielas' in label:
+                                elif any(pattern in label for pattern in ['šķiedrvielas', 'fiber']):
                                     fiber = extract_decimal(value)
                                     nutrition_data['fiber'] = fiber
                                     found_nutrition_count += 1

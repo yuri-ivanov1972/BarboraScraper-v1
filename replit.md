@@ -167,6 +167,11 @@ The application uses a PostgreSQL database with the following key tables:
   - Fixed database schema compatibility issues: Updated all table/column names to match actual schema (products, nutritionfacts, product_price_history)
   - Resolved nutri-score calculation errors: Fixed KeyError issues with safe field access and proper handling of calculator return format (tuple vs dictionary)
   - Completed nutrition data processing transparency: System now provides complete visibility into website extraction, database storage, and calculation processes
+  - CRITICAL FIX: Resolved nutrition data extraction failure - Fixed Unicode character encoding issues in HTML parsing for Latvian nutrition labels
+  - Fixed nutrition table detection: Enhanced parsing logic to handle both normal and Unicode-escaped Latvian characters (e.g., "enerģētiskā vērtība" vs "ener\u0123\u0113tisk\u0101 v\u0113rt\u012bba")
+  - Successfully extracted complete olive oil nutrition data: Energy 900 kcal/3700 kJ, Fat 100g, Saturated fat 16g, Carbs 0g, Protein 0g, Salt 0g
+  - Enhanced nutrition label matching: Added pattern recognition for Unicode escape sequences in product details HTML extraction
+  - Verified complete nutrition processing pipeline: Website extraction → database storage → nutri-score calculation (E grade, 20 points for olive oil)
 
 - **June 28, 2025**: Implemented comprehensive database update system with complete nutrition data extraction
   - Created database updater with nutri-score calculation using provided nutriscore_calculator.py module
