@@ -505,8 +505,19 @@ class EnhancedDatabaseUpdater:
                 self.status_callback(f"Failed to save in database: No valid photos could be saved for product ID {product_id}")
                 return False
             
-            self.status_callback(f"Successfully saved {photos_saved} photo(s) to database for product ID {product_id}")
-            return True
+            # Ensure transaction is committed
+            try:
+                self.conn.commit()
+                self.status_callback(f"Successfully committed {photos_saved} photo(s) to database for product ID {product_id}")
+                return True
+            except Exception as e:
+                self.status_callback(f"Failed to save in database: Error committing photo transaction - {str(e)}")
+                try:
+                    self.conn.rollback()
+                    self.status_callback("Photo transaction rolled back")
+                except:
+                    pass
+                return False
             
         except Exception as e:
             self.status_callback(f"Failed to save in database: Unexpected error in add_product_photos - {str(e)}")
