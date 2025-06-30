@@ -19,7 +19,7 @@ def debug_ingredient_extraction():
         print("=" * 60)
         
         # Get the raw HTML
-        soup = client._make_request_with_retry(url)
+        soup = client.make_request_with_retry(url)
         
         if soup:
             # Look for any mention of "Sastāvdaļas" in the entire page
