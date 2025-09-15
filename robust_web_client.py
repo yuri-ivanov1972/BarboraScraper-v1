@@ -514,18 +514,23 @@ class RobustWebClient:
                                     ingredients_found = True
                                     break
                     
-                    # Method 2: Look in product list wrappers (original method)
+                    # Method 2: Look in product list wrappers (FIXED for nested structure)
                     if not ingredients_found:
                         for section in details_soup.find_all('div', class_='product__list-wrapper'):
                             heading = section.find('p', class_='heading')
                             if heading:
                                 heading_text = heading.get_text(strip=True)
                                 if any(keyword in heading_text for keyword in ingredient_keywords):
-                                    text_div = section.find('div', class_='text')
-                                    if text_div and text_div.p:
-                                        nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
-                                        self.status_callback(f"Found ingredients (method 2): {nutrition_data['ingredients'][:50]}...")
-                                        ingredients_found = True
+                                    # Handle nested structure: wrapper > ul > li > div.text > p
+                                    text_divs = section.find_all('div', class_='text')  # Find ALL text divs in this section
+                                    for text_div in text_divs:
+                                        if text_div.p and text_div.p.get_text(strip=True):
+                                            content = text_div.p.get_text(strip=True)
+                                            nutrition_data['ingredients'] = content
+                                            self.status_callback(f"Found ingredients (method 2, nested): {content[:80]}...")
+                                            ingredients_found = True
+                                            break
+                                    if ingredients_found:
                                         break
                     
                     # Method 3: Enhanced text pattern search with better regex
