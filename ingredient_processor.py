@@ -15,10 +15,9 @@ class IngredientProcessor:
     """Processes ingredients for new products and maintains frequency tracking"""
     
     def __init__(self, status_callback=None):
+        from database_config import db_config
         self.status_callback = status_callback or (lambda x: None)
-        self.db_url = os.getenv('PRODUCTS_DB_URL')
-        if not self.db_url:
-            raise ValueError("PRODUCTS_DB_URL environment variable not set")
+        self.db_url = db_config.products_db_url
         
         self.conn = None
         self._connect()

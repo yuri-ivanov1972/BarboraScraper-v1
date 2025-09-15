@@ -15,12 +15,10 @@ class EnhancedDatabaseUpdater:
     """Enhanced database updater with forced update capabilities for corrupted data"""
     
     def __init__(self, status_callback=None):
+        from database_config import db_config
         self.status_callback = status_callback or (lambda msg: print(msg))
         self.conn = None
-        self.products_db_url = os.environ.get('PRODUCTS_DB_URL')
-        
-        if not self.products_db_url:
-            raise Exception("PRODUCTS_DB_URL environment variable not found")
+        self.products_db_url = db_config.products_db_url
         
         self._connect()
     

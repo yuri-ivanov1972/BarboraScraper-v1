@@ -16,7 +16,8 @@ class IngredientDeduplicator:
     def _connect(self):
         """Establish database connection"""
         try:
-            db_url = os.getenv('PRODUCTS_DB_URL')
+            from database_config import db_config
+            db_url = db_config.products_db_url
             self.conn = psycopg2.connect(db_url, cursor_factory=RealDictCursor)
             self.status_callback("Deduplicator connected to database")
         except Exception as e:

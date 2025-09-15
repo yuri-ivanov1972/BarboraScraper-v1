@@ -344,11 +344,9 @@ class DatabaseConnection:
     """Database connection manager using exact hierarchical matching"""
     
     def __init__(self):
-        self.categories_db_url = os.getenv('CATEGORIES_DB_URL')
-        self.products_db_url = os.getenv('PRODUCTS_DB_URL')
-        
-        if not self.categories_db_url or not self.products_db_url:
-            raise ValueError("CATEGORIES_DB_URL and PRODUCTS_DB_URL must be set")
+        from database_config import db_config
+        self.categories_db_url = db_config.categories_db_url
+        self.products_db_url = db_config.products_db_url
     
     def get_categories(self) -> List[Dict]:
         """Get all categories from normalized_categories table"""

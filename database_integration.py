@@ -36,11 +36,9 @@ class ExternalDatabaseManager:
     """Manager for accessing external categories and products databases"""
     
     def __init__(self):
-        self.categories_db_url = os.getenv('CATEGORIES_DB_URL')
-        self.products_db_url = os.getenv('PRODUCTS_DB_URL')
-        
-        if not self.categories_db_url or not self.products_db_url:
-            raise ValueError("CATEGORIES_DB_URL and PRODUCTS_DB_URL must be set")
+        from database_config import db_config
+        self.categories_db_url = db_config.categories_db_url
+        self.products_db_url = db_config.products_db_url
     
     def get_all_categories(self) -> List[CategoryInfo]:
         """Get all categories from the external database"""
