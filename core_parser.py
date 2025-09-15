@@ -49,14 +49,55 @@ class RimiParser:
             category_code = f"SH-{category_code}"
         return f"https://www.rimi.lv/e-veikals/lv/produkti/c/{category_code}"
     
+    def _detect_page_size(self, category_url: str, soup: BeautifulSoup = None) -> int:
+        """Dynamically detect page size by counting products on first page"""
+        try:
+            if soup is None:
+                response = self.session.get(category_url, timeout=10)
+                soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Count actual products on first page
+            products_on_first_page = len(self.extract_products_from_page(category_url, max_products=100))
+            self.status_callback(f"Found {products_on_first_page} products on first page")
+            
+            # Common page sizes used by e-commerce sites
+            common_page_sizes = [20, 24, 25, 30, 36, 40, 48, 50, 60]
+            
+            # If we found products, try to match to common page sizes
+            if products_on_first_page > 0:
+                # If it matches a common page size exactly, use it
+                if products_on_first_page in common_page_sizes:
+                    self.status_callback(f"Detected standard page size: {products_on_first_page}")
+                    return products_on_first_page
+                # If it's close to a common page size (within 2), use the common one
+                for page_size in common_page_sizes:
+                    if abs(products_on_first_page - page_size) <= 2:
+                        self.status_callback(f"Detected page size {products_on_first_page}, using standard {page_size}")
+                        return page_size
+                # Otherwise, use the actual count
+                self.status_callback(f"Using actual detected page size: {products_on_first_page}")
+                return products_on_first_page
+            
+            # Fallback: default to 40 (current Rimi standard)
+            self.status_callback("No products detected, using fallback page size: 40")
+            return 40
+            
+        except Exception as e:
+            self.status_callback(f"Error detecting page size, using fallback: {str(e)}")
+            return 40  # Safe fallback
+    
     def get_total_products_from_pagination(self, category_url: str) -> Tuple[int, int]:
-        """Get exact product count by checking the last page"""
+        """Get exact product count by checking the last page and dynamically detecting page size"""
         try:
             self.status_callback(f"Fetching category page: {category_url}")
             response = self.session.get(category_url, timeout=10)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # First, detect the actual page size by counting products on first page
+            page_size = self._detect_page_size(category_url, soup)
+            self.status_callback(f"Detected page size: {page_size} products per page")
             
             max_page = 1
             
@@ -119,18 +160,18 @@ class RimiParser:
                         page_num = int(text)
                         max_page = max(max_page, page_num)
             
-            # Now get exact product count
+            # Now get exact product count using detected page size
             if max_page == 1:
                 # Single page - count products directly
-                products_on_page = len(self.extract_products_from_page(category_url))
+                products_on_page = len(self.extract_products_from_page(category_url, max_products=page_size * 2))
                 total_products = products_on_page
                 self.status_callback(f"Single page with {total_products} products")
             else:
                 # Multiple pages - validate last page and get exact count
                 self.status_callback(f"Validating last page ({max_page}) contains products")
-                last_page_url = f"{category_url}?pageSize=20&currentPage={max_page}"
+                last_page_url = f"{category_url}?pageSize={page_size}&currentPage={max_page}"
                 
-                products_on_last_page = len(self.extract_products_from_page(last_page_url))
+                products_on_last_page = len(self.extract_products_from_page(last_page_url, max_products=page_size * 2))
                 
                 # If the detected last page is empty, search backwards for the real last page
                 if products_on_last_page == 0:
@@ -139,8 +180,8 @@ class RimiParser:
                     
                     # Search backwards from detected max_page
                     for test_page in range(max_page - 1, max(1, max_page - 10), -1):
-                        test_url = f"{category_url}?pageSize=20&currentPage={test_page}"
-                        test_products = len(self.extract_products_from_page(test_url))
+                        test_url = f"{category_url}?pageSize={page_size}&currentPage={test_page}"
+                        test_products = len(self.extract_products_from_page(test_url, max_products=page_size * 2))
                         if test_products > 0:
                             actual_last_page = test_page
                             products_on_last_page = test_products
@@ -149,9 +190,9 @@ class RimiParser:
                     
                     max_page = actual_last_page
                 
-                # Calculate exact total: (pages-1) * 20 + products on last page
-                total_products = (max_page - 1) * 20 + products_on_last_page
-                self.status_callback(f"Exact count: ({max_page}-1) × 20 + {products_on_last_page} = {total_products} products")
+                # Calculate exact total using detected page size
+                total_products = (max_page - 1) * page_size + products_on_last_page
+                self.status_callback(f"Exact count: ({max_page}-1) × {page_size} + {products_on_last_page} = {total_products} products")
             
             return total_products, max_page
             
@@ -159,7 +200,7 @@ class RimiParser:
             self.status_callback(f"Error getting pagination info: {str(e)}")
             return 0, 0
     
-    def extract_products_from_page(self, page_url: str, max_products: int = 20) -> List[ProductInfo]:
+    def extract_products_from_page(self, page_url: str, max_products: int = 100) -> List[ProductInfo]:
         """Extract product information from a single page"""
         products = []
         
@@ -268,22 +309,22 @@ class RimiParser:
             self.status_callback(f"Error extracting products: {str(e)}")
             return []
     
-    def _find_actual_last_page(self, category_url: str, suspected_max: int) -> int:
+    def _find_actual_last_page(self, category_url: str, suspected_max: int, page_size: int = 40) -> int:
         """Use binary search to find the actual last page with products"""
         
         # Start with a reasonable upper bound
         left, right = 1, min(suspected_max, 100)  # Cap at 100 to avoid infinite loops
         actual_last_page = 1
         
-        self.status_callback(f"Binary searching for last page between 1 and {right}")
+        self.status_callback(f"Binary searching for last page between 1 and {right} (page size: {page_size})")
         
         # Binary search for the last page with products
         while left <= right:
             mid = (left + right) // 2
-            test_url = f"{category_url}?pageSize=20&currentPage={mid}"
+            test_url = f"{category_url}?pageSize={page_size}&currentPage={mid}"
             
             try:
-                products_count = len(self.extract_products_from_page(test_url))
+                products_count = len(self.extract_products_from_page(test_url, max_products=page_size * 2))
                 
                 if products_count > 0:
                     actual_last_page = mid
