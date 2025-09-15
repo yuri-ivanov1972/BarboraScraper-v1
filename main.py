@@ -130,10 +130,13 @@ def analyze_category(category_code: str):
             f"{len(db_products)} of {total_products_web} products"
         )
         
-        # Progress bar
-        st.progress(coverage_percentage / 100)
+        # Progress bar (cap at 100% for visual display)
+        progress_value = min(coverage_percentage / 100, 1.0)
+        st.progress(progress_value)
         
-        if coverage_percentage < 50:
+        if coverage_percentage > 100:
+            st.success(f"Database has {coverage_percentage:.1f}% coverage - includes discontinued products not currently on website")
+        elif coverage_percentage < 50:
             st.warning("Low database coverage - many products missing from database")
         elif coverage_percentage < 80:
             st.info("Moderate database coverage - some products missing")
