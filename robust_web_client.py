@@ -498,8 +498,8 @@ class RobustWebClient:
                     # Extract ingredients with enhanced HTML structure detection
                     ingredients_found = False
                     
-                    # Define ingredient section keywords (Latvian variants)
-                    ingredient_keywords = ['Sastāvdaļas', 'sastāvdaļas', 'Sastāvs', 'sastāvs', 'SASTĀVDAĻAS', 'SASTĀVS']
+                    # Define ingredient section keywords (Latvian variants) - ONLY for ingredients, NOT nutrition facts
+                    ingredient_keywords = ['Sastāvdaļas', 'sastāvdaļas', 'SASTĀVDAĻAS']
                     
                     # Method 1: Look in list items with spans
                     for item in details_soup.find_all('li', class_='item'):
@@ -534,12 +534,12 @@ class RobustWebClient:
                         if any(keyword in all_text for keyword in ingredient_keywords):
                             # Try multiple patterns to capture different content structures
                             patterns = [
-                                # Pattern 1: Content between ingredient keywords and next section
-                                r'(?:Sastāvdaļas|Sastāvs)\s*([^.]*(?:\.[^.]*)*?)(?:\s*(?:Izcelsmes valsts|Daudzums|$))',
-                                # Pattern 2: Content after ingredient keywords until next capital word section  
-                                r'(?:Sastāvdaļas|Sastāvs)\s*(.*?)(?:[A-Z][a-z]+\s*[A-Z]|$)',
-                                # Pattern 3: Everything after ingredient keywords for at least 20 characters
-                                r'(?:Sastāvdaļas|Sastāvs)\s*(.{20,}?)(?:\s*[A-Z][a-z]+|$)'
+                                # Pattern 1: Content between Sastāvdaļas and next section (avoid Sastāvs which is nutrition)
+                                r'Sastāvdaļas\s*([^.]*(?:\.[^.]*)*?)(?:\s*(?:Izcelsmes valsts|Sastāvs|Daudzums|$))',
+                                # Pattern 2: Content after Sastāvdaļas until next capital word section  
+                                r'Sastāvdaļas\s*(.*?)(?:[A-Z][a-z]+\s*[A-Z]|$)',
+                                # Pattern 3: Everything after Sastāvdaļas for at least 20 characters
+                                r'Sastāvdaļas\s*(.{20,}?)(?:\s*[A-Z][a-z]+|$)'
                             ]
                             
                             for i, pattern in enumerate(patterns, 1):
