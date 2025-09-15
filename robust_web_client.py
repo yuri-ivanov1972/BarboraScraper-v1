@@ -498,41 +498,48 @@ class RobustWebClient:
                     # Extract ingredients with enhanced HTML structure detection
                     ingredients_found = False
                     
+                    # Define ingredient section keywords (Latvian variants)
+                    ingredient_keywords = ['Sastāvdaļas', 'sastāvdaļas', 'Sastāvs', 'sastāvs', 'SASTĀVDAĻAS', 'SASTĀVS']
+                    
                     # Method 1: Look in list items with spans
                     for item in details_soup.find_all('li', class_='item'):
                         span = item.find('span')
-                        if span and 'Sastāvdaļas' in span.get_text(strip=True):
-                            text_div = item.find('div', class_='text')
-                            if text_div and text_div.p:
-                                nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
-                                self.status_callback(f"Found ingredients (method 1): {nutrition_data['ingredients'][:50]}...")
-                                ingredients_found = True
-                                break
+                        if span:
+                            span_text = span.get_text(strip=True)
+                            if any(keyword in span_text for keyword in ingredient_keywords):
+                                text_div = item.find('div', class_='text')
+                                if text_div and text_div.p:
+                                    nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
+                                    self.status_callback(f"Found ingredients (method 1): {nutrition_data['ingredients'][:50]}...")
+                                    ingredients_found = True
+                                    break
                     
                     # Method 2: Look in product list wrappers (original method)
                     if not ingredients_found:
                         for section in details_soup.find_all('div', class_='product__list-wrapper'):
                             heading = section.find('p', class_='heading')
-                            if heading and 'Sastāvdaļas' in heading.get_text(strip=True):
-                                text_div = section.find('div', class_='text')
-                                if text_div and text_div.p:
-                                    nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
-                                    self.status_callback(f"Found ingredients (method 2): {nutrition_data['ingredients'][:50]}...")
-                                    ingredients_found = True
-                                    break
+                            if heading:
+                                heading_text = heading.get_text(strip=True)
+                                if any(keyword in heading_text for keyword in ingredient_keywords):
+                                    text_div = section.find('div', class_='text')
+                                    if text_div and text_div.p:
+                                        nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
+                                        self.status_callback(f"Found ingredients (method 2): {nutrition_data['ingredients'][:50]}...")
+                                        ingredients_found = True
+                                        break
                     
                     # Method 3: Enhanced text pattern search with better regex
                     if not ingredients_found:
                         all_text = details_soup.get_text()
-                        if 'Sastāvdaļas' in all_text:
+                        if any(keyword in all_text for keyword in ingredient_keywords):
                             # Try multiple patterns to capture different content structures
                             patterns = [
-                                # Pattern 1: Content between Sastāvdaļas and next section
-                                r'Sastāvdaļas\s*([^.]*(?:\.[^.]*)*?)(?:\s*(?:Izcelsmes valsts|Sastāvs|Daudzums|$))',
-                                # Pattern 2: Content after Sastāvdaļas until next capital word section  
-                                r'Sastāvdaļas\s*(.*?)(?:[A-Z][a-z]+\s*[A-Z]|$)',
-                                # Pattern 3: Everything after Sastāvdaļas for at least 20 characters
-                                r'Sastāvdaļas\s*(.{20,}?)(?:\s*[A-Z][a-z]+|$)'
+                                # Pattern 1: Content between ingredient keywords and next section
+                                r'(?:Sastāvdaļas|Sastāvs)\s*([^.]*(?:\.[^.]*)*?)(?:\s*(?:Izcelsmes valsts|Daudzums|$))',
+                                # Pattern 2: Content after ingredient keywords until next capital word section  
+                                r'(?:Sastāvdaļas|Sastāvs)\s*(.*?)(?:[A-Z][a-z]+\s*[A-Z]|$)',
+                                # Pattern 3: Everything after ingredient keywords for at least 20 characters
+                                r'(?:Sastāvdaļas|Sastāvs)\s*(.{20,}?)(?:\s*[A-Z][a-z]+|$)'
                             ]
                             
                             for i, pattern in enumerate(patterns, 1):
@@ -548,20 +555,76 @@ class RobustWebClient:
                                         ingredients_found = True
                                         break
                     
-                    # Method 4: Fallback - extract any content near "Sastāvdaļas" 
-                    if not ingredients_found and 'Sastāvdaļas' in details_soup.get_text():
+                    # Method 4: Fallback - extract any content near ingredient keywords 
+                    if not ingredients_found:
                         all_text = details_soup.get_text()
-                        pos = all_text.find('Sastāvdaļas')
-                        if pos != -1:
-                            # Extract context after Sastāvdaļas
-                            context_start = pos + len('Sastāvdaļas')
-                            context_end = min(len(all_text), context_start + 200)  # Next 200 chars
-                            context = all_text[context_start:context_end].strip()
+                        for keyword in ingredient_keywords:
+                            pos = all_text.find(keyword)
+                            if pos != -1:
+                                # Extract context after ingredient keyword
+                                context_start = pos + len(keyword)
+                                context_end = min(len(all_text), context_start + 200)  # Next 200 chars
+                                context = all_text[context_start:context_end].strip()
+                                
+                                if len(context) > 15:  # Has meaningful content
+                                    nutrition_data['ingredients'] = context
+                                    self.status_callback(f"Found ingredients (method 4, context): {context[:80]}...")
+                                    ingredients_found = True
+                                    break
+                    
+                    # Method 5: Single-ingredient product fallback
+                    if not ingredients_found:
+                        # Try to get product name from page title or meta tags
+                        page_title = ''
+                        title_tag = soup.find('title')
+                        if title_tag:
+                            page_title = title_tag.get_text(strip=True)
+                        
+                        # Also try to get from h1 tags
+                        if not page_title:
+                            h1_tag = soup.find('h1')
+                            if h1_tag:
+                                page_title = h1_tag.get_text(strip=True)
+                        
+                        if page_title:
+                            # Helper function to normalize text for matching (remove diacritics)
+                            def normalize_text(text):
+                                replacements = {
+                                    'ā': 'a', 'ē': 'e', 'ī': 'i', 'ū': 'u', 'ō': 'o', 
+                                    'ģ': 'g', 'ķ': 'k', 'ļ': 'l', 'ņ': 'n', 'š': 's', 'ž': 'z',
+                                    'č': 'c'
+                                }
+                                normalized = text.lower()
+                                for latvian, ascii_char in replacements.items():
+                                    normalized = normalized.replace(latvian, ascii_char)
+                                return normalized
                             
-                            if len(context) > 15:  # Has meaningful content
-                                nutrition_data['ingredients'] = context
-                                self.status_callback(f"Found ingredients (method 4, context): {context[:80]}...")
-                                ingredients_found = True
+                            # Canonical ingredient mapping for single-ingredient products
+                            ingredient_patterns = {
+                                # Eggs - various forms
+                                r'\b(?:olas?|olu|egg|eggs)\b': 'olas',
+                                # Milk  
+                                r'\b(?:piens|milk)\b': 'piens',
+                                # Bread
+                                r'\b(?:maize|bread|maizes)\b': 'maize',
+                                # Cheese
+                                r'\b(?:siers|cheese|siera)\b': 'siers',
+                                # Meat - various forms
+                                r'\b(?:gala|galas|meat)\b': 'gaļa',
+                                # Fish - various forms  
+                                r'\b(?:zivs|zivis|fish)\b': 'zivs'
+                            }
+                            
+                            # Normalize title for matching
+                            normalized_title = normalize_text(page_title)
+                            
+                            # Try each ingredient pattern
+                            for pattern, canonical_ingredient in ingredient_patterns.items():
+                                if re.search(pattern, normalized_title, re.IGNORECASE):
+                                    nutrition_data['ingredients'] = canonical_ingredient
+                                    self.status_callback(f"Inferred single ingredient from product title: {canonical_ingredient} (matched pattern in '{page_title}')")
+                                    ingredients_found = True
+                                    break
                     
                     # Find nutrition table with proper HTML parsing and character encoding handling
                     tables = details_soup.find_all('table')
