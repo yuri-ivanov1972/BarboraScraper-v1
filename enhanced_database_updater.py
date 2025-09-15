@@ -262,6 +262,10 @@ class EnhancedDatabaseUpdater:
                 self.status_callback("Creating new nutrition record")
                 self.add_nutrition_data(product_id, nutrition_data)
             
+            # Commit the transaction
+            self.conn.commit()
+            self.status_callback("✓ Committed nutrition update to database")
+            
             return True
             
         except Exception as e:
@@ -575,7 +579,7 @@ class EnhancedDatabaseUpdater:
             
             result = self._execute_query(nutrition_query, (
                 product_id,
-                nutrition_data.get('ingredients', ''),
+                nutrition_data.get('ingredients_text', ''),
                 nutrition_data.get('energy_kcal', 0),
                 nutrition_data.get('energy_kj', 0),
                 nutrition_data.get('fat_total', 0),
@@ -593,6 +597,11 @@ class EnhancedDatabaseUpdater:
                 
                 # Calculate nutri-score
                 self.force_recalculate_nutriscore(product_id)
+                
+                # Commit the transaction
+                self.conn.commit()
+                self.status_callback("✓ Committed nutrition data to database")
+                
                 return True
             
             return False
