@@ -425,7 +425,7 @@ class RobustWebClient:
         # Initialize nutrition data
         nutrition_data = {
             'has_nutrition': False,
-            'ingredients': '',
+            'ingredients_text': '',
             'energy_kcal': 0,
             'energy_kj': 0,
             'fat_total': 0,
@@ -509,8 +509,8 @@ class RobustWebClient:
                             if any(keyword in span_text for keyword in ingredient_keywords):
                                 text_div = item.find('div', class_='text')
                                 if text_div and text_div.p:
-                                    nutrition_data['ingredients'] = text_div.p.get_text(strip=True)
-                                    self.status_callback(f"Found ingredients (method 1): {nutrition_data['ingredients'][:50]}...")
+                                    nutrition_data['ingredients_text'] = text_div.p.get_text(strip=True)
+                                    self.status_callback(f"Found ingredients (method 1): {nutrition_data['ingredients_text'][:50]}...")
                                     ingredients_found = True
                                     break
                     
@@ -526,7 +526,7 @@ class RobustWebClient:
                                     for text_div in text_divs:
                                         if text_div.p and text_div.p.get_text(strip=True):
                                             content = text_div.p.get_text(strip=True)
-                                            nutrition_data['ingredients'] = content
+                                            nutrition_data['ingredients_text'] = content
                                             self.status_callback(f"Found ingredients (method 2, nested): {content[:80]}...")
                                             ingredients_found = True
                                             break
@@ -555,7 +555,7 @@ class RobustWebClient:
                                     ingredients_text = re.sub(r'\s+', ' ', ingredients_text)  # Normalize whitespace
                                     
                                     if len(ingredients_text) > 10:  # Meaningful content
-                                        nutrition_data['ingredients'] = ingredients_text
+                                        nutrition_data['ingredients_text'] = ingredients_text
                                         self.status_callback(f"Found ingredients (method 3, pattern {i}): {ingredients_text[:80]}...")
                                         ingredients_found = True
                                         break
@@ -572,7 +572,7 @@ class RobustWebClient:
                                 context = all_text[context_start:context_end].strip()
                                 
                                 if len(context) > 15:  # Has meaningful content
-                                    nutrition_data['ingredients'] = context
+                                    nutrition_data['ingredients_text'] = context
                                     self.status_callback(f"Found ingredients (method 4, context): {context[:80]}...")
                                     ingredients_found = True
                                     break
@@ -626,7 +626,7 @@ class RobustWebClient:
                             # Try each ingredient pattern
                             for pattern, canonical_ingredient in ingredient_patterns.items():
                                 if re.search(pattern, normalized_title, re.IGNORECASE):
-                                    nutrition_data['ingredients'] = canonical_ingredient
+                                    nutrition_data['ingredients_text'] = canonical_ingredient
                                     self.status_callback(f"Inferred single ingredient from product title: {canonical_ingredient} (matched pattern in '{page_title}')")
                                     ingredients_found = True
                                     break
@@ -725,6 +725,9 @@ class RobustWebClient:
                 
         except Exception as e:
             self.status_callback(f"✗ Error extracting nutrition data: {str(e)}")
+        
+        # Add backwards compatibility for older code expecting 'ingredients' key
+        nutrition_data['ingredients'] = nutrition_data.get('ingredients_text', '')
         
         return nutrition_data
     
