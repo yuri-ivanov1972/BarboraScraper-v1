@@ -479,11 +479,21 @@ class RobustWebClient:
                 )
                 
                 if details_match:
-                    # Decode the HTML content
+                    # Decode the HTML content with proper Unicode handling
                     details_html = details_match.group(1)
-                    details_html = details_html.replace('\\/', '/').replace('\\"', '"').replace('\\n', '\n').replace('\\t', '\t')
+                    details_html = details_html.replace('\\/', '/').replace('\\"', '"')
+                    details_html = details_html.replace('\\n', '\n').replace('\\t', '\t')
+                    details_html = details_html.replace('\\r', '\r')
+                    
+                    # Decode Unicode escapes (e.g., \u0101 -> ā, \u013c -> ļ)
+                    try:
+                        details_html = details_html.encode('utf-8').decode('unicode_escape')
+                    except UnicodeDecodeError:
+                        # If Unicode decoding fails, continue with the original
+                        self.status_callback("Warning: Could not decode Unicode escapes in details HTML")
+                    
                     details_soup = BeautifulSoup(details_html, 'html.parser')
-                    self.status_callback("Successfully parsed product details HTML")
+                    self.status_callback("Successfully parsed product details HTML with Unicode decoding")
                     
                     # Extract ingredients with enhanced HTML structure detection
                     ingredients_found = False
@@ -511,20 +521,47 @@ class RobustWebClient:
                                     ingredients_found = True
                                     break
                     
-                    # Method 3: Search all text content for ingredients pattern
+                    # Method 3: Enhanced text pattern search with better regex
                     if not ingredients_found:
                         all_text = details_soup.get_text()
                         if 'Sastāvdaļas' in all_text:
-                            # Find ingredients section in text
-                            import re
-                            pattern = r'Sastāvdaļas\s*([^.]*(?:\.[^.]*)*?)(?:\s*Izcelsmes valsts|$)'
-                            match = re.search(pattern, all_text, re.DOTALL | re.IGNORECASE)
-                            if match:
-                                ingredients_text = match.group(1).strip()
-                                if len(ingredients_text) > 10:  # Meaningful content
-                                    nutrition_data['ingredients'] = ingredients_text
-                                    self.status_callback(f"Found ingredients (method 3): {ingredients_text[:50]}...")
-                                    ingredients_found = True
+                            # Try multiple patterns to capture different content structures
+                            patterns = [
+                                # Pattern 1: Content between Sastāvdaļas and next section
+                                r'Sastāvdaļas\s*([^.]*(?:\.[^.]*)*?)(?:\s*(?:Izcelsmes valsts|Sastāvs|Daudzums|$))',
+                                # Pattern 2: Content after Sastāvdaļas until next capital word section  
+                                r'Sastāvdaļas\s*(.*?)(?:[A-Z][a-z]+\s*[A-Z]|$)',
+                                # Pattern 3: Everything after Sastāvdaļas for at least 20 characters
+                                r'Sastāvdaļas\s*(.{20,}?)(?:\s*[A-Z][a-z]+|$)'
+                            ]
+                            
+                            for i, pattern in enumerate(patterns, 1):
+                                match = re.search(pattern, all_text, re.DOTALL | re.IGNORECASE)
+                                if match:
+                                    ingredients_text = match.group(1).strip()
+                                    # Clean up the text
+                                    ingredients_text = re.sub(r'\s+', ' ', ingredients_text)  # Normalize whitespace
+                                    
+                                    if len(ingredients_text) > 10:  # Meaningful content
+                                        nutrition_data['ingredients'] = ingredients_text
+                                        self.status_callback(f"Found ingredients (method 3, pattern {i}): {ingredients_text[:80]}...")
+                                        ingredients_found = True
+                                        break
+                    
+                    # Method 4: Fallback - extract any content near "Sastāvdaļas" 
+                    if not ingredients_found and 'Sastāvdaļas' in details_soup.get_text():
+                        all_text = details_soup.get_text()
+                        pos = all_text.find('Sastāvdaļas')
+                        if pos != -1:
+                            # Extract context after Sastāvdaļas
+                            context_start = pos + len('Sastāvdaļas')
+                            context_end = min(len(all_text), context_start + 200)  # Next 200 chars
+                            context = all_text[context_start:context_end].strip()
+                            
+                            if len(context) > 15:  # Has meaningful content
+                                nutrition_data['ingredients'] = context
+                                self.status_callback(f"Found ingredients (method 4, context): {context[:80]}...")
+                                ingredients_found = True
                     
                     # Find nutrition table with proper HTML parsing and character encoding handling
                     tables = details_soup.find_all('table')
