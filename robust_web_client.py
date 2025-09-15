@@ -320,13 +320,13 @@ class RobustWebClient:
     
     def _clean_image_url(self, src: str) -> str:
         """
-        Clean and normalize image URL
+        Clean and normalize image URL, improving Cloudinary quality for better images
         
         Args:
             src: Raw image URL
             
         Returns:
-            Cleaned URL or empty string if invalid
+            Cleaned and optimized URL or empty string if invalid
         """
         if not src:
             return ""
@@ -344,6 +344,10 @@ class RobustWebClient:
                 self.status_callback(f"Invalid URL protocol: {src}")
                 return ""
             
+            # Improve Cloudinary URL quality parameters
+            if 'cloudinary' in src.lower() and 'rimibaltic' in src.lower():
+                src = self._improve_cloudinary_url(src)
+            
             # Remove any trailing parameters that might cause issues
             # But keep necessary CDN parameters
             if '?' in src and 'cloudinary' not in src.lower():
@@ -354,6 +358,55 @@ class RobustWebClient:
         except Exception as e:
             self.status_callback(f"Error cleaning URL '{src}': {str(e)}")
             return ""
+    
+    def _improve_cloudinary_url(self, url: str) -> str:
+        """
+        Improve Cloudinary URL quality parameters for better image quality
+        
+        Replaces low-quality parameters (h_480,q_1,w_480) with high-quality ones (q_auto:low,w_auto)
+        
+        Args:
+            url: Original Cloudinary URL
+            
+        Returns:
+            Improved URL with better quality parameters
+        """
+        try:
+            if '/upload/' not in url:
+                return url
+                
+            # Split at upload to separate base from parameters and path
+            base_part, rest = url.split('/upload/', 1)
+            
+            # Find the start of the path (after parameters)
+            parts = rest.split('/')
+            
+            if len(parts) > 1:
+                params_part = parts[0]
+                path_part = '/'.join(parts[1:])
+                
+                # Replace problematic low-quality parameters
+                new_params = []
+                
+                for param in params_part.split(','):
+                    param = param.strip()
+                    # Remove height, width, and low quality parameters
+                    if not param.startswith(('h_', 'w_')) and param != 'q_1':
+                        new_params.append(param)
+                
+                # Add improved quality parameters
+                new_params.extend(['q_auto:low', 'w_auto'])
+                
+                # Reconstruct URL
+                improved_url = f"{base_part}/upload/{','.join(new_params)}/{path_part}"
+                self.status_callback(f"Improved image quality: {url[:60]}... -> {improved_url[:60]}...")
+                return improved_url
+                
+            return url
+            
+        except Exception as e:
+            self.status_callback(f"Error improving Cloudinary URL: {str(e)}")
+            return url
     
     def extract_nutrition_data(self, soup: BeautifulSoup, product_url: str) -> Dict[str, Any]:
         """
