@@ -41,7 +41,7 @@ def compare_products_detailed(category_code: str):
                 if product.website_data and product.website_data.price:
                     st.write(f"   Price: {product.website_data.price}")
                 if product.website_data and product.website_data.url:
-                    st.write(f"   URL: {product.website_data.url[:80]}...")
+                    st.write(f"   URL: {product.website_data.url}")
                 st.divider()
     
     # Missing products section  
@@ -54,7 +54,7 @@ def compare_products_detailed(category_code: str):
                 if product.database_data and product.database_data.get('quantity_value'):
                     st.write(f"   Quantity: {product.database_data['quantity_value']}{product.database_data.get('quantity_unit', '')}")
                 if product.database_data and product.database_data.get('rimi_url'):
-                    st.write(f"   URL: {product.database_data['rimi_url'][:80]}...")
+                    st.write(f"   URL: {product.database_data['rimi_url']}")
                 st.divider()
     
     # Changed products section
