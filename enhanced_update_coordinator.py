@@ -39,7 +39,9 @@ class EnhancedUpdateCoordinator:
             
         except Exception as e:
             self.status_callback(f"Error initializing components: {str(e)}")
-            raise
+            # Initialize with None but don't raise - let the calling code handle it
+            self.web_client = None
+            self.db_updater = None
     
     def process_single_product_with_auto_category(self, sku: str, force_update: bool = False) -> ProcessingResult:
         """
@@ -66,6 +68,11 @@ class EnhancedUpdateCoordinator:
         try:
             # Step 1: Get product data to extract category
             self.status_callback("Step 1: Fetching product data for category extraction...")
+            
+            if not self.web_client:
+                result.errors.append("Web client not initialized")
+                return result
+                
             product_data = self.web_client.get_product_data(sku)
             
             if not product_data:

@@ -940,7 +940,12 @@ def main():
                     processor = BatchProcessor(batch_status_callback, max_workers=max_workers)
                     
                     start_time = time.time()
-                    results = processor.process_sku_list(skus_to_process, category_code)
+                    # Handle automatic vs manual category
+                    if category_code is None:
+                        # For automatic extraction, pass a special flag
+                        results = processor.process_sku_list_with_auto_category(skus_to_process)
+                    else:
+                        results = processor.process_sku_list(skus_to_process, category_code)
                     processor.close()
                     
                     # Final progress

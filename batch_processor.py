@@ -133,6 +133,19 @@ class BatchProcessor:
         products = [{'sku': sku} for sku in sku_list]
         return self.process_product_batch(products, category_code)
     
+    def process_sku_list_with_auto_category(self, sku_list: List[str]) -> Dict:
+        """
+        Process a list of SKUs with automatic category extraction
+        
+        Args:
+            sku_list: List of product SKUs
+            
+        Returns:
+            Batch processing results
+        """
+        products = [{'sku': sku} for sku in sku_list]
+        return self.process_product_batch(products, None)  # None triggers auto-extraction
+    
     def close(self):
         """Close all coordinator connections"""
         for coordinator in self.coordinators:
