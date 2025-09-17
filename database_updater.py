@@ -18,10 +18,11 @@ class DatabaseUpdater:
     """Core database updater for PRODUCTS_DB_URL database"""
     
     def __init__(self, status_callback=None):
+        # Use the same database configuration as EnhancedDatabaseUpdater
+        from database_config import db_config
         self.status_callback = status_callback or (lambda x: None)
-        self.db_url = os.getenv('PRODUCTS_DB_URL')
-        if not self.db_url:
-            raise ValueError("PRODUCTS_DB_URL environment variable not set")
+        self.db_config = db_config
+        self.db_url = db_config.products_db_url
         
         self.nutri_calculator = NutriscoreCalculator()
         self.ingredient_processor = None
@@ -37,7 +38,15 @@ class DatabaseUpdater:
                     self.conn.close()
                 self.conn = psycopg2.connect(self.db_url)
                 self.conn.autocommit = False
-                self.status_callback("Database connection established")
+                
+                # Log database identity for debugging (same as EnhancedDatabaseUpdater)
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT current_database(), inet_server_addr(), inet_server_port(), version() LIMIT 1")
+                db_info = cursor.fetchone()
+                cursor.close()
+                
+                db_mode = "DEVELOPMENT (DATABASE_URL)" if self.db_config.is_development else "PRODUCTION (PRODUCTS_DB_URL)"
+                self.status_callback(f"Connected to {db_mode} database: {db_info[0]} @ {db_info[1] if db_info[1] else 'local'}:{db_info[2] if db_info[2] else 'default'}")
                 return
             except Exception as e:
                 if attempt < max_retries - 1:
