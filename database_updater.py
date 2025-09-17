@@ -112,12 +112,19 @@ class DatabaseUpdater:
             quantity_value, quantity_unit = self._parse_quantity(name)
             self.status_callback(f"Extracted quantity: {quantity_value} {quantity_unit} from '{name[:50]}'")
             
-            self.status_callback(f"Adding new product: {sku} - {name[:50]}")
+            self.status_callback(f"Creating or updating product: {sku} - {name[:50]}")
             
-            # Insert into products table
+            # UPSERT into products table (handles concurrent inserts gracefully)
             product_query = """
                 INSERT INTO products (sku, name, rimi_url, category_id, quantity_value, quantity_unit)
                 VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (sku) DO UPDATE SET
+                    name = COALESCE(EXCLUDED.name, products.name),
+                    category_id = COALESCE(EXCLUDED.category_id, products.category_id),
+                    rimi_url = COALESCE(EXCLUDED.rimi_url, products.rimi_url),
+                    quantity_value = COALESCE(EXCLUDED.quantity_value, products.quantity_value),
+                    quantity_unit = COALESCE(EXCLUDED.quantity_unit, products.quantity_unit),
+                    updated_at = NOW()
                 RETURNING product_id
             """
             
@@ -136,7 +143,7 @@ class DatabaseUpdater:
                     self._add_price_history_record(product_id, price_decimal, True, 'rimi_scraper')
             
             self.conn.commit()
-            self.status_callback(f"Successfully added product {sku} with ID {product_id}")
+            self.status_callback(f"Successfully created/updated product {sku} with ID {product_id}")
             return product_id
             
         except Exception as e:
