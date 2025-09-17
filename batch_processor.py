@@ -58,10 +58,16 @@ class BatchProcessor:
             sku = product_info.get('sku') or str(product_info)
             coordinator = None
             
-            # Create thread-safe callback that doesn't rely on Streamlit context
+            # Create thread-safe callback that updates both logs and Streamlit UI
             def thread_safe_callback(msg):
-                # Just print directly - will appear in logs
+                # Print to logs for debugging
                 print(f"[THREAD-{sku}] {msg}")
+                # Also update Streamlit UI with progress
+                try:
+                    self.status_callback(f"[{sku}] {msg}")
+                except Exception as ui_error:
+                    # Fallback to console if UI update fails
+                    print(f"[THREAD-{sku}] UI update failed: {ui_error}")
             
             try:
                 print(f"🚀 BATCH: Starting thread processing for {sku}")
