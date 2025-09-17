@@ -26,7 +26,7 @@ class BatchProcessor:
             self.coordinators.append(coordinator)
             return coordinator
     
-    def process_product_batch(self, products: List[Dict], category_code: str = 'SH-1-1-1') -> Dict:
+    def process_product_batch(self, products: List[Dict], category_code: Optional[str] = None) -> Dict:
         """
         Process a batch of products with optimized connection handling
         
@@ -58,12 +58,23 @@ class BatchProcessor:
                 coordinator = self._get_coordinator()
                 
                 self.status_callback(f"Processing product {sku}")
-                result = coordinator.process_single_product(sku, category_code)
                 
-                if result['success']:
+                # Use automatic category extraction if no category_code provided
+                if category_code is None:
+                    self.status_callback(f"Using automatic category extraction for {sku}")
+                    # Use enhanced coordinator for automatic category extraction
+                    from enhanced_update_coordinator import EnhancedUpdateCoordinator
+                    enhanced_coordinator = EnhancedUpdateCoordinator(self.status_callback)
+                    result = enhanced_coordinator.process_single_product_with_auto_category(sku)
+                    enhanced_coordinator.close()
+                else:
+                    result = coordinator.process_single_product(sku, category_code)
+                
+                if result['success'] if isinstance(result, dict) else result.success:
                     return {'sku': sku, 'status': 'success', 'result': result}
                 else:
-                    return {'sku': sku, 'status': 'failed', 'error': result.get('error', 'Unknown error')}
+                    error_msg = result.get('error', 'Unknown error') if isinstance(result, dict) else 'Processing failed'
+                    return {'sku': sku, 'status': 'failed', 'error': error_msg}
                     
             except Exception as e:
                 error_msg = f"Exception processing {sku}: {str(e)}"

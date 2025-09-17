@@ -875,12 +875,27 @@ def main():
             skus_to_process = ["147762", "961367", "999409"]
             st.write("Test SKUs:", skus_to_process)
         
-        # Category selection
-        category_code = st.selectbox(
-            "Category Code:",
-            ["SH-1-1-1", "SH-2-1-1", "SH-11", "SH-12", "SH-13"],
-            help="Category to assign to all products in batch"
+        # Category selection - now optional with automatic extraction
+        st.subheader("🎯 Category Assignment")
+        
+        use_auto_category = st.radio(
+            "Category Source:",
+            ["🤖 Automatic Extraction (Recommended)", "📝 Manual Selection"],
+            help="Choose how to determine product categories"
         )
+        
+        if use_auto_category == "🤖 Automatic Extraction (Recommended)":
+            st.success("✨ **Phase 1 Active**: Categories will be automatically extracted from product pages!")
+            st.info("The system will extract RIMI category codes (SH-X-X-X format) directly from each product's details page.")
+            category_code = None  # Will be extracted automatically
+            
+        else:  # Manual selection
+            category_code = st.selectbox(
+                "Manual Category Code:",
+                ["SH-1-1-1", "SH-2-1-1", "SH-11", "SH-12", "SH-13"],
+                help="Category to assign to all products in batch (will override automatic extraction)"
+            )
+            st.warning("⚠️ Manual category will override automatic extraction for all products in this batch")
         
         # Batch processing options
         col1, col2 = st.columns(2)

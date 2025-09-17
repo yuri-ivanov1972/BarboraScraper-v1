@@ -41,6 +41,62 @@ class EnhancedUpdateCoordinator:
             self.status_callback(f"Error initializing components: {str(e)}")
             raise
     
+    def process_single_product_with_auto_category(self, sku: str, force_update: bool = False) -> ProcessingResult:
+        """
+        Process single product with automatic category extraction from product page
+        
+        Args:
+            sku: Product SKU to process
+            force_update: Whether to force update existing data
+            
+        Returns:
+            ProcessingResult with success status and details
+        """
+        self.status_callback(f"Processing product {sku} with automatic category extraction")
+        
+        result = ProcessingResult(
+            success=False,
+            sku=sku,
+            operation='',
+            changes={},
+            errors=[],
+            product_data={}
+        )
+        
+        try:
+            # Step 1: Get product data to extract category
+            self.status_callback("Step 1: Fetching product data for category extraction...")
+            product_data = self.web_client.get_product_data(sku)
+            
+            if not product_data:
+                result.errors.append("Product not found on website")
+                self.status_callback("Product not accessible on website")
+                return result
+            
+            # Step 2: Extract category from product page
+            self.status_callback("Step 2: Extracting category from product page...")
+            nutrition_data = self.web_client.extract_nutrition_data(product_data['soup'], product_data['url'])
+            
+            extracted_category = nutrition_data.get('category_code', '')
+            category_path = nutrition_data.get('category_path_full', '')
+            
+            if extracted_category:
+                self.status_callback(f"✓ Extracted category: {extracted_category} from path: {category_path}")
+                category_code = extracted_category
+            else:
+                self.status_callback("⚠️ No category found on product page, using default SH-1-1-1")
+                category_code = 'SH-1-1-1'  # Default fallback
+            
+            # Step 3: Process with extracted category
+            self.status_callback(f"Step 3: Processing with category {category_code}")
+            return self.process_single_product_enhanced(sku, category_code, force_update)
+            
+        except Exception as e:
+            error_msg = f"Error in automatic category processing: {str(e)}"
+            result.errors.append(error_msg)
+            self.status_callback(error_msg)
+            return result
+
     def process_single_product_enhanced(self, sku: str, category_code: str, force_update: bool = False) -> ProcessingResult:
         """
         Process a single product with enhanced retry logic and data corruption handling
