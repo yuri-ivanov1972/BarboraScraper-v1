@@ -18,6 +18,7 @@ class EnhancedDatabaseUpdater:
         from database_config import db_config
         self.status_callback = status_callback or (lambda msg: print(msg))
         self.conn = None
+        self.db_config = db_config
         self.products_db_url = db_config.products_db_url
         
         self._connect()
@@ -39,7 +40,8 @@ class EnhancedDatabaseUpdater:
                 db_info = cursor.fetchone()
                 cursor.close()
                 
-                self.status_callback(f"Connected to PRODUCTS_DB_URL database: {db_info['current_database']} @ {db_info.get('inet_server_addr', 'local')}:{db_info.get('inet_server_port', 'default')}")
+                db_mode = "DEVELOPMENT (DATABASE_URL)" if self.db_config.is_development else "PRODUCTION (PRODUCTS_DB_URL)"
+                self.status_callback(f"Connected to {db_mode} database: {db_info['current_database']} @ {db_info.get('inet_server_addr', 'local')}:{db_info.get('inet_server_port', 'default')}")
                 return
             except Exception as e:
                 if attempt < max_attempts - 1:
