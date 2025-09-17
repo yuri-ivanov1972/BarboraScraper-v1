@@ -32,7 +32,14 @@ class EnhancedDatabaseUpdater:
                     cursor_factory=psycopg2.extras.RealDictCursor
                 )
                 self.conn.autocommit = False
-                self.status_callback("Connected to PRODUCTS_DB_URL database")
+                
+                # Log database identity for debugging
+                cursor = self.conn.cursor()
+                cursor.execute("SELECT current_database(), inet_server_addr(), inet_server_port(), version() LIMIT 1")
+                db_info = cursor.fetchone()
+                cursor.close()
+                
+                self.status_callback(f"Connected to PRODUCTS_DB_URL database: {db_info['current_database']} @ {db_info.get('inet_server_addr', 'local')}:{db_info.get('inet_server_port', 'default')}")
                 return
             except Exception as e:
                 if attempt < max_attempts - 1:
@@ -70,6 +77,10 @@ class EnhancedDatabaseUpdater:
                     return result
                 else:
                     cursor.close()
+                    # Commit write operations (INSERT, UPDATE, DELETE)
+                    if any(keyword in query.upper() for keyword in ['INSERT', 'UPDATE', 'DELETE']):
+                        self.conn.commit()
+                        self.status_callback("✓ Database commit succeeded")
                     return None
                     
             except Exception as e:
