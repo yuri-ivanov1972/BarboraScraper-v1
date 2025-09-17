@@ -408,6 +408,98 @@ class RobustWebClient:
             self.status_callback(f"Error improving Cloudinary URL: {str(e)}")
             return url
     
+    def _extract_category_from_main_page(self, soup: BeautifulSoup, nutrition_data: Dict[str, Any]) -> bool:
+        """
+        Extract RIMI category codes from main page HTML (breadcrumbs and product metadata)
+        
+        Args:
+            soup: BeautifulSoup object of the main product page
+            nutrition_data: Dictionary to populate with category data
+            
+        Returns:
+            True if category was successfully extracted, False otherwise
+        """
+        import re
+        
+        # Method 1: Extract from product metadata (GTM tracking data) - Most reliable
+        self.status_callback("Method 1: Searching product metadata for category...")
+        try:
+            page_html = str(soup)
+            
+            # Look for category in GTM product data: "category":"SH-7-2-17\/SH-7-2\/SH-7\/SH"
+            category_patterns = [
+                r'"category":\s*"([^"]*SH[^"]*)"',
+                r'data-gtm-eec-product="[^"]*category[^"]*:[\s]*["\']([^"\']*SH[^"\']*)["\']',
+                r'"category":\s*"([^"]*)"'
+            ]
+            
+            for i, pattern in enumerate(category_patterns, 1):
+                matches = re.findall(pattern, page_html, re.IGNORECASE)
+                if matches:
+                    for match in matches:
+                        if 'SH-' in match:
+                            # Extract rightmost RIMI code from category hierarchy
+                            category_path = match.replace('\\/', '/')  # Unescape slashes
+                            nutrition_data['category_path_full'] = category_path
+                            
+                            # Find rightmost SH-X-X-X code
+                            sh_codes = re.findall(r'SH-[\d-]+', category_path)
+                            if sh_codes:
+                                nutrition_data['category_code'] = max(sh_codes, key=len)  # Get the most specific (longest)
+                                self.status_callback(f"✓ Found category in metadata (pattern {i}): {category_path}")
+                                self.status_callback(f"✓ Extracted code: {nutrition_data['category_code']}")
+                                return True
+                            
+        except Exception as e:
+            self.status_callback(f"Error in metadata extraction: {str(e)}")
+        
+        # Method 2: Extract from breadcrumb navigation - Backup method
+        self.status_callback("Method 2: Searching breadcrumb navigation for category...")
+        try:
+            # Look for breadcrumb links containing SH- codes
+            breadcrumb_links = soup.find_all('a', href=re.compile(r'/c/SH-'))
+            
+            if breadcrumb_links:
+                category_codes = []
+                for link in breadcrumb_links:
+                    href = link.get('href', '')
+                    # Extract SH-X-X-X codes from URLs like /c/SH-7-2-17
+                    sh_match = re.search(r'/c/(SH-[\d-]+)', href)
+                    if sh_match:
+                        category_codes.append(sh_match.group(1))
+                
+                if category_codes:
+                    # Use the most specific (longest) category code
+                    most_specific = max(category_codes, key=len)
+                    nutrition_data['category_code'] = most_specific
+                    nutrition_data['category_path_full'] = ' / '.join(category_codes)
+                    self.status_callback(f"✓ Found category in breadcrumbs: {nutrition_data['category_path_full']}")
+                    self.status_callback(f"✓ Extracted code: {nutrition_data['category_code']}")
+                    return True
+                    
+        except Exception as e:
+            self.status_callback(f"Error in breadcrumb extraction: {str(e)}")
+        
+        # Method 3: Simple SH- pattern search in page HTML - Final fallback
+        self.status_callback("Method 3: Simple SH- pattern search in page HTML...")
+        try:
+            page_text = soup.get_text()
+            sh_codes = re.findall(r'SH-[\d-]+', page_text)
+            
+            if sh_codes:
+                # Use the most specific (longest) code found
+                most_specific = max(sh_codes, key=len)
+                nutrition_data['category_code'] = most_specific
+                nutrition_data['category_path_full'] = f"Pattern search result: {most_specific}"
+                self.status_callback(f"✓ Found category via pattern search: {most_specific}")
+                return True
+                
+        except Exception as e:
+            self.status_callback(f"Error in pattern search: {str(e)}")
+        
+        self.status_callback("❌ No category codes found in main page HTML")
+        return False
+    
     def extract_nutrition_data(self, soup: BeautifulSoup, product_url: str) -> Dict[str, Any]:
         """
         Extract nutrition data from product page with robust HTML table parsing
@@ -438,6 +530,18 @@ class RobustWebClient:
             'salt': 0,
             'fiber': 0
         }
+        
+        # PHASE 1 FIX: Extract category from main page HTML first
+        try:
+            self.status_callback("=== PHASE 1 CATEGORY EXTRACTION ===")
+            category_extracted = self._extract_category_from_main_page(soup, nutrition_data)
+            if category_extracted:
+                self.status_callback(f"✅ Category extraction successful: {nutrition_data['category_code']}")
+            else:
+                self.status_callback("⚠️ No category found in main page HTML")
+            self.status_callback("=" * 40)
+        except Exception as e:
+            self.status_callback(f"Error in category extraction: {str(e)}")
         
         try:
             # Helper function to extract decimal values
