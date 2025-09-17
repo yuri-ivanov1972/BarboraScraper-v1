@@ -493,7 +493,8 @@ class EnhancedUpdateCoordinator:
                 'quantity_value': product_data.get('quantity_value'),
                 'quantity_unit': product_data.get('quantity_unit'),
                 'nutrition_data': product_data.get('nutrition_data', {}),
-                'ingredients': product_data.get('nutrition_data', {}).get('ingredients', '')
+                'ingredients': product_data.get('nutrition_data', {}).get('ingredients', ''),
+                'photos': product_data.get('photos', [])
             }
             
             # First create basic product record

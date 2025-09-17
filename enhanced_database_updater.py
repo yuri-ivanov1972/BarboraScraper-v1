@@ -187,6 +187,14 @@ class EnhancedDatabaseUpdater:
             if 'ingredients' in product_data and product_data['ingredients']:
                 self.force_update_ingredients(sku, product_data['ingredients'])
             
+            # Process photos if provided
+            if 'photos' in product_data and product_data['photos']:
+                photos_saved = self.add_product_photos(product_id, product_data['photos'])
+                if photos_saved:
+                    self.status_callback(f"✓ Successfully saved {len(product_data['photos'])} photo(s) for product {sku}")
+                else:
+                    self.status_callback(f"⚠ Failed to save photos for product {sku} - check logs above for specific error")
+            
             self.conn.commit()
             self.status_callback(f"Successfully force-updated product {sku}")
             return True
