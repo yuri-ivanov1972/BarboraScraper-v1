@@ -470,7 +470,7 @@ class RobustWebClient:
                     # Split by '/' and check each part from right to left
                     parts = [part.strip() for part in category_path.split('/')]
                     for part in reversed(parts):
-                        # Match RIMI category format: SH-X-X or SH-X-X-X
+                        # Match RIMI category format: SH-X-X or SH-X-X-X (allow single or multiple digits)
                         if re.match(r'^SH-\d+-\d+(-\d+)?$', part):
                             return part
                     return ''
@@ -667,20 +667,55 @@ class RobustWebClient:
                                     ingredients_found = True
                                     break
                     
-                    # Category extraction fallback methods
+                    # Method 3: Category extraction fallback - comprehensive text pattern search
+                    if not category_found:
+                        all_text = details_soup.get_text()
+                        if any(keyword in all_text for keyword in category_keywords):
+                            # Try multiple patterns to capture different category content structures
+                            category_patterns = [
+                                # Pattern 1: Category followed by path with RIMI codes
+                                r'(?:Kategorija|Category)\s*:?\s*([^.]*(?:\bSH-\d+-\d+(?:-\d+)?\b)[^.]*)',
+                                # Pattern 2: Any line containing category keyword and RIMI code
+                                r'([^.\n]*(?:Kategorija|Category)[^.\n]*(?:\bSH-\d+-\d+(?:-\d+)?\b)[^.\n]*)',
+                                # Pattern 3: RIMI code with surrounding context mentioning category
+                                r'([^.\n]*(?:\bSH-\d+-\d+(?:-\d+)?\b)[^.\n]*(?:Kategorija|Category)[^.\n]*)',
+                                # Pattern 4: Just extract any RIMI code in category context
+                                r'(?:Kategorija|Category)[^.]*?(\bSH-\d+-\d+(?:-\d+)?\b)'
+                            ]
+                            
+                            for i, pattern in enumerate(category_patterns, 1):
+                                match = re.search(pattern, all_text, re.DOTALL | re.IGNORECASE)
+                                if match:
+                                    content = match.group(1).strip()
+                                    # Clean up the text
+                                    content = re.sub(r'\s+', ' ', content)  # Normalize whitespace
+                                    
+                                    if len(content) > 3:  # Meaningful content
+                                        nutrition_data['category_path_full'] = content
+                                        nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
+                                        self.status_callback(f"Found category (method 3, pattern {i}): {content} -> code: {nutrition_data['category_code']}")
+                                        category_found = True
+                                        break
+                    
+                    # Method 4: Category proximity fallback - extract context around category keywords
                     if not category_found:
                         all_text = details_soup.get_text()
                         for keyword in category_keywords:
-                            # Look for category pattern in text
-                            pattern = rf'{keyword}\s*:?\s*([^.]*(?:\bSH-\d+-\d+(?:-\d+)?\b)[^.]*)'
-                            match = re.search(pattern, all_text, re.IGNORECASE)
-                            if match:
-                                content = match.group(1).strip()
-                                nutrition_data['category_path_full'] = content
-                                nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
-                                self.status_callback(f"Found category (fallback): {content} -> code: {nutrition_data['category_code']}")
-                                category_found = True
-                                break
+                            pos = all_text.find(keyword)
+                            if pos != -1:
+                                # Extract context after category keyword
+                                context_start = pos + len(keyword)
+                                context_end = min(len(all_text), context_start + 300)  # Next 300 chars
+                                context = all_text[context_start:context_end].strip()
+                                
+                                # Look for RIMI code in context
+                                rimi_match = re.search(r'\bSH-\d+-\d+(?:-\d+)?\b', context)
+                                if rimi_match and len(context) > 10:  # Has meaningful content with RIMI code
+                                    nutrition_data['category_path_full'] = context[:100]  # Limit to 100 chars
+                                    nutrition_data['category_code'] = rimi_match.group(0)
+                                    self.status_callback(f"Found category (method 4, proximity): {context[:50]}... -> code: {nutrition_data['category_code']}")
+                                    category_found = True
+                                    break
                     
                     # Find nutrition table with proper HTML parsing and character encoding handling
                     tables = details_soup.find_all('table')
