@@ -667,6 +667,21 @@ class RobustWebClient:
                                     ingredients_found = True
                                     break
                     
+                    # Category extraction fallback methods
+                    if not category_found:
+                        all_text = details_soup.get_text()
+                        for keyword in category_keywords:
+                            # Look for category pattern in text
+                            pattern = rf'{keyword}\s*:?\s*([^.]*(?:\bSH-\d+-\d+(?:-\d+)?\b)[^.]*)'
+                            match = re.search(pattern, all_text, re.IGNORECASE)
+                            if match:
+                                content = match.group(1).strip()
+                                nutrition_data['category_path_full'] = content
+                                nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
+                                self.status_callback(f"Found category (fallback): {content} -> code: {nutrition_data['category_code']}")
+                                category_found = True
+                                break
+                    
                     # Find nutrition table with proper HTML parsing and character encoding handling
                     tables = details_soup.find_all('table')
                     nutrition_table = None
