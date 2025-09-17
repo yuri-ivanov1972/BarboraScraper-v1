@@ -28,20 +28,38 @@ class EnhancedUpdateCoordinator:
         self._initialize_components()
     
     def _initialize_components(self):
-        """Initialize web client and database updater"""
-        try:
-            from robust_web_client import RobustWebClient
-            from enhanced_database_updater import EnhancedDatabaseUpdater
-            
-            self.web_client = RobustWebClient(self.status_callback)
-            self.db_updater = EnhancedDatabaseUpdater(self.status_callback)
-            self.status_callback("Enhanced coordinator initialized with robust components")
-            
-        except Exception as e:
-            self.status_callback(f"Error initializing components: {str(e)}")
-            # Initialize with None but don't raise - let the calling code handle it
-            self.web_client = None
-            self.db_updater = None
+        """Initialize web client and database updater with retry logic for threading"""
+        max_retries = 3
+        retry_count = 0
+        
+        while retry_count < max_retries:
+            try:
+                from robust_web_client import RobustWebClient
+                from enhanced_database_updater import EnhancedDatabaseUpdater
+                
+                self.status_callback(f"Initializing components (attempt {retry_count + 1}/{max_retries})")
+                
+                self.web_client = RobustWebClient(self.status_callback)
+                self.db_updater = EnhancedDatabaseUpdater(self.status_callback)
+                
+                # Verify components are properly initialized
+                if self.web_client is None or self.db_updater is None:
+                    raise Exception("Components initialized but are None")
+                
+                self.status_callback("Enhanced coordinator initialized with robust components")
+                return
+                
+            except Exception as e:
+                retry_count += 1
+                self.status_callback(f"Error initializing components (attempt {retry_count}): {str(e)}")
+                
+                if retry_count < max_retries:
+                    import time
+                    time.sleep(1)  # Brief delay before retry
+                else:
+                    self.status_callback("Failed to initialize components after all retries")
+                    self.web_client = None
+                    self.db_updater = None
     
     def process_single_product_with_auto_category(self, sku: str, force_update: bool = False) -> ProcessingResult:
         """
@@ -69,8 +87,24 @@ class EnhancedUpdateCoordinator:
             # Step 1: Get product data to extract category
             self.status_callback("Step 1: Fetching product data for category extraction...")
             
+            # Check if components are properly initialized
             if not self.web_client:
-                result.errors.append("Web client not initialized")
+                error_msg = "Web client not initialized - component initialization failed"
+                result.errors.append(error_msg)
+                self.status_callback(f"❌ {error_msg}")
+                # Try to reinitialize once more
+                self.status_callback("Attempting to reinitialize components...")
+                self._initialize_components()
+                if not self.web_client:
+                    self.status_callback("❌ Reinitialization failed - cannot proceed")
+                    return result
+                else:
+                    self.status_callback("✅ Reinitialization successful")
+            
+            if not self.db_updater:
+                error_msg = "Database updater not initialized - component initialization failed"
+                result.errors.append(error_msg)
+                self.status_callback(f"❌ {error_msg}")
                 return result
                 
             product_data = self.web_client.get_product_data(sku)
