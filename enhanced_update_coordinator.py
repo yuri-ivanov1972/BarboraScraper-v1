@@ -230,23 +230,10 @@ class EnhancedUpdateCoordinator:
                     else:
                         self.status_callback(f"Photos processing: No photos extracted for product {sku}")
                     
-                    # Save ingredients if available - continue processing even if ingredients fail
-                    ingredients_saved = False
+                    # Skip ingredients processing (postponed for simplified batch processing)
+                    ingredients_saved = True  # Skip ingredients for now
                     ingredient_error = None
-                    if nutrition_data.get('ingredients'):
-                        try:
-                            ingredients_saved = self.db_updater.force_update_ingredients(
-                                sku, nutrition_data['ingredients']
-                            )
-                            if ingredients_saved:
-                                self.status_callback(f"Ingredients processing: Successfully saved for product {sku}")
-                            else:
-                                self.status_callback(f"Ingredients processing: Failed to save for product {sku}")
-                        except Exception as e:
-                            ingredient_error = str(e)
-                            self.status_callback(f"Ingredients processing: Exception during save for product {sku} - {ingredient_error}")
-                    else:
-                        self.status_callback(f"Ingredients processing: No ingredients extracted for product {sku}")
+                    self.status_callback(f"Ingredients processing: Skipped (postponed for batch processing)")
                     
                     result.success = True
                     result.changes = {
@@ -397,9 +384,9 @@ class EnhancedUpdateCoordinator:
                         existing_product['product_id'], nutrition_data, force_overwrite=False
                     )
             
-            # Update ingredients if available
-            if nutrition_data.get('ingredients'):
-                self.db_updater.force_update_ingredients(sku, nutrition_data['ingredients'])
+            # Skip ingredients update (postponed for simplified batch processing)
+            # if nutrition_data.get('ingredients'):
+            #     self.db_updater.force_update_ingredients(sku, nutrition_data['ingredients'])
             
             # Update photos if available
             if product_data.get('photos'):
