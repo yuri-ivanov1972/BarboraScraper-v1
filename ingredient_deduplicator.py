@@ -80,12 +80,15 @@ class IngredientDeduplicator:
     
     def find_duplicate_groups(self) -> List[Dict]:
         """Find groups of ingredients that are likely duplicates"""
+        conn = None
         try:
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             
             # Get all ingredients
             cursor.execute("SELECT id, ingredient, frequency FROM ingredient_analysis ORDER BY ingredient")
             ingredients = cursor.fetchall()
+            cursor.close()
             
             # Group by normalized form
             groups = {}
@@ -108,17 +111,24 @@ class IngredientDeduplicator:
                         'duplicates': group[1:]  # Others to merge
                     })
             
-            cursor.close()
+            self._return_connection(conn)
             return duplicates
             
         except Exception as e:
+            if conn:
+                self._return_connection(conn, close_on_error=True)
             self.status_callback(f"Error finding duplicates: {str(e)}")
             return []
     
     def merge_duplicate_group(self, group: Dict) -> bool:
         """Merge a group of duplicate ingredients"""
+        conn = None
         try:
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            # Disable autocommit for transaction handling
+            conn.autocommit = False
+            
+            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
             
             primary = group['primary']
             duplicates = group['duplicates']
@@ -156,13 +166,24 @@ class IngredientDeduplicator:
                 WHERE id = ANY(%s)
             """, (duplicate_ids,))
             
-            self.conn.commit()
+            conn.commit()
+            cursor.close()
+            
+            # Restore autocommit and return connection
+            conn.autocommit = True
+            self._return_connection(conn)
             
             self.status_callback(f"  Merged {len(duplicates)} duplicates, new frequency: {total_frequency}")
             return True
             
         except Exception as e:
-            self.conn.rollback()
+            if conn:
+                try:
+                    conn.rollback()
+                    conn.autocommit = True  # Restore autocommit
+                    self._return_connection(conn, close_on_error=True)
+                except:
+                    self._return_connection(conn, close_on_error=True)
             self.status_callback(f"Error merging group: {str(e)}")
             return False
     

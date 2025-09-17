@@ -33,11 +33,11 @@ class IngredientProcessor:
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                # Create a connection pool with min 1 connection, max 10 connections
+                # Create a connection pool with min 1 connection, max 10 connections  
+                # Note: cursor_factory must be set on individual connections
                 self.connection_pool = psycopg2.pool.ThreadedConnectionPool(
                     1, 10,  # min and max connections
-                    self.db_url,
-                    cursor_factory=psycopg2.extras.RealDictCursor
+                    self.db_url
                 )
                 self.status_callback("Ingredient processor initialized thread-safe connection pool")
                 return
@@ -49,10 +49,14 @@ class IngredientProcessor:
                     raise Exception(f"Connection pool initialization failed after {max_retries} attempts: {str(e)}")
 
     def _get_connection(self):
-        """Get a connection from the thread-safe pool"""
+        """Get a connection from the thread-safe pool with proper cursor factory"""
         if not self.connection_pool:
             raise Exception("Connection pool not initialized")
-        return self.connection_pool.getconn()
+        conn = self.connection_pool.getconn()
+        # Set cursor factory on the connection for dict-like row access
+        conn.cursor_factory = psycopg2.extras.RealDictCursor
+        # Keep default autocommit=False to not affect other pool users
+        return conn
     
     def _init_deduplicator(self):
         """Initialize shared deduplicator instance with connection pool"""
@@ -68,30 +72,37 @@ class IngredientProcessor:
             self.deduplicator = None
     
     def _execute_query(self, query: str, params: Tuple = None, fetch: bool = False):
-        """Execute query with thread-safe connection handling"""
+        """Execute query with thread-safe connection handling and proper transaction management"""
         conn = None
         max_retries = 3
+        
+        # Determine if this is a write operation
+        is_write = any(query.strip().upper().startswith(cmd) for cmd in ['INSERT', 'UPDATE', 'DELETE'])
         
         for attempt in range(max_retries):
             try:
                 # Get connection from pool
                 conn = self._get_connection()
+                result = None
                 
+                # Execute query with proper cursor lifecycle
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     if fetch:
                         result = cursor.fetchall()
-                        # Return connection to pool before returning result
-                        self.connection_pool.putconn(conn)
-                        return result
-                    else:
-                        # Return connection to pool
-                        self.connection_pool.putconn(conn)
-                        return None
+                    
+                    # Commit write operations
+                    if is_write and not conn.autocommit:
+                        conn.commit()
+                
+                # Return connection after cursor is closed and committed
+                self.connection_pool.putconn(conn)
+                return result
                         
             except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
                 if conn:
                     self.connection_pool.putconn(conn, close=True)  # Close bad connection
+                    conn = None
                 if attempt < max_retries - 1:
                     self.status_callback(f"Query attempt {attempt + 1} failed due to connection issue, retrying...")
                     time.sleep(0.5)
@@ -100,15 +111,16 @@ class IngredientProcessor:
             except Exception as e:
                 if conn:
                     try:
-                        conn.rollback()
-                        self.connection_pool.putconn(conn)
-                    except:
+                        if is_write and not conn.autocommit:
+                            conn.rollback()  # Rollback on error
                         self.connection_pool.putconn(conn, close=True)  # Close on error
+                    except:
+                        pass
                 raise Exception(f"Query execution failed: {str(e)}")
     
     def process_product_ingredients(self, sku: str, ingredients_text: str) -> Dict:
         """
-        Process ingredients for a new product
+        Process ingredients for a new product (now using autocommit for simplicity)
         
         Args:
             sku: Product SKU
@@ -129,7 +141,7 @@ class IngredientProcessor:
                 self.status_callback(f"No ingredients extracted from text for product {sku}")
                 return {'processed': 0, 'new_ingredients': 0}
             
-            # Process each ingredient
+            # Process each ingredient (each _execute_query will auto-commit)
             processed_count = 0
             new_ingredients_count = 0
             
@@ -146,8 +158,6 @@ class IngredientProcessor:
                     if self._is_new_ingredient(ingredient_id):
                         new_ingredients_count += 1
             
-            self.conn.commit()
-            
             self.status_callback(f"Processed {processed_count} ingredients for product {sku} ({new_ingredients_count} new)")
             
             return {
@@ -157,7 +167,6 @@ class IngredientProcessor:
             }
             
         except Exception as e:
-            self.conn.rollback()
             raise Exception(f"Failed to process ingredients for {sku}: {str(e)}")
     
     def _extract_ingredients(self, ingredients_text: str) -> List[str]:
@@ -363,25 +372,18 @@ class IngredientProcessor:
                         pass  # Frequency update failure is not critical
                     return ingredient_id
                 
-                # Ingredient doesn't exist, create it with manual ID to bypass sequence issues
+                # Ingredient doesn't exist, create it atomically (race-safe)
                 try:
-                    # Get next available ID manually
-                    max_id_query = "SELECT COALESCE(MAX(id), 0) + 1 as next_id FROM ingredient_analysis"
-                    max_result = self._execute_query(max_id_query, fetch=True)
-                    next_id = max_result[0]['next_id'] if max_result else 1
-                    
-                    # Insert with explicit ID using normalized name
+                    # Use atomic insert with sequence default - no race conditions
                     insert_query = """
-                        INSERT INTO ingredient_analysis (id, ingredient, frequency) 
-                        VALUES (%s, %s, 1)
+                        INSERT INTO ingredient_analysis (ingredient, frequency) 
+                        VALUES (%s, 1)
                         ON CONFLICT (ingredient) DO UPDATE SET 
                             frequency = ingredient_analysis.frequency + 1
                         RETURNING id
                     """
-                    insert_result = self._execute_query(insert_query, (next_id, normalized_name), fetch=True)
+                    insert_result = self._execute_query(insert_query, (normalized_name,), fetch=True)
                     if insert_result and len(insert_result) > 0:
-                        # Update sequence to match
-                        self._execute_query("SELECT setval('ingredient_analysis_id_seq', %s)", (next_id,))
                         return insert_result[0]['id']
                 
                 except Exception as insert_error:
@@ -463,7 +465,16 @@ class IngredientProcessor:
             return {}
     
     def close(self):
-        """Close database connection"""
-        if self.conn:
-            self.conn.close()
-            self.status_callback("Ingredient processor connection closed")
+        """Clean up database connections and resources"""
+        try:
+            # Close deduplicator first
+            if self.deduplicator:
+                self.deduplicator.close()
+                self.deduplicator = None
+            
+            # Close connection pool
+            if self.connection_pool:
+                self.connection_pool.closeall()
+                self.status_callback("Ingredient processor connection pool closed")
+        except Exception as e:
+            self.status_callback(f"Error closing connections: {str(e)}")
