@@ -34,19 +34,27 @@ class EnhancedUpdateCoordinator:
         
         while retry_count < max_retries:
             try:
+                self.status_callback(f"🔧 COORDINATOR: Initializing components (attempt {retry_count + 1}/{max_retries})")
+                
+                self.status_callback(f"🔧 COORDINATOR: Importing RobustWebClient...")
                 from robust_web_client import RobustWebClient
+                
+                self.status_callback(f"🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...")
                 from enhanced_database_updater import EnhancedDatabaseUpdater
                 
-                self.status_callback(f"Initializing components (attempt {retry_count + 1}/{max_retries})")
-                
+                self.status_callback(f"🔧 COORDINATOR: Creating RobustWebClient instance...")
                 self.web_client = RobustWebClient(self.status_callback)
+                self.status_callback(f"🔧 COORDINATOR: Web client created: {type(self.web_client)}")
+                
+                self.status_callback(f"🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...")
                 self.db_updater = EnhancedDatabaseUpdater(self.status_callback)
+                self.status_callback(f"🔧 COORDINATOR: DB updater created: {type(self.db_updater)}")
                 
                 # Verify components are properly initialized
                 if self.web_client is None or self.db_updater is None:
-                    raise Exception("Components initialized but are None")
+                    raise Exception(f"Components initialized but are None: web_client={self.web_client}, db_updater={self.db_updater}")
                 
-                self.status_callback("Enhanced coordinator initialized with robust components")
+                self.status_callback("✅ COORDINATOR: Enhanced coordinator initialized with robust components")
                 return
                 
             except Exception as e:
@@ -72,7 +80,10 @@ class EnhancedUpdateCoordinator:
         Returns:
             ProcessingResult with success status and details
         """
-        self.status_callback(f"Processing product {sku} with automatic category extraction")
+        self.status_callback(f"🔄 COORDINATOR: Processing product {sku} with automatic category extraction")
+        import threading
+        self.status_callback(f"🔄 COORDINATOR: Thread ID: {threading.current_thread().ident}")
+        self.status_callback(f"🔄 COORDINATOR: Thread name: {threading.current_thread().name}")
         
         result = ProcessingResult(
             success=False,
@@ -85,52 +96,71 @@ class EnhancedUpdateCoordinator:
         
         try:
             # Step 1: Get product data to extract category
-            self.status_callback("Step 1: Fetching product data for category extraction...")
+            self.status_callback("🔄 COORDINATOR: Step 1: Fetching product data for category extraction...")
             
             # Check if components are properly initialized
+            self.status_callback(f"🔍 COORDINATOR: Checking component initialization...")
+            self.status_callback(f"🔍 COORDINATOR: Web client: {type(self.web_client) if self.web_client else 'None'}")
+            self.status_callback(f"🔍 COORDINATOR: DB updater: {type(self.db_updater) if self.db_updater else 'None'}")
+            
             if not self.web_client:
                 error_msg = "Web client not initialized - component initialization failed"
                 result.errors.append(error_msg)
-                self.status_callback(f"❌ {error_msg}")
+                self.status_callback(f"❌ COORDINATOR: {error_msg}")
                 # Try to reinitialize once more
-                self.status_callback("Attempting to reinitialize components...")
+                self.status_callback("🔧 COORDINATOR: Attempting to reinitialize components...")
                 self._initialize_components()
                 if not self.web_client:
-                    self.status_callback("❌ Reinitialization failed - cannot proceed")
+                    self.status_callback("❌ COORDINATOR: Reinitialization failed - cannot proceed")
                     return result
                 else:
-                    self.status_callback("✅ Reinitialization successful")
+                    self.status_callback("✅ COORDINATOR: Reinitialization successful")
             
             if not self.db_updater:
                 error_msg = "Database updater not initialized - component initialization failed"
                 result.errors.append(error_msg)
-                self.status_callback(f"❌ {error_msg}")
+                self.status_callback(f"❌ COORDINATOR: {error_msg}")
                 return result
                 
+            self.status_callback(f"🔄 COORDINATOR: Calling web_client.get_product_data({sku})...")
             product_data = self.web_client.get_product_data(sku)
+            self.status_callback(f"🔍 COORDINATOR: Product data result: {type(product_data)}, keys: {list(product_data.keys()) if product_data else 'None'}")
             
             if not product_data:
-                result.errors.append("Product not found on website")
-                self.status_callback("Product not accessible on website")
+                error_msg = "Product not found on website"
+                result.errors.append(error_msg)
+                self.status_callback(f"❌ COORDINATOR: {error_msg}")
                 return result
             
             # Step 2: Extract category from product page
-            self.status_callback("Step 2: Extracting category from product page...")
+            self.status_callback("🔄 COORDINATOR: Step 2: Extracting category from product page...")
+            self.status_callback(f"🔄 COORDINATOR: Calling extract_nutrition_data...")
             nutrition_data = self.web_client.extract_nutrition_data(product_data['soup'], product_data['url'])
+            self.status_callback(f"🔍 COORDINATOR: Nutrition data keys: {list(nutrition_data.keys()) if nutrition_data else 'None'}")
             
             extracted_category = nutrition_data.get('category_code', '')
             category_path = nutrition_data.get('category_path_full', '')
             
+            self.status_callback(f"🔍 COORDINATOR: Extracted category: '{extracted_category}'")
+            self.status_callback(f"🔍 COORDINATOR: Category path: '{category_path}'")
+            
             if extracted_category:
-                self.status_callback(f"✓ Extracted category: {extracted_category} from path: {category_path}")
+                self.status_callback(f"✅ COORDINATOR: Successfully extracted category: {extracted_category} from path: {category_path}")
                 category_code = extracted_category
             else:
-                self.status_callback("⚠️ No category found on product page, using default SH-1-1-1")
+                self.status_callback("⚠️ COORDINATOR: No category found on product page, using default SH-1-1-1")
                 category_code = 'SH-1-1-1'  # Default fallback
             
             # Step 3: Process with extracted category
-            self.status_callback(f"Step 3: Processing with category {category_code}")
-            return self.process_single_product_enhanced(sku, category_code, force_update)
+            self.status_callback(f"🔄 COORDINATOR: Step 3: Processing with category {category_code}")
+            self.status_callback(f"🔄 COORDINATOR: Calling process_single_product_enhanced...")
+            
+            enhanced_result = self.process_single_product_enhanced(sku, category_code, force_update)
+            self.status_callback(f"🔍 COORDINATOR: Enhanced processing result: success={enhanced_result.success}, operation={enhanced_result.operation}")
+            if enhanced_result.errors:
+                self.status_callback(f"🔍 COORDINATOR: Enhanced processing errors: {enhanced_result.errors}")
+            
+            return enhanced_result
             
         except Exception as e:
             error_msg = f"Error in automatic category processing: {str(e)}"

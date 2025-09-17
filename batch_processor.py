@@ -55,25 +55,64 @@ class BatchProcessor:
             coordinator = None
             
             try:
+                self.status_callback(f"🚀 BATCH: Starting thread processing for {sku}")
                 coordinator = self._get_coordinator()
                 
-                self.status_callback(f"Processing product {sku}")
+                self.status_callback(f"🔄 BATCH: Processing product {sku}")
                 
                 # Use automatic category extraction if no category_code provided
                 if category_code is None:
-                    self.status_callback(f"Using automatic category extraction for {sku}")
-                    # Use enhanced coordinator for automatic category extraction
-                    from enhanced_update_coordinator import EnhancedUpdateCoordinator
-                    enhanced_coordinator = EnhancedUpdateCoordinator(self.status_callback)
-                    result = enhanced_coordinator.process_single_product_with_auto_category(sku)
-                    enhanced_coordinator.close()
+                    self.status_callback(f"🔄 BATCH: Using automatic category extraction for {sku}")
+                    self.status_callback(f"🔄 BATCH: Thread ID: {threading.current_thread().ident}")
+                    self.status_callback(f"🔄 BATCH: Thread name: {threading.current_thread().name}")
+                    
+                    try:
+                        # Use enhanced coordinator for automatic category extraction
+                        self.status_callback(f"🔄 BATCH: Importing EnhancedUpdateCoordinator...")
+                        from enhanced_update_coordinator import EnhancedUpdateCoordinator
+                        
+                        self.status_callback(f"🔄 BATCH: Creating coordinator instance...")
+                        enhanced_coordinator = EnhancedUpdateCoordinator(self.status_callback)
+                        
+                        self.status_callback(f"🔄 BATCH: Calling process_single_product_with_auto_category...")
+                        result = enhanced_coordinator.process_single_product_with_auto_category(sku)
+                        
+                        self.status_callback(f"🔄 BATCH: Processing completed, result type: {type(result)}")
+                        self.status_callback(f"🔄 BATCH: Result success: {getattr(result, 'success', 'N/A')}")
+                        if hasattr(result, 'errors') and result.errors:
+                            self.status_callback(f"🔄 BATCH: Result errors: {result.errors}")
+                        
+                        self.status_callback(f"🔄 BATCH: Closing coordinator...")
+                        enhanced_coordinator.close()
+                        self.status_callback(f"🔄 BATCH: Coordinator closed successfully")
+                        
+                    except Exception as batch_error:
+                        self.status_callback(f"❌ BATCH: Exception during auto category processing: {str(batch_error)}")
+                        import traceback
+                        self.status_callback(f"❌ BATCH: Traceback: {traceback.format_exc()}")
+                        raise batch_error
                 else:
+                    self.status_callback(f"🔄 BATCH: Using manual category {category_code} for {sku}")
                     result = coordinator.process_single_product(sku, category_code)
                 
-                if result['success'] if isinstance(result, dict) else result.success:
+                self.status_callback(f"🔍 BATCH: Checking result for {sku}...")
+                success = result['success'] if isinstance(result, dict) else result.success
+                self.status_callback(f"🔍 BATCH: Success status for {sku}: {success}")
+                
+                if success:
+                    self.status_callback(f"✅ BATCH: {sku} processed successfully")
                     return {'sku': sku, 'status': 'success', 'result': result}
                 else:
-                    error_msg = result.get('error', 'Unknown error') if isinstance(result, dict) else 'Processing failed'
+                    if isinstance(result, dict):
+                        error_msg = result.get('error', 'Unknown error')
+                        errors = result.get('errors', [])
+                    else:
+                        error_msg = 'Processing failed'
+                        errors = getattr(result, 'errors', [])
+                    
+                    self.status_callback(f"❌ BATCH: {sku} failed with error: {error_msg}")
+                    if errors:
+                        self.status_callback(f"❌ BATCH: {sku} detailed errors: {errors}")
                     return {'sku': sku, 'status': 'failed', 'error': error_msg}
                     
             except Exception as e:
