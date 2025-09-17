@@ -7,6 +7,7 @@ import os
 import time
 import psycopg2
 import psycopg2.extras
+import psycopg2.pool
 import re
 from typing import Dict, List, Set, Tuple
 from datetime import datetime, timezone
@@ -19,84 +20,90 @@ class IngredientProcessor:
         self.status_callback = status_callback or (lambda x: None)
         self.db_url = db_config.products_db_url
         
-        self.conn = None
-        self._connect()
+        # Create a thread-safe connection pool instead of single connection
+        self.connection_pool = None
+        self._init_connection_pool()
         
-        # Create a shared deduplicator instance to avoid multiple database connections
+        # Create a shared deduplicator instance that uses the same connection pool
         self.deduplicator = None
         self._init_deduplicator()
     
-    def _connect(self):
-        """Establish database connection with retry logic"""
+    def _init_connection_pool(self):
+        """Initialize thread-safe connection pool"""
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                if self.conn:
-                    self.conn.close()
-                self.conn = psycopg2.connect(self.db_url, cursor_factory=psycopg2.extras.RealDictCursor)
-                self.conn.autocommit = False
-                self.status_callback("Ingredient processor connected to database")
-                
-                # Update deduplicator connection after reconnect
-                if self.deduplicator and self.deduplicator.conn is not self.conn:
-                    self.deduplicator.conn = self.conn
+                # Create a connection pool with min 1 connection, max 10 connections
+                self.connection_pool = psycopg2.pool.ThreadedConnectionPool(
+                    1, 10,  # min and max connections
+                    self.db_url,
+                    cursor_factory=psycopg2.extras.RealDictCursor
+                )
+                self.status_callback("Ingredient processor initialized thread-safe connection pool")
                 return
             except Exception as e:
                 if attempt < max_retries - 1:
-                    self.status_callback(f"Connection attempt {attempt + 1} failed, retrying...")
+                    self.status_callback(f"Connection pool init attempt {attempt + 1} failed, retrying...")
                     time.sleep(1)
                 else:
-                    raise Exception(f"Database connection failed after {max_retries} attempts: {str(e)}")
+                    raise Exception(f"Connection pool initialization failed after {max_retries} attempts: {str(e)}")
 
-    def _ensure_connection(self):
-        """Ensure database connection is active"""
-        try:
-            if not self.conn or self.conn.closed:
-                self._connect()
-            else:
-                # Test connection with a simple query
-                with self.conn.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-        except Exception:
-            self._connect()
+    def _get_connection(self):
+        """Get a connection from the thread-safe pool"""
+        if not self.connection_pool:
+            raise Exception("Connection pool not initialized")
+        return self.connection_pool.getconn()
     
     def _init_deduplicator(self):
-        """Initialize shared deduplicator instance with existing connection"""
+        """Initialize shared deduplicator instance with connection pool"""
         try:
             from ingredient_deduplicator import IngredientDeduplicator
-            # Pass our existing connection to avoid creating a new one
+            # Pass our connection pool to the deduplicator
             self.deduplicator = IngredientDeduplicator(
                 status_callback=self.status_callback,
-                existing_connection=self.conn
+                connection_pool=self.connection_pool
             )
         except Exception as e:
             self.status_callback(f"Failed to initialize deduplicator: {str(e)}")
             self.deduplicator = None
     
     def _execute_query(self, query: str, params: Tuple = None, fetch: bool = False):
-        """Execute query with robust connection handling"""
+        """Execute query with thread-safe connection handling"""
+        conn = None
         max_retries = 3
+        
         for attempt in range(max_retries):
             try:
-                self._ensure_connection()
-                with self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cursor:
+                # Get connection from pool
+                conn = self._get_connection()
+                
+                with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     if fetch:
-                        return cursor.fetchall()
-                    return None
+                        result = cursor.fetchall()
+                        # Return connection to pool before returning result
+                        self.connection_pool.putconn(conn)
+                        return result
+                    else:
+                        # Return connection to pool
+                        self.connection_pool.putconn(conn)
+                        return None
+                        
             except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+                if conn:
+                    self.connection_pool.putconn(conn, close=True)  # Close bad connection
                 if attempt < max_retries - 1:
-                    self.status_callback(f"Query attempt {attempt + 1} failed due to connection issue, reconnecting...")
-                    self._connect()
+                    self.status_callback(f"Query attempt {attempt + 1} failed due to connection issue, retrying...")
                     time.sleep(0.5)
                 else:
                     raise Exception(f"Query execution failed after {max_retries} attempts: {str(e)}")
             except Exception as e:
-                if self.conn:
+                if conn:
                     try:
-                        self.conn.rollback()
+                        conn.rollback()
+                        self.connection_pool.putconn(conn)
                     except:
-                        pass
+                        self.connection_pool.putconn(conn, close=True)  # Close on error
                 raise Exception(f"Query execution failed: {str(e)}")
     
     def process_product_ingredients(self, sku: str, ingredients_text: str) -> Dict:

@@ -8,19 +8,29 @@ import re
 from typing import List, Dict, Tuple
 
 class IngredientDeduplicator:
-    def __init__(self, status_callback=None, existing_connection=None):
+    def __init__(self, status_callback=None, existing_connection=None, connection_pool=None):
         self.status_callback = status_callback or print
-        self.conn = existing_connection
-        self.is_shared_connection = existing_connection is not None
         
-        # Only create a new connection if none was provided
-        if self.conn is None:
-            self._connect()
-        else:
+        # Support both old single connection and new connection pool approach
+        if connection_pool:
+            self.connection_pool = connection_pool
+            self.conn = None  # We'll get connections from pool as needed
+            self.is_shared_connection = False
+            self.status_callback("Deduplicator using thread-safe connection pool")
+        elif existing_connection:
+            self.conn = existing_connection
+            self.connection_pool = None
+            self.is_shared_connection = True
             self.status_callback("Deduplicator using shared database connection")
+        else:
+            # Fallback: create own connection
+            self.conn = None
+            self.connection_pool = None
+            self.is_shared_connection = False
+            self._connect()
     
     def _connect(self):
-        """Establish database connection"""
+        """Establish database connection (fallback method)"""
         try:
             from database_config import db_config
             db_url = db_config.products_db_url
@@ -28,6 +38,19 @@ class IngredientDeduplicator:
             self.status_callback("Deduplicator connected to database")
         except Exception as e:
             self.status_callback(f"Database connection failed: {str(e)}")
+    
+    def _get_connection(self):
+        """Get a database connection (from pool or direct)"""
+        if self.connection_pool:
+            return self.connection_pool.getconn()
+        else:
+            return self.conn
+    
+    def _return_connection(self, conn, close_on_error=False):
+        """Return connection to pool or do nothing for direct connection"""
+        if self.connection_pool:
+            self.connection_pool.putconn(conn, close=close_on_error)
+        # For direct connections, we don't need to return anything
     
     def _normalize_for_comparison(self, ingredient: str) -> str:
         """Normalize ingredient for comparison - should match the processor normalization"""
@@ -162,10 +185,12 @@ class IngredientDeduplicator:
     
     def find_ingredient_by_similarity(self, ingredient_name: str) -> int:
         """Find existing ingredient by similarity (for preventing future duplicates)"""
+        conn = None
         try:
             normalized_input = self._normalize_for_comparison(ingredient_name)
             
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, ingredient, frequency 
                 FROM ingredient_analysis 
@@ -176,11 +201,16 @@ class IngredientDeduplicator:
             cursor.close()
             
             if result:
-                return result['id']
+                ingredient_id = result['id']
+                self._return_connection(conn)
+                return ingredient_id
             
+            self._return_connection(conn)
             return None
             
         except Exception as e:
+            if conn:
+                self._return_connection(conn, close_on_error=True)
             self.status_callback(f"Error finding similar ingredient: {str(e)}")
             return None
     
