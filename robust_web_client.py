@@ -426,6 +426,8 @@ class RobustWebClient:
         nutrition_data = {
             'has_nutrition': False,
             'ingredients_text': '',
+            'category_code': '',
+            'category_path_full': '',
             'energy_kcal': 0,
             'energy_kj': 0,
             'fat_total': 0,
@@ -461,6 +463,20 @@ class RobustWebClient:
                 except Exception:
                     return 0.0, 0.0
             
+            # Helper function to extract rightmost RIMI category code
+            def extract_rightmost_rimi_code(category_path: str) -> str:
+                """Extract rightmost RIMI category code from full path"""
+                try:
+                    # Split by '/' and check each part from right to left
+                    parts = [part.strip() for part in category_path.split('/')]
+                    for part in reversed(parts):
+                        # Match RIMI category format: SH-X-X or SH-X-X-X
+                        if re.match(r'^SH-\d+-\d+(-\d+)?$', part):
+                            return part
+                    return ''
+                except Exception:
+                    return ''
+            
             # First, try to extract from JavaScript content (existing product details)
             script_tag = None
             for script in soup.find_all('script'):
@@ -495,42 +511,62 @@ class RobustWebClient:
                     details_soup = BeautifulSoup(details_html, 'html.parser')
                     self.status_callback("Successfully parsed product details HTML with Unicode decoding")
                     
-                    # Extract ingredients with enhanced HTML structure detection
+                    # Extract ingredients and category with enhanced HTML structure detection
                     ingredients_found = False
+                    category_found = False
                     
-                    # Define ingredient section keywords (Latvian variants) - ONLY for ingredients, NOT nutrition facts
+                    # Define section keywords
                     ingredient_keywords = ['Sastāvdaļas', 'sastāvdaļas', 'SASTĀVDAĻAS']
+                    category_keywords = ['Kategorija', 'kategorija', 'Category', 'Produkta kategorija']
                     
-                    # Method 1: Look in list items with spans
+                    # Method 1: Look in list items with spans for both ingredients and category
                     for item in details_soup.find_all('li', class_='item'):
                         span = item.find('span')
                         if span:
                             span_text = span.get_text(strip=True)
-                            if any(keyword in span_text for keyword in ingredient_keywords):
-                                text_div = item.find('div', class_='text')
-                                if text_div and text_div.p:
-                                    nutrition_data['ingredients_text'] = text_div.p.get_text(strip=True)
+                            text_div = item.find('div', class_='text')
+                            if text_div and text_div.p:
+                                content = text_div.p.get_text(strip=True)
+                                
+                                # Check for ingredients
+                                if any(keyword in span_text for keyword in ingredient_keywords):
+                                    nutrition_data['ingredients_text'] = content
                                     self.status_callback(f"Found ingredients (method 1): {nutrition_data['ingredients_text'][:50]}...")
                                     ingredients_found = True
-                                    break
+                                
+                                # Check for category
+                                elif any(keyword in span_text for keyword in category_keywords):
+                                    nutrition_data['category_path_full'] = content
+                                    nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
+                                    self.status_callback(f"Found category (method 1): {content} -> code: {nutrition_data['category_code']}")
+                                    category_found = True
                     
-                    # Method 2: Look in product list wrappers (FIXED for nested structure)
-                    if not ingredients_found:
-                        for section in details_soup.find_all('div', class_='product__list-wrapper'):
-                            heading = section.find('p', class_='heading')
-                            if heading:
-                                heading_text = heading.get_text(strip=True)
-                                if any(keyword in heading_text for keyword in ingredient_keywords):
-                                    # Handle nested structure: wrapper > ul > li > div.text > p
-                                    text_divs = section.find_all('div', class_='text')  # Find ALL text divs in this section
-                                    for text_div in text_divs:
-                                        if text_div.p and text_div.p.get_text(strip=True):
-                                            content = text_div.p.get_text(strip=True)
-                                            nutrition_data['ingredients_text'] = content
-                                            self.status_callback(f"Found ingredients (method 2, nested): {content[:80]}...")
-                                            ingredients_found = True
-                                            break
-                                    if ingredients_found:
+                    # Method 2: Look in product list wrappers for both ingredients and category
+                    for section in details_soup.find_all('div', class_='product__list-wrapper'):
+                        heading = section.find('p', class_='heading')
+                        if heading:
+                            heading_text = heading.get_text(strip=True)
+                            text_divs = section.find_all('div', class_='text')  # Find ALL text divs in this section
+                            
+                            # Check for ingredients
+                            if not ingredients_found and any(keyword in heading_text for keyword in ingredient_keywords):
+                                for text_div in text_divs:
+                                    if text_div.p and text_div.p.get_text(strip=True):
+                                        content = text_div.p.get_text(strip=True)
+                                        nutrition_data['ingredients_text'] = content
+                                        self.status_callback(f"Found ingredients (method 2, nested): {content[:80]}...")
+                                        ingredients_found = True
+                                        break
+                            
+                            # Check for category
+                            elif not category_found and any(keyword in heading_text for keyword in category_keywords):
+                                for text_div in text_divs:
+                                    if text_div.p and text_div.p.get_text(strip=True):
+                                        content = text_div.p.get_text(strip=True)
+                                        nutrition_data['category_path_full'] = content
+                                        nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
+                                        self.status_callback(f"Found category (method 2, nested): {content} -> code: {nutrition_data['category_code']}")
+                                        category_found = True
                                         break
                     
                     # Method 3: Enhanced text pattern search with better regex
