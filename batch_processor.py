@@ -54,53 +54,58 @@ class BatchProcessor:
             sku = product_info.get('sku') or str(product_info)
             coordinator = None
             
+            # Create thread-safe callback that doesn't rely on Streamlit context
+            def thread_safe_callback(msg):
+                # Just print directly - will appear in logs
+                print(f"[THREAD-{sku}] {msg}")
+            
             try:
-                self.status_callback(f"🚀 BATCH: Starting thread processing for {sku}")
+                print(f"🚀 BATCH: Starting thread processing for {sku}")
                 coordinator = self._get_coordinator()
                 
-                self.status_callback(f"🔄 BATCH: Processing product {sku}")
+                print(f"🔄 BATCH: Processing product {sku}")
                 
                 # Use automatic category extraction if no category_code provided
                 if category_code is None:
-                    self.status_callback(f"🔄 BATCH: Using automatic category extraction for {sku}")
-                    self.status_callback(f"🔄 BATCH: Thread ID: {threading.current_thread().ident}")
-                    self.status_callback(f"🔄 BATCH: Thread name: {threading.current_thread().name}")
+                    print(f"🔄 BATCH: Using automatic category extraction for {sku}")
+                    print(f"🔄 BATCH: Thread ID: {threading.current_thread().ident}")
+                    print(f"🔄 BATCH: Thread name: {threading.current_thread().name}")
                     
                     try:
                         # Use enhanced coordinator for automatic category extraction
-                        self.status_callback(f"🔄 BATCH: Importing EnhancedUpdateCoordinator...")
+                        print(f"🔄 BATCH: Importing EnhancedUpdateCoordinator...")
                         from enhanced_update_coordinator import EnhancedUpdateCoordinator
                         
-                        self.status_callback(f"🔄 BATCH: Creating coordinator instance...")
-                        enhanced_coordinator = EnhancedUpdateCoordinator(self.status_callback)
+                        print(f"🔄 BATCH: Creating coordinator instance...")
+                        enhanced_coordinator = EnhancedUpdateCoordinator(thread_safe_callback)
                         
-                        self.status_callback(f"🔄 BATCH: Calling process_single_product_with_auto_category...")
+                        print(f"🔄 BATCH: Calling process_single_product_with_auto_category...")
                         result = enhanced_coordinator.process_single_product_with_auto_category(sku)
                         
-                        self.status_callback(f"🔄 BATCH: Processing completed, result type: {type(result)}")
-                        self.status_callback(f"🔄 BATCH: Result success: {getattr(result, 'success', 'N/A')}")
+                        print(f"🔄 BATCH: Processing completed, result type: {type(result)}")
+                        print(f"🔄 BATCH: Result success: {getattr(result, 'success', 'N/A')}")
                         if hasattr(result, 'errors') and result.errors:
-                            self.status_callback(f"🔄 BATCH: Result errors: {result.errors}")
+                            print(f"🔄 BATCH: Result errors: {result.errors}")
                         
-                        self.status_callback(f"🔄 BATCH: Closing coordinator...")
+                        print(f"🔄 BATCH: Closing coordinator...")
                         enhanced_coordinator.close()
-                        self.status_callback(f"🔄 BATCH: Coordinator closed successfully")
+                        print(f"🔄 BATCH: Coordinator closed successfully")
                         
                     except Exception as batch_error:
-                        self.status_callback(f"❌ BATCH: Exception during auto category processing: {str(batch_error)}")
+                        print(f"❌ BATCH: Exception during auto category processing: {str(batch_error)}")
                         import traceback
-                        self.status_callback(f"❌ BATCH: Traceback: {traceback.format_exc()}")
+                        print(f"❌ BATCH: Traceback: {traceback.format_exc()}")
                         raise batch_error
                 else:
-                    self.status_callback(f"🔄 BATCH: Using manual category {category_code} for {sku}")
+                    print(f"🔄 BATCH: Using manual category {category_code} for {sku}")
                     result = coordinator.process_single_product(sku, category_code)
                 
-                self.status_callback(f"🔍 BATCH: Checking result for {sku}...")
+                print(f"🔍 BATCH: Checking result for {sku}...")
                 success = result['success'] if isinstance(result, dict) else result.success
-                self.status_callback(f"🔍 BATCH: Success status for {sku}: {success}")
+                print(f"🔍 BATCH: Success status for {sku}: {success}")
                 
                 if success:
-                    self.status_callback(f"✅ BATCH: {sku} processed successfully")
+                    print(f"✅ BATCH: {sku} processed successfully")
                     return {'sku': sku, 'status': 'success', 'result': result}
                 else:
                     if isinstance(result, dict):
@@ -110,9 +115,9 @@ class BatchProcessor:
                         error_msg = 'Processing failed'
                         errors = getattr(result, 'errors', [])
                     
-                    self.status_callback(f"❌ BATCH: {sku} failed with error: {error_msg}")
+                    print(f"❌ BATCH: {sku} failed with error: {error_msg}")
                     if errors:
-                        self.status_callback(f"❌ BATCH: {sku} detailed errors: {errors}")
+                        print(f"❌ BATCH: {sku} detailed errors: {errors}")
                     return {'sku': sku, 'status': 'failed', 'error': error_msg}
                     
             except Exception as e:
