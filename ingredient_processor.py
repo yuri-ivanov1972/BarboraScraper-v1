@@ -21,6 +21,10 @@ class IngredientProcessor:
         
         self.conn = None
         self._connect()
+        
+        # Create a shared deduplicator instance to avoid multiple database connections
+        self.deduplicator = None
+        self._init_deduplicator()
     
     def _connect(self):
         """Establish database connection with retry logic"""
@@ -29,9 +33,13 @@ class IngredientProcessor:
             try:
                 if self.conn:
                     self.conn.close()
-                self.conn = psycopg2.connect(self.db_url)
+                self.conn = psycopg2.connect(self.db_url, cursor_factory=psycopg2.extras.RealDictCursor)
                 self.conn.autocommit = False
                 self.status_callback("Ingredient processor connected to database")
+                
+                # Update deduplicator connection after reconnect
+                if self.deduplicator and self.deduplicator.conn is not self.conn:
+                    self.deduplicator.conn = self.conn
                 return
             except Exception as e:
                 if attempt < max_retries - 1:
@@ -51,6 +59,19 @@ class IngredientProcessor:
                     cursor.execute("SELECT 1")
         except Exception:
             self._connect()
+    
+    def _init_deduplicator(self):
+        """Initialize shared deduplicator instance with existing connection"""
+        try:
+            from ingredient_deduplicator import IngredientDeduplicator
+            # Pass our existing connection to avoid creating a new one
+            self.deduplicator = IngredientDeduplicator(
+                status_callback=self.status_callback,
+                existing_connection=self.conn
+            )
+        except Exception as e:
+            self.status_callback(f"Failed to initialize deduplicator: {str(e)}")
+            self.deduplicator = None
     
     def _execute_query(self, query: str, params: Tuple = None, fetch: bool = False):
         """Execute query with robust connection handling"""
@@ -303,11 +324,10 @@ class IngredientProcessor:
         if not normalized_name:
             return None
         
-        # Use the deduplicator to check for existing similar ingredients
-        from ingredient_deduplicator import IngredientDeduplicator
-        deduplicator = IngredientDeduplicator()
-        existing_id = deduplicator.find_ingredient_by_similarity(normalized_name)
-        deduplicator.close()
+        # Use the shared deduplicator to check for existing similar ingredients
+        existing_id = None
+        if self.deduplicator:
+            existing_id = self.deduplicator.find_ingredient_by_similarity(normalized_name)
         
         if existing_id:
             # Update frequency of existing ingredient

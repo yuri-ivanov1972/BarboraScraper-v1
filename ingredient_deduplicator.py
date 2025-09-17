@@ -8,10 +8,16 @@ import re
 from typing import List, Dict, Tuple
 
 class IngredientDeduplicator:
-    def __init__(self, status_callback=None):
+    def __init__(self, status_callback=None, existing_connection=None):
         self.status_callback = status_callback or print
-        self.conn = None
-        self._connect()
+        self.conn = existing_connection
+        self.is_shared_connection = existing_connection is not None
+        
+        # Only create a new connection if none was provided
+        if self.conn is None:
+            self._connect()
+        else:
+            self.status_callback("Deduplicator using shared database connection")
     
     def _connect(self):
         """Establish database connection"""
@@ -179,10 +185,12 @@ class IngredientDeduplicator:
             return None
     
     def close(self):
-        """Close database connection"""
-        if self.conn:
+        """Close database connection (only if not shared)"""
+        if self.conn and not self.is_shared_connection:
             self.conn.close()
             self.status_callback("Deduplicator connection closed")
+        elif self.is_shared_connection:
+            self.status_callback("Deduplicator using shared connection - not closing")
 
 
 def run_ingredient_cleanup():
