@@ -7,6 +7,8 @@ This Streamlit web application scrapes product data from Rimi, a Baltic grocery 
 Preferred communication style: Simple, everyday language.
 Preferred approach: Simplified category-by-category analysis in read-only mode without database modifications.
 
+**CRITICAL DEVELOPMENT RULE**: Always check existing database schema FIRST before making any assumptions about table names, field names, or database structure. Use SQL queries to verify actual schema before writing code that references database tables/columns.
+
 ## System Architecture
 The application features a modular Python architecture comprising:
 - **Frontend**: Streamlit for the user interface.

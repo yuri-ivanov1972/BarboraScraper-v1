@@ -419,8 +419,8 @@ class EnhancedDatabaseUpdater:
             product_id = product['product_id']
             
             # Remove existing ingredient mappings
-            delete_query = "DELETE FROM productingredients WHERE product_id = %s"
-            self._execute_query(delete_query, (product_id,))
+            delete_query = "DELETE FROM ingredient_product_mapping WHERE product_sku = %s"
+            self._execute_query(delete_query, (sku,))
             self.status_callback("Removed existing ingredient mappings")
             
             # Process ingredients using the ingredient processor
