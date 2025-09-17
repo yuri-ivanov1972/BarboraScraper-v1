@@ -21,8 +21,12 @@ class BatchProcessor:
     def _get_coordinator(self) -> UpdateCoordinator:
         """Get or create a coordinator for the current thread"""
         with self._lock:
+            # Create thread-safe callback that doesn't rely on Streamlit context
+            def thread_safe_callback(msg):
+                print(f"[COORDINATOR] {msg}")
+            
             # Create a new coordinator for each worker to avoid connection conflicts
-            coordinator = UpdateCoordinator(self.status_callback)
+            coordinator = UpdateCoordinator(thread_safe_callback)
             self.coordinators.append(coordinator)
             return coordinator
     
