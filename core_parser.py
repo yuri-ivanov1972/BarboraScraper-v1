@@ -321,6 +321,83 @@ class RimiParser:
             self.status_callback(f"Error extracting products: {str(e)}")
             return []
     
+    def collect_category_skus(self, category_code: str) -> List[str]:
+        """
+        Collect all product SKUs from a Rimi category using pagination
+        
+        Args:
+            category_code: Rimi category code (e.g., 'SH-7-2-14')
+            
+        Returns:
+            List of unique SKU strings found in the category
+        """
+        try:
+            # Build category URL using existing normalization method
+            category_url = self.build_category_url(category_code)
+            self.status_callback(f"Collecting SKUs from category {category_code}")
+            self.status_callback(f"Category URL: {category_url}")
+            
+            # Get pagination info and detect actual page size
+            total_products, total_pages = self.get_total_products_from_pagination(category_url)
+            
+            if total_products == 0:
+                self.status_callback(f"No products found in category {category_code}")
+                return []
+            
+            # Detect actual page size used by the site
+            page_size = self._detect_page_size(category_url)
+            self.status_callback(f"Detected page size: {page_size} products per page")
+            self.status_callback(f"Found {total_products} products across {total_pages} pages in category {category_code}")
+            
+            # Collect SKUs from all pages
+            all_skus = []
+            successful_pages = 0
+            
+            for page_num in range(1, total_pages + 1):
+                try:
+                    # Build page URL using detected page size
+                    page_url = f"{category_url}?pageSize={page_size}&currentPage={page_num}"
+                    self.status_callback(f"Processing page {page_num}/{total_pages}: {page_url}")
+                    
+                    # Extract products from this page (use generous max_products)
+                    products = self.extract_products_from_page(page_url, max_products=page_size * 2)
+                    
+                    # Collect SKUs from products
+                    page_skus = [product.sku for product in products if product.sku]
+                    all_skus.extend(page_skus)
+                    successful_pages += 1
+                    
+                    self.status_callback(f"Page {page_num}: Found {len(page_skus)} SKUs")
+                    
+                except Exception as page_error:
+                    self.status_callback(f"Error processing page {page_num}: {str(page_error)} - Skipping")
+                    continue
+            
+            # Deduplicate SKUs while preserving order
+            unique_skus = list(dict.fromkeys(all_skus))  # Preserves order, removes duplicates
+            
+            self.status_callback(f"Category {category_code} collection complete:")
+            self.status_callback(f"  - Total pages processed: {successful_pages}/{total_pages}")
+            self.status_callback(f"  - Total SKUs found: {len(all_skus)} (including duplicates)")
+            self.status_callback(f"  - Unique SKUs: {len(unique_skus)}")
+            
+            # Handle count mismatch with retry logic
+            if len(unique_skus) != total_products and successful_pages == total_pages:
+                self.status_callback(f"⚠️  SKU count mismatch: Expected {total_products}, got {len(unique_skus)}")
+                self.status_callback(f"Attempting to find actual last page to verify count...")
+                
+                # Try to find the actual last page to verify our pagination
+                actual_last_page = self._find_actual_last_page(category_url, total_pages, page_size)
+                if actual_last_page != total_pages:
+                    self.status_callback(f"Found different last page: {actual_last_page} vs {total_pages}")
+                    # Note: Could implement retry here if needed, but for now just log the finding
+            
+            return unique_skus
+            
+        except Exception as e:
+            self.status_callback(f"Error collecting SKUs from category {category_code}: {str(e)}")
+            return []
+    
     def _find_actual_last_page(self, category_url: str, suspected_max: int, page_size: int = 40) -> int:
         """Use binary search to find the actual last page with products"""
         
