@@ -691,12 +691,315 @@ def product_manager_tab():
         - Nutri-score calculation
         """)
 
+def sh7_processor_tab():
+    """SH-7 Category Processor Tab - Process all 17 subcategories with checkpoint support"""
+    st.header("🚀 SH-7 Category Processor")
+    st.markdown("Process all SH-7 subcategories (~480 products) with checkpoint/resume capability")
+    
+    # Import required modules
+    try:
+        from sh7_category_processor import SH7CategoryProcessor
+    except ImportError as e:
+        st.error(f"Error importing SH-7 processor: {str(e)}")
+        return
+    
+    # Initialize processor for status checking
+    try:
+        processor = SH7CategoryProcessor()
+        can_resume = processor.can_resume()
+        checkpoint_summary = processor.get_processing_summary()
+    except Exception as e:
+        st.error(f"Error initializing processor: {str(e)}")
+        return
+    
+    # Display current status
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("📊 Processing Status")
+        if can_resume:
+            st.info("🔄 **Previous session found** - You can resume processing")
+            with st.expander("View Previous Progress", expanded=True):
+                st.text(checkpoint_summary)
+        else:
+            st.success("✨ **Ready for new processing** - No previous session found")
+            
+        # Show SH-7 category structure
+        st.subheader("📋 SH-7 Subcategories")
+        subcategories = SH7CategoryProcessor.SH7_SUBCATEGORIES
+        
+        col_a, col_b = st.columns(2)
+        items = list(subcategories.items())
+        mid = len(items) // 2
+        
+        with col_a:
+            st.write("**First 8 subcategories:**")
+            for code, count in items[:mid]:
+                st.text(f"• {code}: {count} products")
+        
+        with col_b:
+            st.write("**Remaining 9 subcategories:**")
+            for code, count in items[mid:]:
+                st.text(f"• {code}: {count} products")
+        
+        total_products = sum(subcategories.values())
+        st.metric("Total Products to Process", total_products)
+    
+    with col2:
+        st.subheader("⚙️ Controls")
+        
+        # Processing options
+        max_workers = st.slider(
+            "Worker Threads",
+            min_value=1,
+            max_value=10,
+            value=3,
+            help="Number of concurrent worker threads for batch processing"
+        )
+        
+        # Processing buttons
+        if can_resume:
+            if st.button("▶️ Resume Processing", type="primary"):
+                st.session_state['sh7_processing'] = True
+                st.session_state['sh7_resume'] = True
+                st.rerun()
+                
+            if st.button("🔄 Start Fresh", help="Reset progress and start from beginning"):
+                try:
+                    processor.reset_progress()
+                    st.success("Progress reset successfully!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error resetting progress: {str(e)}")
+        else:
+            if st.button("🚀 Start SH-7 Processing", type="primary"):
+                st.session_state['sh7_processing'] = True
+                st.session_state['sh7_resume'] = False
+                st.rerun()
+        
+        # Test mode option
+        st.subheader("🧪 Test Mode")
+        if st.button("Test Small Subcategory", help="Test with SH-7-2-28 (4 products only)"):
+            st.session_state['sh7_test_mode'] = True
+            st.rerun()
+    
+    # Processing execution
+    if st.session_state.get('sh7_processing', False):
+        run_sh7_processing(max_workers, st.session_state.get('sh7_resume', False))
+        st.session_state['sh7_processing'] = False
+        st.session_state['sh7_resume'] = False
+        
+    elif st.session_state.get('sh7_test_mode', False):
+        run_sh7_test_processing(max_workers)
+        st.session_state['sh7_test_mode'] = False
+    
+    # Help and information
+    with st.expander("ℹ️ SH-7 Processing Information"):
+        st.markdown("""
+        **SH-7 Category Processor** provides comprehensive category-scale processing:
+        
+        **Features:**
+        - **Sequential Processing**: Processes 17 subcategories one by one as requested
+        - **Checkpoint/Resume**: Can resume interrupted processing sessions
+        - **Progress Tracking**: Real-time progress updates with detailed statistics
+        - **Skip-and-Continue**: Individual subcategory failures don't stop overall processing
+        - **Collect-First Approach**: Collects all SKUs from category pages, then batch processes
+        
+        **Processing Approach:**
+        1. **SKU Collection Phase**: Extract all product SKUs from category listing pages
+        2. **Validation Phase**: Check collected count vs expected count
+        3. **Batch Processing Phase**: Process all collected SKUs with auto-category detection
+        4. **Checkpoint Save**: Save progress after each subcategory completion
+        
+        **Technical Details:**
+        - Uses enhanced pagination handling with dynamic page size detection
+        - Leverages thread-safe batch processing with connection pooling
+        - Automatic category extraction (no manual category needed)
+        - Comprehensive error handling with detailed logging
+        
+        **Test Mode:**
+        - Processes only SH-7-2-28 (4 products) for quick testing
+        - Useful for validating the workflow before full processing
+        """)
+
+def run_sh7_processing(max_workers: int, resume: bool = False):
+    """Execute SH-7 processing with real-time progress updates"""
+    st.subheader("🚀 SH-7 Processing In Progress")
+    
+    # Create containers for real-time updates
+    progress_container = st.container()
+    status_container = st.container()
+    results_container = st.container()
+    
+    with progress_container:
+        overall_progress = st.progress(0)
+        progress_text = st.empty()
+        subcategory_status = st.empty()
+    
+    with status_container:
+        status_text = st.empty()
+        log_container = st.empty()
+    
+    # Processing state
+    processing_logs = []
+    current_subcategory = 0
+    total_subcategories = 17
+    
+    def status_callback(msg):
+        """Real-time status updates"""
+        nonlocal current_subcategory
+        processing_logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
+        
+        # Update current status
+        status_text.text(f"🔄 {msg}")
+        
+        # Update progress based on message content
+        if "Processing subcategory:" in msg:
+            current_subcategory += 1
+            overall_progress.progress(current_subcategory / total_subcategories)
+            progress_text.text(f"Subcategory {current_subcategory}/{total_subcategories}")
+        elif "complete:" in msg and "✅" in msg:
+            subcategory_status.success(msg)
+        elif "Failed -" in msg and "❌" in msg:
+            subcategory_status.error(msg)
+        elif "⚠️" in msg:
+            subcategory_status.warning(msg)
+        
+        # Update log display (show last 15 messages)
+        recent_logs = processing_logs[-15:]
+        log_text = "\n".join(recent_logs)
+        log_container.text_area("Processing Log", log_text, height=300, key=f"log_{len(processing_logs)}")
+    
+    try:
+        # Initialize processor
+        processor = SH7CategoryProcessor(status_callback, max_workers=max_workers)
+        
+        # Start processing
+        action_type = "Resuming" if resume else "Starting"
+        st.info(f"🔄 {action_type} SH-7 processing with {max_workers} worker threads...")
+        
+        # Execute processing
+        with st.spinner(f"{action_type} comprehensive SH-7 processing..."):
+            results = processor.process_all_subcategories()
+        
+        # Display final results
+        with results_container:
+            st.subheader("🎯 Processing Results")
+            
+            # Summary metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total Subcategories", results['subcategories_total'])
+            with col2:
+                st.metric("✅ Completed", results['subcategories_completed'])
+            with col3:
+                st.metric("❌ Failed", results['subcategories_failed'])
+            with col4:
+                st.metric("📊 Products Processed", results['total_products_processed'])
+            
+            # Processing time and efficiency
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("⏱️ Processing Time", f"{results['processing_time']:.1f}s")
+            with col2:
+                avg_time_per_product = results['processing_time'] / max(results['total_products_processed'], 1)
+                st.metric("⚡ Avg Time/Product", f"{avg_time_per_product:.1f}s")
+            
+            # Success rate
+            success_rate = (results['subcategories_completed'] / results['subcategories_total']) * 100
+            st.metric("Success Rate", f"{success_rate:.1f}%")
+            
+            # Detailed results
+            if results['subcategory_details']:
+                st.subheader("📋 Subcategory Details")
+                
+                with st.expander(f"View all {len(results['subcategory_details'])} subcategory results"):
+                    for detail in results['subcategory_details']:
+                        status_icon = "✅" if detail.get('success') else "❌"
+                        products_info = f"{detail.get('products_processed', 0)}/{detail.get('skus_collected', 0)}"
+                        time_info = f"{detail.get('processing_time', 0):.1f}s"
+                        
+                        st.write(f"{status_icon} **{detail['subcategory']}**: {products_info} products ({time_info})")
+                        if not detail.get('success') and detail.get('error'):
+                            st.error(f"   Error: {detail['error']}")
+            
+            # Final status
+            if results['subcategories_failed'] == 0:
+                st.success("🎉 **All SH-7 subcategories processed successfully!**")
+            else:
+                st.warning(f"⚠️ Processing completed with {results['subcategories_failed']} failed subcategories")
+        
+        # Cleanup
+        processor.close()
+        
+    except Exception as e:
+        st.error(f"💥 Fatal processing error: {str(e)}")
+        status_text.text(f"❌ Processing failed: {str(e)}")
+
+def run_sh7_test_processing(max_workers: int):
+    """Execute test processing on smallest SH-7 subcategory"""
+    st.subheader("🧪 SH-7 Test Processing")
+    st.info("Testing with SH-7-2-28 (4 products) - smallest subcategory")
+    
+    status_container = st.container()
+    results_container = st.container()
+    
+    with status_container:
+        status_text = st.empty()
+        progress_bar = st.progress(0)
+    
+    processing_logs = []
+    
+    def test_status_callback(msg):
+        processing_logs.append(f"[{time.strftime('%H:%M:%S')}] {msg}")
+        status_text.text(f"🧪 {msg}")
+        
+        # Simple progress updates
+        if "Phase 1" in msg:
+            progress_bar.progress(0.25)
+        elif "Phase 2" in msg:
+            progress_bar.progress(0.75)
+        elif "complete" in msg.lower():
+            progress_bar.progress(1.0)
+    
+    try:
+        # Test with single subcategory
+        processor = SH7CategoryProcessor(test_status_callback, max_workers=max_workers)
+        
+        with st.spinner("Running test processing..."):
+            result = processor.process_single_subcategory("SH-7-2-28", 4)
+        
+        with results_container:
+            st.subheader("🧪 Test Results")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Success", "✅" if result['success'] else "❌")
+            with col2:
+                st.metric("SKUs Collected", result.get('skus_collected', 0))
+            with col3:
+                st.metric("Products Processed", result.get('products_processed', 0))
+            
+            st.metric("Processing Time", f"{result.get('processing_time', 0):.1f}s")
+            
+            if result['success']:
+                st.success("🎉 **Test completed successfully!** The SH-7 processor is working correctly.")
+                st.info("💡 You can now run the full SH-7 processing with confidence.")
+            else:
+                st.error(f"❌ **Test failed:** {result.get('error', 'Unknown error')}")
+                st.warning("🔧 Please fix the issues before running full processing.")
+        
+        processor.close()
+        
+    except Exception as e:
+        st.error(f"💥 Test processing error: {str(e)}")
+
 def main():
     st.title("🛒 Rimi Category Analyzer")
     st.markdown("Analyze and compare Rimi product categories with database data")
     
     # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["Category Analysis", "Product Manager", "Batch Processing", "Database Info"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Category Analysis", "Product Manager", "Batch Processing", "🚀 SH-7 Processor", "Database Info"])
     
     with tab1:
         # Category input
@@ -1009,6 +1312,10 @@ def main():
             """)
     
     with tab4:
+        # SH-7 Category Processor Tab
+        sh7_processor_tab()
+    
+    with tab5:
         # Database Info Tab
         st.header("📊 Database Information")
         st.markdown("View information about connected databases")
