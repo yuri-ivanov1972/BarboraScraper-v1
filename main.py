@@ -826,6 +826,13 @@ def run_sh7_processing(max_workers: int, resume: bool = False):
     """Execute SH-7 processing with real-time progress updates"""
     st.subheader("🚀 SH-7 Processing In Progress")
     
+    # Import required modules
+    try:
+        from sh7_category_processor import SH7CategoryProcessor
+    except ImportError as e:
+        st.error(f"Error importing SH-7 processor: {str(e)}")
+        return
+    
     # Create containers for real-time updates
     progress_container = st.container()
     status_container = st.container()
@@ -940,6 +947,13 @@ def run_sh7_test_processing(max_workers: int):
     """Execute test processing on smallest SH-7 subcategory"""
     st.subheader("🧪 SH-7 Test Processing")
     st.info("Testing with SH-7-2-28 (4 products) - smallest subcategory")
+    
+    # Import required modules
+    try:
+        from sh7_category_processor import SH7CategoryProcessor
+    except ImportError as e:
+        st.error(f"Error importing SH-7 processor: {str(e)}")
+        return
     
     status_container = st.container()
     results_container = st.container()
