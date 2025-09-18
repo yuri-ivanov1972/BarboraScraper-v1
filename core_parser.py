@@ -211,43 +211,55 @@ class RimiParser:
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Look for product containers
-            product_selectors = [
-                'div[class*="product"]',
-                'article[class*="product"]',
-                'div[class*="item"]',
-                '[data-testid*="product"]'
-            ]
+            # Priority 1: Look for Rimi-specific product containers with data-product-code
+            product_elements = soup.select('div[data-product-code]')[:max_products]
             
-            product_elements = []
-            for selector in product_selectors:
-                elements = soup.select(selector)
-                if elements:
-                    product_elements = elements[:max_products]
-                    break
+            if not product_elements:
+                # Fallback: Look for generic product containers
+                product_selectors = [
+                    'div[class*="product"]',
+                    'article[class*="product"]',
+                    'div[class*="item"]',
+                    '[data-testid*="product"]'
+                ]
+                
+                for selector in product_selectors:
+                    elements = soup.select(selector)
+                    if elements:
+                        product_elements = elements[:max_products]
+                        break
             
             for element in product_elements:
                 try:
-                    # Extract SKU from URL or data attributes
-                    sku = None
+                    # Extract SKU - Priority 1: data-product-code attribute (Rimi specific)
+                    sku = element.get('data-product-code')
+                    
+                    # Fallback: Extract from URL if data-product-code not found
+                    if not sku:
+                        link = element.find('a', href=True)
+                        if link and link.get('href'):
+                            href = link.get('href')
+                            # Ensure href is a string
+                            if isinstance(href, str):
+                                # Extract SKU from URL pattern like /p/123456
+                                sku_match = re.search(r'/p/(\d+)', href)
+                                if sku_match:
+                                    sku = sku_match.group(1)
+                    
+                    # Build product URL
+                    product_url = ""
                     link = element.find('a', href=True)
-                    if link:
-                        href = link['href']
-                        # Extract SKU from URL pattern like /p/123456
-                        sku_match = re.search(r'/p/(\d+)', href)
-                        if sku_match:
-                            sku = sku_match.group(1)
-                        
-                        # Build full URL if relative
-                        if href.startswith('/'):
-                            product_url = f"https://www.rimi.lv{href}"
-                        else:
-                            product_url = href
-                    else:
-                        product_url = ""
+                    if link and link.get('href'):
+                        href = link.get('href')
+                        # Ensure href is a string
+                        if isinstance(href, str):
+                            if href.startswith('/'):
+                                product_url = f"https://www.rimi.lv{href}"
+                            else:
+                                product_url = href
                     
                     # Extract product name
-                    name_selectors = ['h3', 'h4', '[class*="title"]', '[class*="name"]']
+                    name_selectors = ['p.card__name', 'h3', 'h4', '[class*="title"]', '[class*="name"]']
                     name = ""
                     for selector in name_selectors:
                         name_elem = element.select_one(selector)

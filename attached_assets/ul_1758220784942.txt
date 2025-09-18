@@ -1,0 +1,164 @@
+<ul
+        class="product-grid"
+                    data-gtms-content-category="Maize un konditoreja - Maize - Baltmaize"
+                data-gtms-event-category="productsBlock"
+        >
+    <li class="product-grid__item">
+        <div data-product-code="978823"
+     class="js-product-container card
+           -horizontal-for-mobile
+     "
+     data-gtms-banner-title="Kefīra maize Lielmaize 500g"
+     data-gtms-click-name="Kefīra maize Lielmaize 500g"
+     data-gtm-click-name="Kefīra maize Lielmaize 500g"
+     data-gtms-product-id="978823"
+          data-gtm-eec-product='{"id":"978823","name":"Kef\u012bra maize Lielmaize 500g","category":"SH-7-2-14","brand":null,"price":1.59,"currency":"EUR"}'
+     >
+
+    <a class="card__url js-gtm-eec-product-click" href="/e-veikals/lv/produkti/maize-un-konditoreja/maize/baltmaize/kefira-maize-lielmaize-500g/p/978823"
+       aria-label="Kefīra maize Lielmaize 500g"></a>
+    <div class="label-badges">
+                            </div>
+    <div class="card__image-wrapper">
+        <div>
+            <img src="https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,h_216,q_1,w_216/d_ecommerce:backend-fallback.png/MAT_978823_PCE_LV"
+                 data-src="https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_978823_PCE_LV"
+                 alt="Kefīra maize Lielmaize 500g">
+                                                    <div class="type-badge -position-bottom-left">
+            <picture>
+            <source srcset="https://rimibaltic-web-res.cloudinary.com/image/upload/c_limit,dpr_auto,f_auto,h_48,q_auto:low,w_56/ecom-cms/6a454d5902434201ce02dcbed1ee367cd05aab04-QvVejLBenJ" media="(min-width: 768px)">
+                        <img src="https://rimibaltic-web-res.cloudinary.com/image/upload/c_limit,dpr_auto,f_auto,h_48,q_auto:low,w_56/ecom-cms/6a454d5902434201ce02dcbed1ee367cd05aab04-QvVejLBenJ"
+                                      title="Izcelsmes valsts Latvija" alt="Izcelsmes valsts Latvija"
+                                >
+        </picture>
+    </div>
+<div class="type-badge -position-top-right">
+            <picture>
+            <source srcset="https://rimibaltic-web-res.cloudinary.com/image/upload/c_limit,dpr_auto,f_auto,h_80,q_auto:low,w_auto/ecom-cms/91d3f123709515bd3cefc5b0eb669511c928298c" media="(min-width: 768px)">
+                        <img src="https://rimibaltic-web-res.cloudinary.com/image/upload/c_limit,dpr_auto,f_auto,h_80,q_auto:low,w_auto/ecom-cms/91d3f123709515bd3cefc5b0eb669511c928298c"
+                                      title="Iespējams zemākā cena!" alt="Iespējams zemākā cena!"
+                                >
+        </picture>
+    </div>
+        </div>
+    </div>
+    <div class="card__details">
+                    
+                <p class="card__name">Kefīra maize Lielmaize 500g</p>
+        <div class="card__details-inner">
+
+            <div class="card__price-wrapper -has-discount">
+    
+        <div class="price-tag card__price">
+    <span>1</span>
+    <div>
+        <sup>59</sup>
+        <sub>€/gab.</sub>
+    </div>
+</div>
+        <div>
+
+            <div class="old-price-tag card__old-price">
+        <span>1,99€</span>
+    </div>
+
+                            <p class="card__price-per">
+                    3,18
+                    €/kg
+                </p>
+            
+        </div>
+    </div>
+
+
+            
+            <form class="favorite  card__favorite  js-update-favorite"
+      action="/e-veikals/favorite/product/978823">
+    <input type="checkbox" name="favorite" value="" >
+    <button class="js-tooltip" type="submit"
+            aria-label="Pievienot favorītiem"
+            data-title="Pievienot favorītiem"
+            data-add-name="Pievienot favorītiem"
+            data-remove-name="Pievienot favorītiem"
+            data-gtm-click-name="Pievienot favorītiem">
+        <span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+    <path d="M24 4l5.05 16L45 19.98l-12.83 8.79L36.98 44 24 34.71 11.02 44l4.81-15.23L3 19.98l15.95.02L24 4z"
+          fill="none" stroke="currentColor" stroke-miterlimit="10" stroke-width="2"/>
+</svg></span>
+    </button>
+</form>
+
+                            
+                
+                <form method="post" action="/e-veikals/cart/change"
+      class="js-add-to-cart card__cart-btn">
+    <input type="hidden" name="_method" value="put">    <input type="hidden" name="product" value="978823">
+    <input type="hidden" name="amount" value="1">
+    <button class="button -with-right-icon -cart gtm -small"
+            type="submit"
+            data-gtm-product-id="978823"
+            data-gtm-event-category="addToBasket"
+    >
+        Pievienot grozam
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><g fill="none" stroke="currentColor" stroke-miterlimit="10" stroke-width="2"><path d="M44 36H19.2c-3.9 0-7.2-2.8-7.9-6.6L6.5 1H0"/><path d="M8 9h39l-2.4 11.6c-.9 4.4-4.7 7.6-9.1 7.9l-24 1.5"/><circle cx="15.5" cy="43.5" r="3.5"/><circle cx="39.5" cy="43.5" r="3.5"/></g></svg>    </button>
+</form>
+
+                <form class="counter  js-counter"
+      method="post"
+      action="/e-veikals/cart/change"
+>
+    <input type="hidden" name="_method" value="put">    <input type="hidden" name="step" value="1">
+    <input type="hidden" name="product" value="978823">
+    <button name="decrease"
+            class="counter__subtract js-subtract"
+            type="button"
+            aria-label="Samazināt"
+            data-gtm-ignore>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+    <path d="M8 24h32" fill="none" stroke="currentColor" stroke-width="2" stroke-miterlimit="10"/>
+</svg>    </button>
+    <input type="text" name="amount"
+           value="1"
+           min="1"
+           max="6"
+           data-amount="1"
+           data-unit="gab."
+           data-big-order-quantity=""
+                                              data-inputmask="'regex': '(0)|([1-9]\\d*)', 'positionCaretOnClick': 'select'"
+                                      class="counter__input form-field__input"
+    >
+        <button name="increase"
+            class="counter__add js-add"
+            type="button"
+            aria-label="Palielināt"
+            data-gtm-ignore
+    >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+    <g fill="none" stroke="currentColor" stroke-width="2" stroke-miterlimit="10"><path d="M6 24h36M24 42V5.9"/></g>
+</svg>    </button>
+
+</form>
+
+                <form class="js-delete-from-cart delete-form" method="post" action="/e-veikals/cart/change">
+    <input type="hidden" name="_method" value="put">    <input type="hidden" value="978823" name="product">
+    <button class="cart-card__delete js-delete js-remove-from-cart "
+            aria-label="Izņemt">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+    <path d="M10 10l28 28m-28 0l28-28" fill="none" stroke="currentColor" stroke-width="2" stroke-miterlimit="10"/>
+</svg>    </button>
+</form>
+            
+
+        </div>
+
+        <p class="card__error"
+           data-error-container
+           data-error-max-amount="Lai sanāk Tev un pārējiem, sasniegts maksimālais apjoms"
+           data-error-big-order-amount=""
+        >
+        </p>
+
+    </div>
+
+    </div>
+    </li>
