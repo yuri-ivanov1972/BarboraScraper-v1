@@ -11,7 +11,7 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from core_parser import CoreParser
+from core_parser import RimiParser
 from batch_processor import BatchProcessor
 from checkpoint_manager import CheckpointManager
 
@@ -52,7 +52,7 @@ class SH7CategoryProcessor:
         self.max_workers = max_workers
         
         # Initialize components
-        self.core_parser = CoreParser(self.status_callback)
+        self.core_parser = RimiParser(self.status_callback)
         self.batch_processor = BatchProcessor(self.status_callback, max_workers=max_workers)
         
         # Initialize checkpoint manager
