@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from core_parser import CoreParser
 from batch_processor import BatchProcessor
+from checkpoint_manager import CheckpointManager
 
 class SH7CategoryProcessor:
     """Processor for SH-7 category with all 17 subcategories"""
@@ -38,13 +39,14 @@ class SH7CategoryProcessor:
         'SH-7-2-27': 71,   # End with largest
     }
     
-    def __init__(self, status_callback=None, max_workers: int = 5):
+    def __init__(self, status_callback=None, max_workers: int = 5, checkpoint_file: str = None):
         """
         Initialize SH-7 processor
         
         Args:
             status_callback: Function for progress updates
             max_workers: Maximum worker threads for batch processing
+            checkpoint_file: Path to checkpoint file (optional)
         """
         self.status_callback = status_callback or self._default_callback
         self.max_workers = max_workers
@@ -53,7 +55,10 @@ class SH7CategoryProcessor:
         self.core_parser = CoreParser(self.status_callback)
         self.batch_processor = BatchProcessor(self.status_callback, max_workers=max_workers)
         
-        # Processing statistics
+        # Initialize checkpoint manager
+        self.checkpoint = CheckpointManager(checkpoint_file or "sh7_processing_checkpoint.json")
+        
+        # Processing statistics (legacy, now managed by checkpoint)
         self.stats = {
             'subcategories_total': len(self.SH7_SUBCATEGORIES),
             'subcategories_completed': 0,
@@ -71,67 +76,95 @@ class SH7CategoryProcessor:
     
     def process_all_subcategories(self) -> Dict:
         """
-        Process all SH-7 subcategories sequentially
+        Process all SH-7 subcategories sequentially with checkpoint support
         
         Returns:
             Dictionary with comprehensive processing results
         """
-        self.status_callback("🚀 Starting SH-7 Category Processing")
+        # Check for previous progress
+        if self.checkpoint.state['status'] == 'in_progress':
+            self.status_callback("🔄 Resuming previous SH-7 processing session")
+            self.status_callback(self.checkpoint.get_progress_summary())
+        else:
+            self.status_callback("🚀 Starting new SH-7 Category Processing")
+            self.checkpoint.start_processing()
+        
         self.status_callback(f"📊 Processing {len(self.SH7_SUBCATEGORIES)} subcategories (~480 products)")
         
         start_time = time.time()
         
-        # Process each subcategory sequentially
-        for subcategory_code, expected_count in self.SH7_SUBCATEGORIES.items():
+        # Get remaining subcategories to process
+        all_subcategories = list(self.SH7_SUBCATEGORIES.keys())
+        remaining_subcategories = self.checkpoint.get_remaining_subcategories(all_subcategories)
+        
+        if not remaining_subcategories:
+            self.status_callback("✅ All subcategories already completed!")
+            # Ensure processing is marked as complete
+            if self.checkpoint.state['status'] != 'completed':
+                self.checkpoint.complete_processing()
+            return self._build_final_stats()
+        
+        self.status_callback(f"📋 Found {len(remaining_subcategories)} subcategories to process")
+        
+        # Process remaining subcategories sequentially
+        for subcategory_code in remaining_subcategories:
+            expected_count = self.SH7_SUBCATEGORIES[subcategory_code]
             try:
                 self.status_callback(f"\n{'='*60}")
                 self.status_callback(f"🔄 Processing subcategory: {subcategory_code}")
                 self.status_callback(f"📈 Expected products: {expected_count}")
-                self.status_callback(f"📍 Progress: {self.stats['subcategories_completed'] + 1}/{self.stats['subcategories_total']}")
+                
+                # Update checkpoint with current subcategory
+                self.checkpoint.set_current_subcategory(subcategory_code)
+                
+                # Show current progress
+                completed = self.checkpoint.state['completed_subcategories']
+                total = self.checkpoint.state['total_subcategories']
+                self.status_callback(f"📍 Progress: {completed + 1}/{total}")
                 
                 # Process single subcategory
                 subcategory_result = self.process_single_subcategory(subcategory_code, expected_count)
                 
-                # Update overall statistics
-                self.stats['subcategory_details'].append(subcategory_result)
-                
+                # Update checkpoint with results
                 if subcategory_result['success']:
-                    self.stats['subcategories_completed'] += 1
-                    self.stats['total_skus_collected'] += subcategory_result['skus_collected']
-                    self.stats['total_products_processed'] += subcategory_result['products_processed']
-                    
+                    self.checkpoint.complete_subcategory(subcategory_code, subcategory_result)
                     self.status_callback(f"✅ {subcategory_code}: {subcategory_result['products_processed']} products processed")
                 else:
-                    self.stats['subcategories_failed'] += 1
+                    self.checkpoint.fail_subcategory(subcategory_code, subcategory_result['error'])
                     self.status_callback(f"❌ {subcategory_code}: Failed - {subcategory_result['error']}")
                 
-            except Exception as e:
-                self.status_callback(f"💥 Fatal error processing {subcategory_code}: {str(e)}")
-                self.stats['subcategories_failed'] += 1
+                # Update legacy stats for compatibility
+                self.stats['subcategory_details'].append(subcategory_result)
                 
-                # Add failed subcategory to details
+            except Exception as e:
+                error_msg = f"Fatal error: {str(e)}"
+                self.status_callback(f"💥 Fatal error processing {subcategory_code}: {str(e)}")
+                
+                # Update checkpoint with failure
+                self.checkpoint.fail_subcategory(subcategory_code, error_msg)
+                
+                # Add failed subcategory to legacy stats
                 self.stats['subcategory_details'].append({
                     'subcategory': subcategory_code,
                     'expected_products': expected_count,
                     'success': False,
-                    'error': f"Fatal error: {str(e)}",
+                    'error': error_msg,
                     'skus_collected': 0,
                     'products_processed': 0,
                     'processing_time': 0
                 })
         
-        # Final statistics
-        self.stats['processing_time'] = time.time() - start_time
+        # Complete processing and build final results
+        self.checkpoint.complete_processing()
+        final_stats = self._build_final_stats()
+        final_stats['processing_time'] = time.time() - start_time
         
         self.status_callback(f"\n{'='*60}")
         self.status_callback("🎯 SH-7 CATEGORY PROCESSING COMPLETE")
-        self.status_callback(f"⏱️  Total time: {self.stats['processing_time']:.1f} seconds")
-        self.status_callback(f"✅ Successful subcategories: {self.stats['subcategories_completed']}/{self.stats['subcategories_total']}")
-        self.status_callback(f"❌ Failed subcategories: {self.stats['subcategories_failed']}")
-        self.status_callback(f"📊 Total products processed: {self.stats['total_products_processed']}")
-        self.status_callback(f"🔍 Total SKUs collected: {self.stats['total_skus_collected']}")
+        self.status_callback(self.checkpoint.get_progress_summary())
+        self.status_callback(f"⏱️  Session time: {final_stats['processing_time']:.1f} seconds")
         
-        return self.stats
+        return final_stats
     
     def process_single_subcategory(self, subcategory_code: str, expected_count: int) -> Dict:
         """
@@ -203,41 +236,52 @@ class SH7CategoryProcessor:
         
         return result
     
+    def _build_final_stats(self) -> Dict:
+        """Build final statistics from checkpoint data"""
+        checkpoint_state = self.checkpoint.state
+        detailed_results = self.checkpoint.get_detailed_results()
+        
+        return {
+            'processing_id': checkpoint_state['processing_id'],
+            'status': checkpoint_state['status'],
+            'subcategories_total': checkpoint_state['total_subcategories'],
+            'subcategories_completed': checkpoint_state['completed_subcategories'],
+            'subcategories_failed': checkpoint_state['failed_subcategories'],
+            'total_skus_collected': checkpoint_state['overall_stats']['total_skus_collected'],
+            'total_products_processed': checkpoint_state['overall_stats']['total_products_processed'],
+            'completed_list': checkpoint_state['completed_list'],
+            'failed_list': checkpoint_state['failed_list'],
+            'subcategory_details': list(detailed_results.values()),
+            'processing_time': 0,  # Will be updated by caller
+            'started_at': checkpoint_state['started_at'],
+            'completed_at': checkpoint_state.get('completed_at'),
+            'checkpoint_file': self.checkpoint.checkpoint_file
+        }
+    
     def get_processing_summary(self) -> str:
         """Get a formatted summary of processing results"""
-        if not self.stats['subcategory_details']:
-            return "No processing completed yet."
-        
-        summary = [
-            f"SH-7 Category Processing Summary",
-            f"{'='*40}",
-            f"Total subcategories: {self.stats['subcategories_total']}",
-            f"Completed: {self.stats['subcategories_completed']}",
-            f"Failed: {self.stats['subcategories_failed']}",
-            f"Total products processed: {self.stats['total_products_processed']}",
-            f"Processing time: {self.stats['processing_time']:.1f}s",
-            f"",
-            f"Subcategory Details:",
-            f"{'-'*40}"
-        ]
-        
-        for detail in self.stats['subcategory_details']:
-            status = "✅" if detail['success'] else "❌"
-            summary.append(
-                f"{status} {detail['subcategory']}: "
-                f"{detail['products_processed']}/{detail['expected_products']} "
-                f"({detail['processing_time']:.1f}s)"
-            )
-        
-        return "\n".join(summary)
+        return self.checkpoint.get_progress_summary()
+    
+    def reset_progress(self):
+        """Reset processing progress (use with caution)"""
+        self.checkpoint.reset_checkpoint()
+        self.status_callback("🔄 Processing progress reset")
+    
+    def can_resume(self) -> bool:
+        """Check if there's a previous session that can be resumed"""
+        return self.checkpoint.state['status'] == 'in_progress'
     
     def close(self):
         """Clean up resources"""
         try:
             if hasattr(self, 'batch_processor'):
                 self.batch_processor.close()
+            
+            # Save final checkpoint state
+            if hasattr(self, 'checkpoint'):
+                self.checkpoint.save_checkpoint()
         except Exception as e:
-            self.status_callback(f"Error closing batch processor: {str(e)}")
+            self.status_callback(f"Error closing processor: {str(e)}")
 
 
 def main():
