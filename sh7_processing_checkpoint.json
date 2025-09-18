@@ -1,18 +1,191 @@
 {
   "processing_id": "sh7_1758223504",
-  "started_at": "2025-09-18T19:25:04.714067",
-  "last_updated": "2025-09-18T19:25:33.918361",
-  "status": "not_started",
+  "started_at": "2025-09-18T19:42:24.022730",
+  "last_updated": "2025-09-18T21:16:14.454286",
+  "status": "completed",
   "total_subcategories": 17,
-  "completed_subcategories": 0,
+  "completed_subcategories": 17,
   "failed_subcategories": 0,
   "current_subcategory": null,
-  "completed_list": [],
+  "completed_list": [
+    "SH-7-2-28",
+    "SH-7-1-1",
+    "SH-7-1-9",
+    "SH-7-2-19",
+    "SH-7-1-3",
+    "SH-7-2-15",
+    "SH-7-1-10",
+    "SH-7-2-21",
+    "SH-7-2-20",
+    "SH-7-2-14",
+    "SH-7-2-23",
+    "SH-7-2-17",
+    "SH-7-1-12",
+    "SH-7-2-25",
+    "SH-7-1-5",
+    "SH-7-1-11",
+    "SH-7-2-27"
+  ],
   "failed_list": [],
-  "subcategory_results": {},
+  "subcategory_results": {
+    "SH-7-2-28": {
+      "subcategory": "SH-7-2-28",
+      "expected_products": 4,
+      "success": true,
+      "error": null,
+      "skus_collected": 3,
+      "products_processed": 3,
+      "processing_time": 30.05708360671997
+    },
+    "SH-7-1-1": {
+      "subcategory": "SH-7-1-1",
+      "expected_products": 5,
+      "success": true,
+      "error": null,
+      "skus_collected": 5,
+      "products_processed": 5,
+      "processing_time": 72.54633712768555
+    },
+    "SH-7-1-9": {
+      "subcategory": "SH-7-1-9",
+      "expected_products": 6,
+      "success": true,
+      "error": null,
+      "skus_collected": 4,
+      "products_processed": 4,
+      "processing_time": 171.28483200073242
+    },
+    "SH-7-2-19": {
+      "subcategory": "SH-7-2-19",
+      "expected_products": 14,
+      "success": true,
+      "error": null,
+      "skus_collected": 15,
+      "products_processed": 15,
+      "processing_time": 129.13236165046692
+    },
+    "SH-7-1-3": {
+      "subcategory": "SH-7-1-3",
+      "expected_products": 16,
+      "success": true,
+      "error": null,
+      "skus_collected": 19,
+      "products_processed": 19,
+      "processing_time": 228.64594388008118
+    },
+    "SH-7-2-15": {
+      "subcategory": "SH-7-2-15",
+      "expected_products": 18,
+      "success": true,
+      "error": null,
+      "skus_collected": 18,
+      "products_processed": 18,
+      "processing_time": 237.4849865436554
+    },
+    "SH-7-1-10": {
+      "subcategory": "SH-7-1-10",
+      "expected_products": 18,
+      "success": true,
+      "error": null,
+      "skus_collected": 5,
+      "products_processed": 5,
+      "processing_time": 50.25970101356506
+    },
+    "SH-7-2-21": {
+      "subcategory": "SH-7-2-21",
+      "expected_products": 21,
+      "success": true,
+      "error": null,
+      "skus_collected": 23,
+      "products_processed": 23,
+      "processing_time": 192.13528728485107
+    },
+    "SH-7-2-20": {
+      "subcategory": "SH-7-2-20",
+      "expected_products": 24,
+      "success": true,
+      "error": null,
+      "skus_collected": 27,
+      "products_processed": 27,
+      "processing_time": 293.80593252182007
+    },
+    "SH-7-2-14": {
+      "subcategory": "SH-7-2-14",
+      "expected_products": 25,
+      "success": true,
+      "error": null,
+      "skus_collected": 25,
+      "products_processed": 25,
+      "processing_time": 210.81180906295776
+    },
+    "SH-7-2-23": {
+      "subcategory": "SH-7-2-23",
+      "expected_products": 26,
+      "success": true,
+      "error": null,
+      "skus_collected": 26,
+      "products_processed": 26,
+      "processing_time": 221.22741293907166
+    },
+    "SH-7-2-17": {
+      "subcategory": "SH-7-2-17",
+      "expected_products": 34,
+      "success": true,
+      "error": null,
+      "skus_collected": 35,
+      "products_processed": 35,
+      "processing_time": 316.6142716407776
+    },
+    "SH-7-1-12": {
+      "subcategory": "SH-7-1-12",
+      "expected_products": 37,
+      "success": true,
+      "error": null,
+      "skus_collected": 34,
+      "products_processed": 34,
+      "processing_time": 527.2565388679504
+    },
+    "SH-7-2-25": {
+      "subcategory": "SH-7-2-25",
+      "expected_products": 47,
+      "success": true,
+      "error": null,
+      "skus_collected": 51,
+      "products_processed": 51,
+      "processing_time": 454.6359934806824
+    },
+    "SH-7-1-5": {
+      "subcategory": "SH-7-1-5",
+      "expected_products": 52,
+      "success": true,
+      "error": null,
+      "skus_collected": 54,
+      "products_processed": 54,
+      "processing_time": 1008.0160183906555
+    },
+    "SH-7-1-11": {
+      "subcategory": "SH-7-1-11",
+      "expected_products": 55,
+      "success": true,
+      "error": null,
+      "skus_collected": 51,
+      "products_processed": 51,
+      "processing_time": 830.0311567783356
+    },
+    "SH-7-2-27": {
+      "subcategory": "SH-7-2-27",
+      "expected_products": 71,
+      "success": true,
+      "error": null,
+      "skus_collected": 81,
+      "products_processed": 81,
+      "processing_time": 656.1056668758392
+    }
+  },
   "overall_stats": {
-    "total_skus_collected": 0,
-    "total_products_processed": 0,
+    "total_skus_collected": 476,
+    "total_products_processed": 476,
     "total_processing_time": 0
-  }
+  },
+  "completed_at": "2025-09-18T21:16:14.404422"
 }
