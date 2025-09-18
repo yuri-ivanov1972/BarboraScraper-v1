@@ -472,9 +472,11 @@ class IngredientProcessor:
                 self.deduplicator.close()
                 self.deduplicator = None
             
-            # Close connection pool
-            if self.connection_pool:
+            # Close connection pool (check if not already closed)
+            if self.connection_pool and not self.connection_pool.closed:
                 self.connection_pool.closeall()
                 self.status_callback("Ingredient processor connection pool closed")
+            elif self.connection_pool and self.connection_pool.closed:
+                self.status_callback("Ingredient processor connection pool already closed")
         except Exception as e:
             self.status_callback(f"Error closing connections: {str(e)}")
