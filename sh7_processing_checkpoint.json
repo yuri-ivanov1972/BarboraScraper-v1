@@ -1,0 +1,18 @@
+{
+  "processing_id": "sh7_1758223504",
+  "started_at": "2025-09-18T19:25:04.714067",
+  "last_updated": "2025-09-18T19:25:33.918361",
+  "status": "not_started",
+  "total_subcategories": 17,
+  "completed_subcategories": 0,
+  "failed_subcategories": 0,
+  "current_subcategory": null,
+  "completed_list": [],
+  "failed_list": [],
+  "subcategory_results": {},
+  "overall_stats": {
+    "total_skus_collected": 0,
+    "total_products_processed": 0,
+    "total_processing_time": 0
+  }
+}
