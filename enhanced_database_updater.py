@@ -101,7 +101,7 @@ class EnhancedDatabaseUpdater:
                             pass
                     raise Exception(f"Query execution failed: {str(e)}")
     
-    def force_update_product_data(self, sku: str, product_data: Dict, force_overwrite: bool = True) -> bool:
+    def force_update_product_data(self, sku: str, product_data: Dict, force_overwrite: bool = True, is_new_product: bool = False) -> bool:
         """
         Force update product data, overwriting existing corrupted/NULL values
         
@@ -109,6 +109,7 @@ class EnhancedDatabaseUpdater:
             sku: Product SKU
             product_data: Complete product data to update
             force_overwrite: Whether to overwrite existing non-NULL values
+            is_new_product: Whether this product was newly created in current session (prevents dual price history)
             
         Returns:
             True if successful
@@ -175,13 +176,21 @@ class EnhancedDatabaseUpdater:
             if 'nutrition_data' in product_data and product_data['nutrition_data']:
                 self.force_update_nutrition_data(product_id, product_data['nutrition_data'], force_overwrite)
             
-            # Force update price if provided
-            if 'price' in product_data:
+            # Force update price if provided (skip for new products to prevent dual entries)
+            if 'price' in product_data and not is_new_product:
                 price_decimal = self._parse_price(product_data['price'])
                 if price_decimal is not None:
                     is_available = price_decimal > 0
-                    self._add_price_history_record(product_id, price_decimal, is_available, 'force_update')
-                    self.status_callback(f"Updated price: €{price_decimal} (available: {is_available})")
+                    # Add deduplication check - only record if significantly different from latest price
+                    if self._should_record_price_update(product_id, price_decimal, is_available):
+                        self._add_price_history_record(product_id, price_decimal, is_available, 'force_update')
+                        self.status_callback(f"Updated price: €{price_decimal} (available: {is_available})")
+                    else:
+                        self.status_callback(f"Skipped duplicate price record: €{price_decimal} (already recorded today)")
+                else:
+                    self.status_callback(f"Invalid price format, skipping price update")
+            elif 'price' in product_data and is_new_product:
+                self.status_callback(f"Skipped price history for new product {sku} (prevents dual entries)")
             
             # Process ingredients if provided
             if 'ingredients' in product_data and product_data['ingredients']:
@@ -575,6 +584,35 @@ class EnhancedDatabaseUpdater:
             pass
         
         return None
+    
+    def _should_record_price_update(self, product_id: int, new_price: Decimal, new_availability: bool) -> bool:
+        """Check if we should record a price update (prevents duplicate entries)"""
+        try:
+            # Check for recent price history (within last 6 hours)
+            recent_price_query = """
+                SELECT price, is_available, data_source, recorded_at 
+                FROM product_price_history 
+                WHERE product_id = %s 
+                  AND recorded_at >= NOW() - INTERVAL '6 hours'
+                ORDER BY recorded_at DESC 
+                LIMIT 1
+            """
+            result = self._execute_query(recent_price_query, (product_id,), fetch=True)
+            
+            if result:
+                last_record = result[0]
+                last_price = last_record['price']
+                last_availability = last_record['is_available']
+                
+                # Skip if price and availability are identical
+                if (abs(last_price - new_price) < 0.01 and 
+                    last_availability == new_availability):
+                    return False
+                    
+            return True  # Record if no recent entry or price/availability changed
+        except Exception as e:
+            self.status_callback(f"Error checking price history: {str(e)}")
+            return True  # Default to recording if check fails
     
     def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str):
         """Add price history record"""

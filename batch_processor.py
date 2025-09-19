@@ -15,19 +15,41 @@ class BatchProcessor:
     def __init__(self, status_callback=None, max_workers=3):
         self.status_callback = status_callback or (lambda x: None)
         self.max_workers = max_workers
-        self.coordinators = []
+        # Thread-local storage for coordinators by type to enable reuse per thread
+        self._thread_coordinators = {}  # {thread_id: {"regular": coord, "enhanced": coord}}
+        self._all_coordinators = []  # Track all coordinators for cleanup
         self._lock = threading.Lock()
         
-    def _get_coordinator(self) -> UpdateCoordinator:
-        """Get or create a coordinator for the current thread"""
+    def _get_coordinator(self, enhanced: bool = False) -> UpdateCoordinator:
+        """Get or create a coordinator for the current thread - reuse per thread and type"""
+        thread_id = threading.current_thread().ident
+        coord_type = "enhanced" if enhanced else "regular"
+        
         with self._lock:
+            # Initialize thread coordinators dict if needed
+            if thread_id not in self._thread_coordinators:
+                self._thread_coordinators[thread_id] = {}
+            
+            # Check if we already have coordinator of this type for this thread
+            if coord_type in self._thread_coordinators[thread_id]:
+                return self._thread_coordinators[thread_id][coord_type]
+            
             # Create thread-safe callback that doesn't rely on Streamlit context
             def thread_safe_callback(msg):
                 print(f"[COORDINATOR] {msg}")
             
-            # Create a new coordinator for each worker to avoid connection conflicts
-            coordinator = UpdateCoordinator(thread_safe_callback)
-            self.coordinators.append(coordinator)
+            # Create coordinator based on type needed
+            if enhanced:
+                from enhanced_update_coordinator import EnhancedUpdateCoordinator
+                coordinator = EnhancedUpdateCoordinator(thread_safe_callback)
+            else:
+                coordinator = UpdateCoordinator(thread_safe_callback)
+            
+            # Store coordinator for reuse by this thread and type
+            self._thread_coordinators[thread_id][coord_type] = coordinator
+            self._all_coordinators.append(coordinator)
+            
+            print(f"🔧 BATCH: Created reusable {coord_type} coordinator for thread {thread_id}")
             return coordinator
     
     def process_product_batch(self, products: List[Dict], category_code: Optional[str] = None) -> Dict:
@@ -71,7 +93,6 @@ class BatchProcessor:
             
             try:
                 print(f"🚀 BATCH: Starting thread processing for {sku}")
-                coordinator = self._get_coordinator()
                 
                 print(f"🔄 BATCH: Processing product {sku}")
                 
@@ -82,12 +103,9 @@ class BatchProcessor:
                     print(f"🔄 BATCH: Thread name: {threading.current_thread().name}")
                     
                     try:
-                        # Use enhanced coordinator for automatic category extraction
-                        print(f"🔄 BATCH: Importing EnhancedUpdateCoordinator...")
-                        from enhanced_update_coordinator import EnhancedUpdateCoordinator
-                        
-                        print(f"🔄 BATCH: Creating coordinator instance...")
-                        enhanced_coordinator = EnhancedUpdateCoordinator(thread_safe_callback)
+                        # Get/reuse enhanced coordinator for this thread
+                        print(f"🔄 BATCH: Getting reusable enhanced coordinator...")
+                        enhanced_coordinator = self._get_coordinator(enhanced=True)
                         
                         print(f"🔄 BATCH: Calling process_single_product_with_auto_category...")
                         result = enhanced_coordinator.process_single_product_with_auto_category(sku)
@@ -97,9 +115,8 @@ class BatchProcessor:
                         if hasattr(result, 'errors') and result.errors:
                             print(f"🔄 BATCH: Result errors: {result.errors}")
                         
-                        print(f"🔄 BATCH: Closing coordinator...")
-                        enhanced_coordinator.close()
-                        print(f"🔄 BATCH: Coordinator closed successfully")
+                        # NOTE: Don't close coordinator here - reuse for other products!
+                        print(f"🔄 BATCH: Coordinator reused successfully (not closing)")
                         
                     except Exception as batch_error:
                         print(f"❌ BATCH: Exception during auto category processing: {str(batch_error)}")
@@ -108,6 +125,8 @@ class BatchProcessor:
                         raise batch_error
                 else:
                     print(f"🔄 BATCH: Using manual category {category_code} for {sku}")
+                    # Get/reuse regular coordinator for this thread
+                    coordinator = self._get_coordinator(enhanced=False)
                     result = coordinator.process_single_product(sku, category_code)
                 
                 print(f"🔍 BATCH: Checking result for {sku}...")
@@ -136,11 +155,9 @@ class BatchProcessor:
                 return {'sku': sku, 'status': 'failed', 'error': error_msg}
             
             finally:
-                if coordinator:
-                    try:
-                        coordinator.close()
-                    except:
-                        pass
+                # NOTE: Don't close coordinators here anymore - they are reused per thread
+                # Coordinators will be closed when the entire batch is done
+                pass
         
         # Process products with thread pool
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
@@ -169,6 +186,12 @@ class BatchProcessor:
                     self.status_callback(error_msg)
         
         results['processing_time'] = time.time() - start_time
+        
+        # Close reused coordinators after batch completion
+        try:
+            self.close()
+        except Exception as e:
+            print(f"⚠️ BATCH: Error closing coordinators: {e}")
         
         self.status_callback(f"Batch processing completed: {results['successful']} successful, {results['failed']} failed")
         return results
@@ -201,14 +224,22 @@ class BatchProcessor:
         return self.process_product_batch(products, None)  # None triggers auto-extraction
     
     def close(self):
-        """Close all coordinator connections"""
-        for coordinator in self.coordinators:
-            try:
-                coordinator.close()
-            except:
-                pass
-        self.coordinators.clear()
-        self.status_callback("Batch processor closed all connections")
+        """Close all coordinator connections - now closes reused coordinators"""
+        with self._lock:
+            closed_count = 0
+            for coordinator in self._all_coordinators:
+                try:
+                    coordinator.close()
+                    closed_count += 1
+                except:
+                    pass
+            
+            # Clear all coordinator references
+            self._thread_coordinators.clear()
+            self._all_coordinators.clear()
+            
+            print(f"🔧 BATCH: Closed {closed_count} reused coordinators")
+            self.status_callback(f"Batch processor closed {closed_count} coordinator connections")
 
 def test_batch_processing():
     """Test batch processing functionality"""

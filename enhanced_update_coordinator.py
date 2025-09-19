@@ -199,14 +199,18 @@ class EnhancedUpdateCoordinator:
             needs_force_update = False
             
             if existing_product:
+                # Only perform force update for existing products with detected corruption or explicit request
                 needs_force_update = self._check_data_corruption(existing_product)
                 if needs_force_update:
                     self.status_callback(f"Detected corrupted data for SKU {sku} - will force update")
                 elif force_update:
-                    self.status_callback(f"Force update requested for SKU {sku}")
+                    self.status_callback(f"Force update explicitly requested for existing product {sku}")
                     needs_force_update = True
                 else:
-                    self.status_callback(f"Product {sku} exists with valid data")
+                    self.status_callback(f"Product {sku} exists with valid data - no update needed")
+            else:
+                # For new products, skip force update logic entirely (prevents dual data source entries)
+                self.status_callback(f"Product {sku} is new - will create with regular processing (no force update)")
             
             # Step 2: Fetch product data with retry logic
             self.status_callback("Fetching product data with retry logic...")
@@ -252,10 +256,12 @@ class EnhancedUpdateCoordinator:
                 product_data['quantity_unit'] = quantity_unit
             
             # Step 4: Database operation
+            is_new_product = existing_product is None
+            
             if existing_product and (needs_force_update or force_update):
                 # Force update existing corrupted product
                 result.operation = 'force_update'
-                self.status_callback("Performing force update of corrupted data...")
+                self.status_callback("Performing force update of corrupted existing product...")
                 
                 # Prepare complete product data for force update
                 update_data = {
@@ -269,7 +275,10 @@ class EnhancedUpdateCoordinator:
                     'quantity_unit': quantity_unit
                 }
                 
-                success = self.db_updater.force_update_product_data(sku, update_data, force_overwrite=True)
+                # Pass information about whether this is a new product to prevent dual price history
+                success = self.db_updater.force_update_product_data(
+                    sku, update_data, force_overwrite=True, is_new_product=False
+                )
                 
                 if success:
                     # Save photos if available - continue processing even if photos fail
@@ -513,8 +522,8 @@ class EnhancedUpdateCoordinator:
                 basic_updater.close()
                 
                 if product_id:
-                    # Now use enhanced updater to complete all data
-                    return self.db_updater.force_update_product_data(sku, new_product_data, force_overwrite=True)
+                    # Now use enhanced updater to complete all data for newly created product
+                    return self.db_updater.force_update_product_data(sku, new_product_data, force_overwrite=True, is_new_product=True)
                     
             except Exception as e:
                 basic_updater.close()
