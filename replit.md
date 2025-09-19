@@ -9,6 +9,13 @@ Preferred approach: Simplified category-by-category analysis in read-only mode w
 
 **CRITICAL DEVELOPMENT RULE**: Always check existing database schema FIRST before making any assumptions about table names, field names, or database structure. Use SQL queries to verify actual schema before writing code that references database tables/columns.
 
+**CRITICAL COMMUNICATION RULE**: NEVER invent, assume, or imagine facts, data, category names, product information, or system details. When you don't know something factual about the system, Rimi categories, product data, or any other concrete information:
+1. Explicitly state "I don't know" or "I need to check"  
+2. Ask the user directly for the correct information
+3. Use available tools to verify facts from actual data sources
+4. Do not provide examples or suggestions based on assumptions
+5. Do not create placeholder lists or fictional category mappings
+
 ## System Architecture
 The application features a modular Python architecture comprising:
 - **Frontend**: Streamlit for the user interface.
