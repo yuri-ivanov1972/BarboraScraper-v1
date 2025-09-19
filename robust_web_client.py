@@ -197,15 +197,15 @@ class RobustWebClient:
         try:
             # Priority order for finding the main product image
             primary_image_selectors = [
-                # Main product image containers (highest priority)
+                # Cloudinary images (highest priority - works 100% for Rimi)
+                'img[src*="cloudinary"]',
+                'img[data-src*="cloudinary"]',
+                
+                # Main product image containers (fallback)
                 '.product-image img',
                 '.product__image img',
                 '.product-gallery img:first-child',
                 '.product-main-image img',
-                
-                # Cloudinary and CDN images
-                'img[src*="cloudinary"]',
-                'img[data-src*="cloudinary"]',
                 
                 # Rimi-specific image patterns
                 'img[src*="rimibaltic.com"]',
