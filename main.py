@@ -163,7 +163,7 @@ def section_category_processing():
         metric_processed.metric("Processed", "0 / 0")
         metric_success.metric("Success", "0")
         metric_failed.metric("Failed", "0")
-        metric_speed.metric("Speed", "0.0 prod/sec")
+        metric_speed.metric("Speed", "- sec/prod")
         
         # Processing state
         processing_state = {
@@ -182,7 +182,7 @@ def section_category_processing():
             # Update metrics if processing
             if processing_state['total_skus'] > 0:
                 elapsed = time.time() - processing_state['start_time']
-                speed = processing_state['processed'] / elapsed if elapsed > 0 else 0
+                speed = elapsed / processing_state['processed'] if processing_state['processed'] > 0 else 0
                 
                 progress = min(processing_state['processed'] / processing_state['total_skus'], 1.0)
                 progress_bar.progress(progress)
@@ -190,7 +190,7 @@ def section_category_processing():
                 metric_processed.metric("Processed", f"{processing_state['processed']} / {processing_state['total_skus']}")
                 metric_success.metric("Success", str(processing_state['success']))
                 metric_failed.metric("Failed", str(processing_state['failed']))
-                metric_speed.metric("Speed", f"{speed:.2f} prod/sec")
+                metric_speed.metric("Speed", f"{speed:.2f} sec/prod")
         
         try:
             # Step 1: Collect SKUs from category
@@ -237,14 +237,14 @@ def section_category_processing():
                 # Update display in real-time whenever we have progress
                 if processing_state['processed'] > 0:
                     elapsed = time.time() - processing_state['start_time']
-                    speed = processing_state['processed'] / elapsed if elapsed > 0 else 0
+                    speed = elapsed / processing_state['processed'] if processing_state['processed'] > 0 else 0
                     progress = min(processing_state['processed'] / processing_state['total_skus'], 1.0)
                     
                     progress_bar.progress(progress)
                     metric_processed.metric("Processed", f"{processing_state['processed']} / {processing_state['total_skus']}")
                     metric_success.metric("Success", str(processing_state['success']))
                     metric_failed.metric("Failed", str(processing_state['failed']))
-                    metric_speed.metric("Speed", f"{speed:.2f} prod/sec")
+                    metric_speed.metric("Speed", f"{speed:.2f} sec/prod")
             
             processor = BatchProcessor(batch_callback, max_workers=3)
             
