@@ -627,25 +627,33 @@ class RobustWebClient:
                 script_content = script_tag.string
                 self.status_callback("Found product details script - extracting HTML content")
                 
-                # Extract the details tab HTML content
+                # Extract the details tab HTML content with proper handling of escaped quotes
+                # Use a more robust pattern that handles \"  inside the HTML string
                 details_match = re.search(
-                    r'identifier:\s*["\']details["\'],[^}]*html:\s*["\']([^"\']+)["\']',
+                    r'identifier:\s*["\']details["\'],[^}]*html:\s*"((?:[^"\\]|\\.)*)"',
                     script_content, re.DOTALL
                 )
                 
                 if details_match:
-                    # Decode the HTML content with proper Unicode handling
+                    # Decode the HTML content with proper JSON/JavaScript string unescaping
+                    import json
                     details_html = details_match.group(1)
-                    details_html = details_html.replace('\\/', '/').replace('\\"', '"')
-                    details_html = details_html.replace('\\n', '\n').replace('\\t', '\t')
-                    details_html = details_html.replace('\\r', '\r')
                     
-                    # Decode Unicode escapes (e.g., \u0101 -> ā, \u013c -> ļ)
+                    # Use JSON decoder which properly handles all JavaScript string escapes
                     try:
-                        details_html = details_html.encode('utf-8').decode('unicode_escape')
-                    except UnicodeDecodeError:
-                        # If Unicode decoding fails, continue with the original
-                        self.status_callback("Warning: Could not decode Unicode escapes in details HTML")
+                        details_html = json.loads(f'"{details_html}"')
+                        self.status_callback("Successfully decoded HTML using JSON parser")
+                    except json.JSONDecodeError:
+                        # Fallback to manual unescaping if JSON fails
+                        self.status_callback("JSON decode failed, using manual unescaping")
+                        details_html = details_html.replace('\\/', '/').replace('\\"', '"')
+                        details_html = details_html.replace('\\n', '\n').replace('\\t', '\t')
+                        details_html = details_html.replace('\\r', '\r')
+                        # Try Unicode escape decoding, but don't fail if it errors
+                        try:
+                            details_html = details_html.encode('utf-8').decode('unicode_escape')
+                        except (UnicodeDecodeError, AttributeError):
+                            pass  # Continue with partially decoded version
                     
                     details_soup = BeautifulSoup(details_html, 'html.parser')
                     self.status_callback("Successfully parsed product details HTML with Unicode decoding")
