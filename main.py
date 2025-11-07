@@ -254,12 +254,9 @@ def section_category_processing():
             processor = BatchProcessor(batch_callback, max_workers=3)
             
             # Process with force update flag if checkbox is checked
-            if force_update:
-                # Force update with manual category
-                results = processor.process_sku_list(all_skus, category_code, force_update=True)
-            else:
-                # Regular processing with automatic category extraction
-                results = processor.process_sku_list_with_auto_category(all_skus, force_update=False)
+            # NOTE: Both paths use auto-category extraction with EnhancedUpdateCoordinator
+            # The force_update flag determines whether to overwrite existing data
+            results = processor.process_sku_list_with_auto_category(all_skus, force_update=force_update)
             
             processor.close()
             
