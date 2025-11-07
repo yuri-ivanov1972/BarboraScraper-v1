@@ -158,7 +158,7 @@ class ProductViewDatabase:
             SELECT photo_url 
             FROM productphotos 
             WHERE product_id = p.product_id 
-            ORDER BY photo_order 
+            ORDER BY is_primary DESC, photo_id 
             LIMIT 1
         ) pp ON true
         WHERE {category_filter}
@@ -247,10 +247,10 @@ class ProductViewDatabase:
         
         # Photos query
         photos_query = """
-        SELECT photo_url, photo_order
+        SELECT photo_url, is_primary
         FROM productphotos
         WHERE product_id = %s
-        ORDER BY photo_order
+        ORDER BY is_primary DESC, photo_id
         """
         
         # Price history query (latest price)
@@ -328,7 +328,7 @@ class ProductViewDatabase:
             SELECT photo_url 
             FROM productphotos 
             WHERE product_id = p.product_id 
-            ORDER BY photo_order 
+            ORDER BY is_primary DESC, photo_id 
             LIMIT 1
         ) pp ON true
         WHERE LOWER(p.name) LIKE %s
