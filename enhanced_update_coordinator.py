@@ -451,6 +451,9 @@ class EnhancedUpdateCoordinator:
     def _update_existing_product(self, sku: str, product_data: Dict, is_available: bool) -> bool:
         """Update existing product with new data"""
         try:
+            # Get explicit is_available from product_data if provided
+            is_available = product_data.get('is_available', is_available)
+            
             # Update price and availability
             price_decimal = self._parse_price(product_data['price'])
             if price_decimal is not None:
@@ -461,8 +464,15 @@ class EnhancedUpdateCoordinator:
                         existing_product['product_id'], price_decimal, is_available, 'enhanced_update'
                     )
             
-            # Update nutrition data if available
+            # Update country of origin if available
             nutrition_data = product_data.get('nutrition_data', {})
+            if nutrition_data.get('country_of_origin'):
+                update_data = {
+                    'country_of_origin': nutrition_data['country_of_origin']
+                }
+                self.db_updater.force_update_product_data(sku, update_data, force_overwrite=False, is_new_product=True)
+            
+            # Update nutrition data if available
             if nutrition_data.get('has_nutrition'):
                 existing_product = self.db_updater.get_product_by_sku(sku)
                 if existing_product:
@@ -493,16 +503,19 @@ class EnhancedUpdateCoordinator:
         try:
             # Use enhanced updater's force update method for new products too
             # This ensures all data is properly set from the start
+            nutrition_data = product_data.get('nutrition_data', {})
             new_product_data = {
                 'sku': sku,
                 'name': product_data['name'],
                 'rimi_url': product_data['url'],
                 'category_id': category_id,
                 'price': product_data['price'],
+                'is_available': product_data.get('is_available', True),
                 'quantity_value': product_data.get('quantity_value'),
                 'quantity_unit': product_data.get('quantity_unit'),
-                'nutrition_data': product_data.get('nutrition_data', {}),
-                'ingredients': product_data.get('nutrition_data', {}).get('ingredients', ''),
+                'country_of_origin': nutrition_data.get('country_of_origin', 'Unknown'),
+                'nutrition_data': nutrition_data,
+                'ingredients': nutrition_data.get('ingredients', ''),
                 'photos': product_data.get('photos', [])
             }
             

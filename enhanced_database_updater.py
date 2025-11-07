@@ -159,6 +159,12 @@ class EnhancedDatabaseUpdater:
                 update_values.append(product_data['quantity_unit'])
                 self.status_callback(f"Updating quantity_unit: {product_data['quantity_unit']}")
             
+            # Update country of origin if provided
+            if 'country_of_origin' in product_data and product_data['country_of_origin']:
+                update_fields.append("country_of_origin = %s")
+                update_values.append(product_data['country_of_origin'])
+                self.status_callback(f"Updating country_of_origin: {product_data['country_of_origin']}")
+            
             # Execute product table update if there are fields to update
             if update_fields:
                 update_fields.append("updated_at = CURRENT_TIMESTAMP")
@@ -180,7 +186,8 @@ class EnhancedDatabaseUpdater:
             if 'price' in product_data and not is_new_product:
                 price_decimal = self._parse_price(product_data['price'])
                 if price_decimal is not None:
-                    is_available = price_decimal > 0
+                    # Use explicit is_available from product_data if provided, otherwise derive from price
+                    is_available = product_data.get('is_available', price_decimal > 0)
                     # Add deduplication check - only record if significantly different from latest price
                     if self._should_record_price_update(product_id, price_decimal, is_available):
                         self._add_price_history_record(product_id, price_decimal, is_available, 'force_update')
