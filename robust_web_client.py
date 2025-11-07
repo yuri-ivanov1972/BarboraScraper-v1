@@ -129,10 +129,14 @@ class RobustWebClient:
                 # Extract product photos
                 photos = self._extract_photos(soup)
                 
+                # Extract availability status
+                is_available = self._extract_availability(soup)
+                
                 return {
                     'name': product_name,
                     'photos': photos,
                     'price': price,
+                    'is_available': is_available,
                     'url': pattern,
                     'soup': soup  # Include soup for further processing
                 }
@@ -181,6 +185,36 @@ class RobustWebClient:
                     break
         
         return price
+    
+    def _extract_availability(self, soup: BeautifulSoup) -> bool:
+        """
+        Extract product availability status from product page
+        
+        Args:
+            soup: BeautifulSoup object of the product page
+            
+        Returns:
+            True if product is available, False if unavailable
+        """
+        try:
+            # Look for the unavailability message in product__main-info section
+            main_info_section = soup.find('div', class_='product__main-info')
+            if main_info_section:
+                info_paragraph = main_info_section.find('p', class_='info')
+                if info_paragraph:
+                    info_text = info_paragraph.get_text(strip=True)
+                    # Check for unavailability message
+                    if 'Īslaicīgi nav pieejamas e-veikalā' in info_text:
+                        self.status_callback("Product is UNAVAILABLE (found unavailability message)")
+                        return False
+            
+            # If no unavailability message found, product is available
+            self.status_callback("Product is AVAILABLE (no unavailability message)")
+            return True
+            
+        except Exception as e:
+            self.status_callback(f"Error extracting availability, defaulting to available: {str(e)}")
+            return True  # Default to available if we can't determine
     
     def _extract_photos(self, soup: BeautifulSoup) -> List[str]:
         """
@@ -520,6 +554,7 @@ class RobustWebClient:
             'ingredients_text': '',
             'category_code': '',
             'category_path_full': '',
+            'country_of_origin': 'Unknown',
             'energy_kcal': 0,
             'energy_kj': 0,
             'fat_total': 0,
@@ -615,13 +650,15 @@ class RobustWebClient:
                     details_soup = BeautifulSoup(details_html, 'html.parser')
                     self.status_callback("Successfully parsed product details HTML with Unicode decoding")
                     
-                    # Extract ingredients and category with enhanced HTML structure detection
+                    # Extract ingredients, category, and country of origin with enhanced HTML structure detection
                     ingredients_found = False
                     category_found = False
+                    country_found = False
                     
                     # Define section keywords
                     ingredient_keywords = ['Sastāvdaļas', 'sastāvdaļas', 'SASTĀVDAĻAS']
                     category_keywords = ['Kategorija', 'kategorija', 'Category', 'Produkta kategorija']
+                    country_keywords = ['Izcelsmes valsts', 'izcelsmes valsts', 'Country of origin']
                     
                     # Method 1: Look in list items with spans for both ingredients and category
                     for item in details_soup.find_all('li', class_='item'):
@@ -644,6 +681,12 @@ class RobustWebClient:
                                     nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
                                     self.status_callback(f"Found category (method 1): {content} -> code: {nutrition_data['category_code']}")
                                     category_found = True
+                                
+                                # Check for country of origin
+                                elif any(keyword in span_text for keyword in country_keywords):
+                                    nutrition_data['country_of_origin'] = content
+                                    self.status_callback(f"Found country of origin (method 1): {content}")
+                                    country_found = True
                     
                     # Method 2: Look in product list wrappers for both ingredients and category
                     for section in details_soup.find_all('div', class_='product__list-wrapper'):
@@ -671,6 +714,16 @@ class RobustWebClient:
                                         nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
                                         self.status_callback(f"Found category (method 2, nested): {content} -> code: {nutrition_data['category_code']}")
                                         category_found = True
+                                        break
+                            
+                            # Check for country of origin
+                            elif not country_found and any(keyword in heading_text for keyword in country_keywords):
+                                for text_div in text_divs:
+                                    if text_div.p and text_div.p.get_text(strip=True):
+                                        content = text_div.p.get_text(strip=True)
+                                        nutrition_data['country_of_origin'] = content
+                                        self.status_callback(f"Found country of origin (method 2, nested): {content}")
+                                        country_found = True
                                         break
                     
                     # Method 3: Enhanced text pattern search with better regex
