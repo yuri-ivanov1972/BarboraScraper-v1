@@ -272,7 +272,8 @@ class EnhancedUpdateCoordinator:
                     'nutrition_data': nutrition_data,
                     'ingredients': nutrition_data.get('ingredients', ''),
                     'quantity_value': quantity_value,
-                    'quantity_unit': quantity_unit
+                    'quantity_unit': quantity_unit,
+                    'country_of_origin': nutrition_data.get('country_of_origin', 'Unknown')
                 }
                 
                 # Pass information about whether this is a new product to prevent dual price history
