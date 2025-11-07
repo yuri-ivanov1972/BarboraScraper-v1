@@ -197,8 +197,7 @@ def section_category_processing():
             update_progress(f"📥 Collecting products from {category_code}...")
             parser = RimiParser(update_progress)
             
-            category_url = parser.build_category_url(category_code)
-            all_skus = parser.collect_all_skus_from_category(category_url)
+            all_skus = parser.collect_category_skus(category_code)
             
             if not all_skus:
                 st.error(f"No products found in category {category_code}")
