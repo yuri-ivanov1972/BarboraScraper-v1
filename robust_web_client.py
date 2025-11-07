@@ -658,17 +658,36 @@ class RobustWebClient:
                     details_soup = BeautifulSoup(details_html, 'html.parser')
                     self.status_callback("Successfully parsed product details HTML with Unicode decoding")
                     
-                    # Extract ingredients, category, and country of origin with enhanced HTML structure detection
+                    # Extract ingredients, category, and country of origin - SIMPLIFIED
                     ingredients_found = False
                     category_found = False
                     country_found = False
                     
-                    # Define section keywords
+                    # SIMPLE COUNTRY EXTRACTION: Search entire HTML for "Izcelsmes valsts", then get next <p> tag
+                    if 'Izcelsmes valsts' in details_html:
+                        # Find all <span> tags and check their text
+                        for span in details_soup.find_all('span'):
+                            if 'Izcelsmes valsts' in span.get_text(strip=True):
+                                # Found the country label, now find the next <p> tag in the same parent structure
+                                # Look for sibling div with class "text" or just the next <p> tag
+                                parent = span.parent
+                                if parent:
+                                    text_div = parent.find('div', class_='text')
+                                    if text_div:
+                                        p_tag = text_div.find('p')
+                                        if p_tag:
+                                            country = p_tag.get_text(strip=True)
+                                            if country:
+                                                nutrition_data['country_of_origin'] = country
+                                                self.status_callback(f"Found country of origin: {country}")
+                                                country_found = True
+                                                break
+                    
+                    # Define section keywords for ingredients and category
                     ingredient_keywords = ['Sastāvdaļas', 'sastāvdaļas', 'SASTĀVDAĻAS']
                     category_keywords = ['Kategorija', 'kategorija', 'Category', 'Produkta kategorija']
-                    country_keywords = ['Izcelsmes valsts', 'izcelsmes valsts', 'Country of origin']
                     
-                    # Method 1: Look in list items with spans for both ingredients and category
+                    # Method 1: Look in list items with spans for ingredients and category
                     for item in details_soup.find_all('li', class_='item'):
                         span = item.find('span')
                         if span:
@@ -689,14 +708,8 @@ class RobustWebClient:
                                     nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
                                     self.status_callback(f"Found category (method 1): {content} -> code: {nutrition_data['category_code']}")
                                     category_found = True
-                                
-                                # Check for country of origin
-                                elif any(keyword in span_text for keyword in country_keywords):
-                                    nutrition_data['country_of_origin'] = content
-                                    self.status_callback(f"Found country of origin (method 1): {content}")
-                                    country_found = True
                     
-                    # Method 2: Look in product list wrappers for both ingredients and category
+                    # Method 2: Look in product list wrappers for ingredients and category only
                     for section in details_soup.find_all('div', class_='product__list-wrapper'):
                         heading = section.find('p', class_='heading')
                         if heading:
@@ -722,16 +735,6 @@ class RobustWebClient:
                                         nutrition_data['category_code'] = extract_rightmost_rimi_code(content)
                                         self.status_callback(f"Found category (method 2, nested): {content} -> code: {nutrition_data['category_code']}")
                                         category_found = True
-                                        break
-                            
-                            # Check for country of origin
-                            elif not country_found and any(keyword in heading_text for keyword in country_keywords):
-                                for text_div in text_divs:
-                                    if text_div.p and text_div.p.get_text(strip=True):
-                                        content = text_div.p.get_text(strip=True)
-                                        nutrition_data['country_of_origin'] = content
-                                        self.status_callback(f"Found country of origin (method 2, nested): {content}")
-                                        country_found = True
                                         break
                     
                     # Method 3: Enhanced text pattern search with better regex
