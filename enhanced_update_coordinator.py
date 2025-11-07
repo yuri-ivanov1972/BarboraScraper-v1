@@ -357,7 +357,8 @@ class EnhancedUpdateCoordinator:
                 
                 # Update price and availability
                 price_decimal = self._parse_price(product_data['price'])
-                is_available = price_decimal > 0 if price_decimal else False
+                # Use explicit is_available from product_data (extracted from page)
+                is_available = product_data.get('is_available', True)
                 
                 success = self._update_existing_product(sku, product_data, is_available)
                 
