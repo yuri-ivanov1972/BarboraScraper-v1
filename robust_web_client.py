@@ -665,23 +665,54 @@ class RobustWebClient:
                     
                     # SIMPLE COUNTRY EXTRACTION: Search entire HTML for "Izcelsmes valsts", then get next <p> tag
                     if 'Izcelsmes valsts' in details_html:
+                        self.status_callback("COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML")
                         # Find all <span> tags and check their text
+                        span_count = 0
                         for span in details_soup.find_all('span'):
-                            if 'Izcelsmes valsts' in span.get_text(strip=True):
+                            span_text = span.get_text(strip=True)
+                            if 'Izcelsmes valsts' in span_text:
+                                span_count += 1
+                                self.status_callback(f"COUNTRY DEBUG: Found span #{span_count} with 'Izcelsmes valsts'")
+                                
                                 # Found the country label, now find the next <p> tag in the same parent structure
-                                # Look for sibling div with class "text" or just the next <p> tag
                                 parent = span.parent
+                                self.status_callback(f"COUNTRY DEBUG: Parent tag: {parent.name if parent else 'None'}")
+                                
                                 if parent:
+                                    # Log parent HTML structure
+                                    parent_html = str(parent)[:200]
+                                    self.status_callback(f"COUNTRY DEBUG: Parent HTML: {parent_html}...")
+                                    
                                     text_div = parent.find('div', class_='text')
+                                    self.status_callback(f"COUNTRY DEBUG: Found text div: {text_div is not None}")
+                                    
                                     if text_div:
                                         p_tag = text_div.find('p')
+                                        self.status_callback(f"COUNTRY DEBUG: Found p tag: {p_tag is not None}")
+                                        
                                         if p_tag:
                                             country = p_tag.get_text(strip=True)
+                                            self.status_callback(f"COUNTRY DEBUG: p tag content: '{country}'")
+                                            
                                             if country:
                                                 nutrition_data['country_of_origin'] = country
-                                                self.status_callback(f"Found country of origin: {country}")
+                                                self.status_callback(f"✅ Found country of origin: {country}")
                                                 country_found = True
                                                 break
+                                            else:
+                                                self.status_callback("COUNTRY DEBUG: p tag was empty")
+                                        else:
+                                            self.status_callback("COUNTRY DEBUG: No p tag found in text div")
+                                    else:
+                                        self.status_callback("COUNTRY DEBUG: No text div found, checking siblings...")
+                                        # Log all siblings
+                                        for i, sibling in enumerate(parent.find_next_siblings(limit=3)):
+                                            self.status_callback(f"COUNTRY DEBUG: Sibling {i}: {sibling.name} - {str(sibling)[:100]}")
+                        
+                        if not country_found:
+                            self.status_callback(f"COUNTRY DEBUG: Checked {span_count} span(s) but no country extracted")
+                    else:
+                        self.status_callback("COUNTRY DEBUG: 'Izcelsmes valsts' NOT found in HTML at all")
                     
                     # Define section keywords for ingredients and category
                     ingredient_keywords = ['Sastāvdaļas', 'sastāvdaļas', 'SASTĀVDAĻAS']
