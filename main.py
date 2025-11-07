@@ -209,16 +209,42 @@ def section_category_processing():
             # Step 2: Process SKUs in batches
             update_progress(f"🔄 Starting batch processing...")
             
+            # Track processing through detailed product results
+            products_completed = []
+            
             def batch_callback(msg: str):
                 """Track batch processing progress"""
-                if "completed successfully" in msg.lower():
+                # Display the message
+                update_progress(msg)
+                
+                # Track success/failure from batch processor messages
+                if msg.startswith("✓") and "processed successfully" in msg:
                     processing_state['success'] += 1
                     processing_state['processed'] += 1
-                elif "failed" in msg.lower() or "error" in msg.lower():
+                elif msg.startswith("✗") and "failed" in msg:
                     processing_state['failed'] += 1
                     processing_state['processed'] += 1
+                else:
+                    # Also track from threaded messages like "[SKU] ..."
+                    if "[" in msg and "]" in msg:
+                        try:
+                            sku_part = msg.split("]")[0].split("[")[1]
+                            if sku_part not in products_completed:
+                                products_completed.append(sku_part)
+                        except:
+                            pass
                 
-                update_progress(msg)
+                # Update display in real-time whenever we have progress
+                if processing_state['processed'] > 0:
+                    elapsed = time.time() - processing_state['start_time']
+                    speed = processing_state['processed'] / elapsed if elapsed > 0 else 0
+                    progress = min(processing_state['processed'] / processing_state['total_skus'], 1.0)
+                    
+                    progress_bar.progress(progress)
+                    metric_processed.metric("Processed", f"{processing_state['processed']} / {processing_state['total_skus']}")
+                    metric_success.metric("Success", str(processing_state['success']))
+                    metric_failed.metric("Failed", str(processing_state['failed']))
+                    metric_speed.metric("Speed", f"{speed:.2f} prod/sec")
             
             processor = BatchProcessor(batch_callback, max_workers=3)
             
@@ -229,6 +255,11 @@ def section_category_processing():
                 results = processor.process_sku_list_with_auto_category(all_skus)
             
             processor.close()
+            
+            # Update final statistics from results
+            processing_state['success'] = results['successful']
+            processing_state['failed'] = results['failed']
+            processing_state['processed'] = results['total_products']
             
             # Final progress update
             progress_bar.progress(1.0)

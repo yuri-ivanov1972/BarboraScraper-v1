@@ -255,10 +255,10 @@ class ProductViewDatabase:
         
         # Price history query (latest price)
         price_query = """
-        SELECT price, scraped_at
+        SELECT price, created_at
         FROM product_price_history
         WHERE product_id = %s
-        ORDER BY scraped_at DESC
+        ORDER BY created_at DESC
         LIMIT 1
         """
         
@@ -281,7 +281,7 @@ class ProductViewDatabase:
             price_row = cursor.fetchone()
             if price_row:
                 product['price'] = float(price_row['price'])
-                product['price_date'] = price_row['scraped_at']
+                product['price_date'] = price_row['created_at']
             else:
                 product['price'] = None
                 product['price_date'] = None
