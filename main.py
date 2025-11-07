@@ -148,7 +148,7 @@ def section_category_processing():
         status_container = st.container()
         
         # Metrics display
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
             metric_processed = st.empty()
@@ -158,12 +158,15 @@ def section_category_processing():
             metric_failed = st.empty()
         with col4:
             metric_speed = st.empty()
+        with col5:
+            metric_total_time = st.empty()
         
         # Initialize metrics
         metric_processed.metric("Processed", "0 / 0")
         metric_success.metric("Success", "0")
         metric_failed.metric("Failed", "0")
         metric_speed.metric("Speed", "- sec/prod")
+        metric_total_time.metric("Total Time", "0s")
         
         # Processing state
         processing_state = {
@@ -191,6 +194,7 @@ def section_category_processing():
                 metric_success.metric("Success", str(processing_state['success']))
                 metric_failed.metric("Failed", str(processing_state['failed']))
                 metric_speed.metric("Speed", f"{speed:.2f} sec/prod")
+                metric_total_time.metric("Total Time", f"{elapsed:.1f}s")
         
         try:
             # Step 1: Collect SKUs from category
@@ -245,6 +249,7 @@ def section_category_processing():
                     metric_success.metric("Success", str(processing_state['success']))
                     metric_failed.metric("Failed", str(processing_state['failed']))
                     metric_speed.metric("Speed", f"{speed:.2f} sec/prod")
+                    metric_total_time.metric("Total Time", f"{elapsed:.1f}s")
             
             processor = BatchProcessor(batch_callback, max_workers=3)
             
@@ -261,9 +266,11 @@ def section_category_processing():
             processing_state['failed'] = results['failed']
             processing_state['processed'] = results['total_products']
             
-            # Update final speed metric using actual processing time
+            # Update final metrics with accurate timing
+            total_elapsed = time.time() - processing_state['start_time']
             final_speed = results['processing_time'] / results['total_products'] if results['total_products'] > 0 else 0
             metric_speed.metric("Speed", f"{final_speed:.2f} sec/prod")
+            metric_total_time.metric("Total Time", f"{total_elapsed:.1f}s")
             
             # Final progress update
             progress_bar.progress(1.0)
