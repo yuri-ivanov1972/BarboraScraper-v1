@@ -129,8 +129,8 @@ def section_category_processing():
     with col1:
         category_code = st.text_input(
             "Category Code",
-            placeholder="e.g., SH-7, SH-11",
-            help="Enter full category code only (not subcategories)"
+            placeholder="e.g., SH-11-6-19, SH-7",
+            help="Enter full category code (e.g., SH-11-6-19)"
         )
     
     with col2:
@@ -140,41 +140,129 @@ def section_category_processing():
     
     # Processing controls
     if st.button("▶️ Start Processing", type="primary", disabled=not category_code):
-        # Placeholder for actual processing logic
+        from core_parser import RimiParser
+        from batch_processor import BatchProcessor
+        
+        # Create UI containers for real-time updates
         progress_bar = st.progress(0)
-        status_text = st.empty()
+        status_container = st.container()
         
         # Metrics display
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             metric_processed = st.empty()
-            metric_processed.metric("Processed", "0 / 0")
-        
         with col2:
             metric_success = st.empty()
-            metric_success.metric("Success", "0")
-        
         with col3:
             metric_failed = st.empty()
-            metric_failed.metric("Failed", "0")
-        
         with col4:
             metric_speed = st.empty()
-            metric_speed.metric("Speed", "0.0 prod/sec")
         
-        # Simulate processing (replace with actual logic)
-        status_text.text("Processing started...")
-        st.info("Category processing will be implemented here")
+        # Initialize metrics
+        metric_processed.metric("Processed", "0 / 0")
+        metric_success.metric("Success", "0")
+        metric_failed.metric("Failed", "0")
+        metric_speed.metric("Speed", "0.0 prod/sec")
+        
+        # Processing state
+        processing_state = {
+            'total_skus': 0,
+            'processed': 0,
+            'success': 0,
+            'failed': 0,
+            'start_time': time.time()
+        }
+        
+        def update_progress(msg: str):
+            """Callback for status updates"""
+            with status_container:
+                st.text(f"[{time.strftime('%H:%M:%S')}] {msg}")
+            
+            # Update metrics if processing
+            if processing_state['total_skus'] > 0:
+                elapsed = time.time() - processing_state['start_time']
+                speed = processing_state['processed'] / elapsed if elapsed > 0 else 0
+                
+                progress = min(processing_state['processed'] / processing_state['total_skus'], 1.0)
+                progress_bar.progress(progress)
+                
+                metric_processed.metric("Processed", f"{processing_state['processed']} / {processing_state['total_skus']}")
+                metric_success.metric("Success", str(processing_state['success']))
+                metric_failed.metric("Failed", str(processing_state['failed']))
+                metric_speed.metric("Speed", f"{speed:.2f} prod/sec")
+        
+        try:
+            # Step 1: Collect SKUs from category
+            update_progress(f"📥 Collecting products from {category_code}...")
+            parser = RimiParser(update_progress)
+            
+            category_url = parser.build_category_url(category_code)
+            all_skus = parser.collect_all_skus_from_category(category_url)
+            
+            if not all_skus:
+                st.error(f"No products found in category {category_code}")
+                return
+            
+            processing_state['total_skus'] = len(all_skus)
+            update_progress(f"✅ Found {len(all_skus)} products to process")
+            
+            # Step 2: Process SKUs in batches
+            update_progress(f"🔄 Starting batch processing...")
+            
+            def batch_callback(msg: str):
+                """Track batch processing progress"""
+                if "completed successfully" in msg.lower():
+                    processing_state['success'] += 1
+                    processing_state['processed'] += 1
+                elif "failed" in msg.lower() or "error" in msg.lower():
+                    processing_state['failed'] += 1
+                    processing_state['processed'] += 1
+                
+                update_progress(msg)
+            
+            processor = BatchProcessor(batch_callback, max_workers=3)
+            
+            # Process with automatic category extraction (unless force update)
+            if force_update:
+                results = processor.process_sku_list(all_skus, category_code)
+            else:
+                results = processor.process_sku_list_with_auto_category(all_skus)
+            
+            processor.close()
+            
+            # Final progress update
+            progress_bar.progress(1.0)
+            update_progress(f"✅ Processing complete!")
+            
+            # Show summary
+            st.success(f"✅ Category {category_code} processed successfully!")
+            
+            summary_col1, summary_col2, summary_col3 = st.columns(3)
+            with summary_col1:
+                st.metric("Total Products", results['total_products'])
+            with summary_col2:
+                st.metric("Successful", results['successful'], delta=f"{(results['successful']/results['total_products']*100):.1f}%")
+            with summary_col3:
+                st.metric("Failed", results['failed'])
+            
+            st.info(f"⏱️ Processing time: {results['processing_time']:.1f}s")
+            
+        except Exception as e:
+            st.error(f"❌ Processing error: {str(e)}")
+            import traceback
+            with st.expander("Error details"):
+                st.code(traceback.format_exc())
     
     # Help section
     with st.expander("ℹ️ Help"):
         st.markdown("""
         **Category Processing** allows you to scrape and update product data:
         
-        - Enter a full category code (e.g., SH-7)
+        - Enter a full category code (e.g., SH-11-6-19)
         - Toggle Force Update to overwrite existing data
         - Monitor progress with real-time statistics
+        - Processing is automatic with category extraction from product pages
         """)
 
 
