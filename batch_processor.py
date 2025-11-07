@@ -52,13 +52,14 @@ class BatchProcessor:
             print(f"🔧 BATCH: Created reusable {coord_type} coordinator for thread {thread_id}")
             return coordinator
     
-    def process_product_batch(self, products: List[Dict], category_code: Optional[str] = None) -> Dict:
+    def process_product_batch(self, products: List[Dict], category_code: Optional[str] = None, force_update: bool = False) -> Dict:
         """
         Process a batch of products with optimized connection handling
         
         Args:
             products: List of product dictionaries with 'sku' and optionally 'name'
             category_code: Default category code to use
+            force_update: Whether to force update existing products (default: False)
             
         Returns:
             Dictionary with batch processing results
@@ -107,8 +108,8 @@ class BatchProcessor:
                         print(f"🔄 BATCH: Getting reusable enhanced coordinator...")
                         enhanced_coordinator = self._get_coordinator(enhanced=True)
                         
-                        print(f"🔄 BATCH: Calling process_single_product_with_auto_category...")
-                        result = enhanced_coordinator.process_single_product_with_auto_category(sku)
+                        print(f"🔄 BATCH: Calling process_single_product_with_auto_category (force_update={force_update})...")
+                        result = enhanced_coordinator.process_single_product_with_auto_category(sku, force_update=force_update)
                         
                         print(f"🔄 BATCH: Processing completed, result type: {type(result)}")
                         print(f"🔄 BATCH: Result success: {getattr(result, 'success', 'N/A')}")
@@ -124,10 +125,10 @@ class BatchProcessor:
                         print(f"❌ BATCH: Traceback: {traceback.format_exc()}")
                         raise batch_error
                 else:
-                    print(f"🔄 BATCH: Using manual category {category_code} for {sku}")
+                    print(f"🔄 BATCH: Using manual category {category_code} for {sku} (force_update={force_update})")
                     # Get/reuse regular coordinator for this thread
                     coordinator = self._get_coordinator(enhanced=False)
-                    result = coordinator.process_single_product(sku, category_code)
+                    result = coordinator.process_single_product(sku, category_code, force_update=force_update)
                 
                 print(f"🔍 BATCH: Checking result for {sku}...")
                 success = result['success'] if isinstance(result, dict) else result.success
@@ -196,32 +197,34 @@ class BatchProcessor:
         self.status_callback(f"Batch processing completed: {results['successful']} successful, {results['failed']} failed")
         return results
     
-    def process_sku_list(self, sku_list: List[str], category_code: str = 'SH-1-1-1') -> Dict:
+    def process_sku_list(self, sku_list: List[str], category_code: str = 'SH-1-1-1', force_update: bool = False) -> Dict:
         """
         Process a list of SKUs
         
         Args:
             sku_list: List of product SKUs
             category_code: Category code to use for all products
+            force_update: Whether to force update existing products (default: False)
             
         Returns:
             Batch processing results
         """
         products = [{'sku': sku} for sku in sku_list]
-        return self.process_product_batch(products, category_code)
+        return self.process_product_batch(products, category_code, force_update=force_update)
     
-    def process_sku_list_with_auto_category(self, sku_list: List[str]) -> Dict:
+    def process_sku_list_with_auto_category(self, sku_list: List[str], force_update: bool = False) -> Dict:
         """
         Process a list of SKUs with automatic category extraction
         
         Args:
             sku_list: List of product SKUs
+            force_update: Whether to force update existing products (default: False)
             
         Returns:
             Batch processing results
         """
         products = [{'sku': sku} for sku in sku_list]
-        return self.process_product_batch(products, None)  # None triggers auto-extraction
+        return self.process_product_batch(products, None, force_update=force_update)  # None triggers auto-extraction
     
     def close(self):
         """Close all coordinator connections - now closes reused coordinators"""
