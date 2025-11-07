@@ -261,6 +261,10 @@ def section_category_processing():
             processing_state['failed'] = results['failed']
             processing_state['processed'] = results['total_products']
             
+            # Update final speed metric using actual processing time
+            final_speed = results['processing_time'] / results['total_products'] if results['total_products'] > 0 else 0
+            metric_speed.metric("Speed", f"{final_speed:.2f} sec/prod")
+            
             # Final progress update
             progress_bar.progress(1.0)
             update_progress(f"✅ Processing complete!")
