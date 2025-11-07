@@ -507,6 +507,11 @@ def render_product_detail_view():
         st.subheader("📝 Sastāvdaļas")
         st.write(product['ingredients_text'])
     
+    # Country of Origin
+    if product.get('country_of_origin') and product.get('country_of_origin') != 'Unknown':
+        st.subheader("🌍 Izcelsmes valsts")
+        st.write(product['country_of_origin'])
+    
     # Category
     st.subheader("📂 Kategorija")
     st.write(f"{product.get('category_name', 'N/A')} ({product.get('rimi_category_code', 'N/A')})")

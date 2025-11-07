@@ -225,6 +225,7 @@ class ProductViewDatabase:
             p.quantity_value,
             p.quantity_unit,
             p.rimi_url,
+            p.country_of_origin,
             nc.rimi_category_code,
             nc.name_lv as category_name,
             nf.nutri_score_grade,
