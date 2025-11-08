@@ -138,8 +138,34 @@ def section_category_processing():
         st.write("")
         force_update = st.checkbox("Force Update", help="Overwrite existing data")
     
+    # Check for incomplete jobs
+    incomplete_job = None
+    if category_code:
+        from progress_manager import ProgressManager
+        progress_mgr = ProgressManager()
+        incomplete_job = progress_mgr.find_incomplete_job(category_code)
+        
+        if incomplete_job:
+            st.info(f"📌 Found incomplete processing job for this category")
+            col_resume1, col_resume2, col_resume3 = st.columns(3)
+            with col_resume1:
+                st.metric("Total Products", incomplete_job['total_products'])
+            with col_resume2:
+                st.metric("Completed", incomplete_job['processed_count'])
+            with col_resume3:
+                remaining = incomplete_job['total_products'] - incomplete_job['processed_count']
+                st.metric("Remaining", remaining)
+    
     # Processing controls
-    if st.button("▶️ Start Processing", type="primary", disabled=not category_code):
+    col_btn1, col_btn2 = st.columns(2)
+    
+    with col_btn1:
+        start_new = st.button("▶️ Start New Processing", type="primary", disabled=not category_code)
+    
+    with col_btn2:
+        resume_processing = st.button("🔄 Resume Processing", type="secondary", disabled=not incomplete_job)
+    
+    if start_new or resume_processing:
         from core_parser import RimiParser
         from batch_processor import BatchProcessor
         
@@ -197,28 +223,52 @@ def section_category_processing():
                 metric_total_time.metric("Total Time", f"{elapsed:.1f}s")
         
         try:
-            # Step 1: Collect SKUs from category
-            update_progress(f"📥 Collecting products from {category_code}...")
-            parser = RimiParser(update_progress)
+            from progress_manager import ProgressManager
+            progress_mgr = ProgressManager(update_progress)
             
-            all_skus = parser.collect_category_skus(category_code)
+            # Determine job_id based on resume or new processing
+            if resume_processing and incomplete_job:
+                # Resume existing job
+                job_id = incomplete_job['job_id']
+                update_progress(f"🔄 Resuming job #{job_id} for category {category_code}")
+                
+                # Reset any interrupted SKUs from 'processing' back to 'pending'
+                reset_count = progress_mgr.reset_stale_processing_records(job_id)
+                if reset_count > 0:
+                    update_progress(f"↺ Reset {reset_count} interrupted products to pending")
+                
+                # Get stats
+                stats = progress_mgr.get_job_statistics(job_id)
+                processing_state['total_skus'] = stats['total_products']
+                processing_state['processed'] = stats['completed'] + stats['skipped']
+                processing_state['success'] = stats['completed']
+                processing_state['failed'] = stats['failed']
+                
+                update_progress(f"📊 Job status: {stats['completed']} completed, {stats['pending']} pending, {stats['failed']} failed")
+                
+            else:
+                # Start new processing job
+                update_progress(f"📥 Collecting products from {category_code}...")
+                parser = RimiParser(update_progress)
+                
+                all_skus = parser.collect_category_skus(category_code)
+                
+                if not all_skus:
+                    st.error(f"No products found in category {category_code}")
+                    return
+                
+                processing_state['total_skus'] = len(all_skus)
+                update_progress(f"✅ Found {len(all_skus)} products to process")
+                
+                # Create processing job (category_id can be NULL for now)
+                job_id = progress_mgr.create_job(category_code, None, len(all_skus), all_skus)
+                update_progress(f"✓ Created processing job #{job_id}")
             
-            if not all_skus:
-                st.error(f"No products found in category {category_code}")
-                return
-            
-            processing_state['total_skus'] = len(all_skus)
-            update_progress(f"✅ Found {len(all_skus)} products to process")
-            
-            # Step 2: Process SKUs in batches
-            update_progress(f"🔄 Starting batch processing...")
-            
-            # Track processing through detailed product results
-            products_completed = []
+            # Step 2: Process SKUs in chunks with progress tracking
+            update_progress(f"🔄 Starting chunked batch processing...")
             
             def batch_callback(msg: str):
                 """Track batch processing progress"""
-                # Display the message
                 update_progress(msg)
                 
                 # Track success/failure from batch processor messages
@@ -228,18 +278,9 @@ def section_category_processing():
                 elif msg.startswith("✗") and "failed" in msg:
                     processing_state['failed'] += 1
                     processing_state['processed'] += 1
-                else:
-                    # Also track from threaded messages like "[SKU] ..."
-                    if "[" in msg and "]" in msg:
-                        try:
-                            sku_part = msg.split("]")[0].split("[")[1]
-                            if sku_part not in products_completed:
-                                products_completed.append(sku_part)
-                        except:
-                            pass
                 
                 # Update display in real-time whenever we have progress
-                if processing_state['processed'] > 0:
+                if processing_state['total_skus'] > 0:
                     elapsed = time.time() - processing_state['start_time']
                     speed = elapsed / processing_state['processed'] if processing_state['processed'] > 0 else 0
                     progress = min(processing_state['processed'] / processing_state['total_skus'], 1.0)
@@ -253,10 +294,8 @@ def section_category_processing():
             
             processor = BatchProcessor(batch_callback, max_workers=3)
             
-            # Process with force update flag if checkbox is checked
-            # NOTE: Both paths use auto-category extraction with EnhancedUpdateCoordinator
-            # The force_update flag determines whether to overwrite existing data
-            results = processor.process_sku_list_with_auto_category(all_skus, force_update=force_update)
+            # Use chunked processing method with job tracking
+            results = processor.process_sku_list_chunked(job_id, chunk_size=15, force_update=force_update)
             
             processor.close()
             

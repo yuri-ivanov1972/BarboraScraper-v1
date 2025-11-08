@@ -226,6 +226,100 @@ class BatchProcessor:
         products = [{'sku': sku} for sku in sku_list]
         return self.process_product_batch(products, None, force_update=force_update)  # None triggers auto-extraction
     
+    def process_sku_list_chunked(self, job_id: int, chunk_size: int = 15, force_update: bool = False) -> Dict:
+        """
+        Process SKUs in chunks with progress tracking for large batches
+        
+        Args:
+            job_id: Processing job ID for progress tracking
+            chunk_size: Number of products to process in each chunk (default: 15)
+            force_update: Whether to force update existing products
+            
+        Returns:
+            Batch processing results with chunk progress
+        """
+        from progress_manager import ProgressManager
+        
+        start_time = time.time()
+        total_results = {
+            'total_products': 0,
+            'successful': 0,
+            'failed': 0,
+            'errors': [],
+            'processing_time': 0,
+            'chunks_processed': 0,
+            'interrupted': False
+        }
+        
+        progress_mgr = ProgressManager(self.status_callback)
+        
+        try:
+            # Get all pending SKUs for this job
+            pending_skus = progress_mgr.get_pending_skus(job_id)
+            
+            if not pending_skus:
+                self.status_callback("✓ No pending SKUs to process")
+                return total_results
+            
+            total_results['total_products'] = len(pending_skus)
+            self.status_callback(f"📦 Processing {len(pending_skus)} products in chunks of {chunk_size}")
+            
+            # Process in chunks
+            for chunk_num, i in enumerate(range(0, len(pending_skus), chunk_size), 1):
+                chunk_skus = pending_skus[i:i + chunk_size]
+                chunk_start = time.time()
+                
+                self.status_callback(f"\n🔄 Chunk {chunk_num}: Processing {len(chunk_skus)} products (SKUs {i+1}-{min(i+chunk_size, len(pending_skus))})")
+                
+                # Mark all products in chunk as 'processing'
+                for sku in chunk_skus:
+                    progress_mgr.update_product_status(job_id, sku, 'processing')
+                
+                # Process chunk
+                products = [{'sku': sku} for sku in chunk_skus]
+                chunk_results = self.process_product_batch(products, None, force_update=force_update)
+                
+                # Update individual product statuses based on results
+                for product_result in chunk_results['products_processed']:
+                    sku = product_result['sku']
+                    if product_result['status'] == 'success':
+                        progress_mgr.update_product_status(job_id, sku, 'completed')
+                    else:
+                        error_msg = product_result.get('error', 'Unknown error')
+                        progress_mgr.update_product_status(job_id, sku, 'failed', error_msg)
+                
+                # Update job progress
+                progress_mgr.update_job_progress(job_id)
+                
+                # Accumulate results
+                total_results['successful'] += chunk_results['successful']
+                total_results['failed'] += chunk_results['failed']
+                total_results['errors'].extend(chunk_results['errors'])
+                total_results['chunks_processed'] += 1
+                
+                chunk_time = time.time() - chunk_start
+                self.status_callback(f"✓ Chunk {chunk_num} completed in {chunk_time:.1f}s ({chunk_results['successful']}/{len(chunk_skus)} successful)")
+                
+                # Brief pause between chunks to avoid overwhelming the system
+                if i + chunk_size < len(pending_skus):
+                    time.sleep(0.5)
+            
+            # Mark job as completed
+            progress_mgr.complete_job(job_id)
+            self.status_callback(f"✅ All chunks processed successfully!")
+            
+        except KeyboardInterrupt:
+            self.status_callback("⚠️ Processing interrupted by user - progress saved")
+            total_results['interrupted'] = True
+            progress_mgr.update_job_progress(job_id)
+        except Exception as e:
+            self.status_callback(f"❌ Error during chunked processing: {str(e)}")
+            total_results['errors'].append(str(e))
+            progress_mgr.update_job_progress(job_id)
+        
+        total_results['processing_time'] = time.time() - start_time
+        return total_results
+    
     def close(self):
         """Close all coordinator connections - now closes reused coordinators"""
         with self._lock:
