@@ -358,12 +358,21 @@ class RimiParser:
             
             for page_num in range(1, total_pages + 1):
                 try:
-                    # Build page URL using detected page size
-                    page_url = f"{category_url}?pageSize={page_size}&currentPage={page_num}"
+                    # For single-page categories, don't limit page size to avoid losing products
+                    # For multi-page categories, use standard pagination with detected page size
+                    if total_pages == 1:
+                        # Single page - fetch without pageSize limit to get all products
+                        page_url = category_url
+                        max_products_to_extract = total_products + 10  # Use actual count + buffer
+                    else:
+                        # Multi-page - use standard pagination
+                        page_url = f"{category_url}?pageSize={page_size}&currentPage={page_num}"
+                        max_products_to_extract = page_size * 2
+                    
                     self.status_callback(f"Processing page {page_num}/{total_pages}: {page_url}")
                     
-                    # Extract products from this page (use generous max_products)
-                    products = self.extract_products_from_page(page_url, max_products=page_size * 2)
+                    # Extract products from this page
+                    products = self.extract_products_from_page(page_url, max_products=max_products_to_extract)
                     
                     # Collect SKUs from products
                     page_skus = [product.sku for product in products if product.sku]
