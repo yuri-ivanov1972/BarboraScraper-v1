@@ -95,7 +95,11 @@ class RimiParser:
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # First, detect the actual page size by counting products on first page
+            # First, get actual product count on first page (before any rounding)
+            actual_first_page_count = len(self.extract_products_from_page(category_url, max_products=100))
+            self.status_callback(f"Extracted {actual_first_page_count} products from page")
+            
+            # Then detect the page size (may be rounded for multi-page categories)
             page_size = self._detect_page_size(category_url, soup)
             self.status_callback(f"Detected page size: {page_size} products per page")
             
@@ -162,9 +166,8 @@ class RimiParser:
             
             # Now get exact product count using detected page size
             if max_page == 1:
-                # Single page - count products directly
-                products_on_page = len(self.extract_products_from_page(category_url, max_products=page_size * 2))
-                total_products = products_on_page
+                # Single page - use the actual count from first page (don't re-fetch)
+                total_products = actual_first_page_count
                 self.status_callback(f"Single page with {total_products} products")
             else:
                 # Multiple pages - validate last page and get exact count
