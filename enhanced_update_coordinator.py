@@ -269,6 +269,7 @@ class EnhancedUpdateCoordinator:
                     'category_id': category_id,
                     'name': product_data['name'],
                     'price': product_data['price'],
+                    'is_available': product_data.get('is_available', True),
                     'nutrition_data': nutrition_data,
                     'ingredients': nutrition_data.get('ingredients', ''),
                     'quantity_value': quantity_value,
