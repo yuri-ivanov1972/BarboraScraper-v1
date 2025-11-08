@@ -3,16 +3,20 @@
 Progress Manager - Handles processing progress tracking and resume capability
 Enables chunked processing with checkpoint saves for large categories
 """
+import os
 import psycopg2
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
-from database_config import get_db_connection
 
 class ProgressManager:
     """Manages processing job tracking for resume capability"""
     
     def __init__(self, status_callback=None):
         self.status_callback = status_callback or (lambda x: None)
+    
+    def _get_db_connection(self):
+        """Get database connection"""
+        return psycopg2.connect(os.environ['DATABASE_URL'])
     
     def create_job(self, category_code: str, category_id: Optional[int], total_products: int, all_skus: List[str]) -> int:
         """
@@ -29,7 +33,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             # Create job record
@@ -76,7 +80,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             # Include 'processing' status to handle interrupted chunks
@@ -109,7 +113,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             cur.execute("""
@@ -147,7 +151,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             cur.execute("""
@@ -175,7 +179,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             # Count completed products
@@ -212,7 +216,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             cur.execute("""
@@ -243,7 +247,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             cur.execute("""
@@ -275,7 +279,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             cur.execute("""
@@ -320,7 +324,7 @@ class ProgressManager:
         """
         conn = None
         try:
-            conn = get_db_connection()
+            conn = self._get_db_connection()
             cur = conn.cursor()
             
             # Get job details
