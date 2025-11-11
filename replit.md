@@ -18,7 +18,9 @@ Preferred approach: Simplified category-by-category analysis in read-only mode w
 
 ## System Architecture
 The application features a modular Python architecture comprising:
-- **Frontend**: Streamlit for the user interface.
+- **Frontend**: Streamlit for the user interface and job queueing.
+- **Worker System**: Standalone CLI worker (`worker.py`) for background category processing, independent of Streamlit sessions.
+- **Job Queue**: PostgreSQL-based job queue with worker registration, heartbeat monitoring, and stale job reassignment.
 - **Backend**: Python modules for web scraping, data processing, and database interactions.
 - **Database**: PostgreSQL for persistent storage of product, nutritional, and additive data.
 - **Parsing Engine**: Custom logic for E-number extraction and ingredient analysis.
@@ -42,6 +44,15 @@ The application features a modular Python architecture comprising:
     - Robust database connection management with retry logic and health checks.
     - Batch processing system with thread-safe connection pooling and Streamlit interface.
     - Corruption fix system for data integrity, including force update capabilities for null values and incorrect categories.
+    - **Standalone Worker System**:
+      - Background processing via `worker.py` CLI independent of Streamlit sessions
+      - Job queue with priority scheduling, heartbeat monitoring, and fault tolerance
+      - Prevents SessionInfo errors by decoupling processing from web session lifecycle
+      - Supports overnight processing of 9000+ products
+      - Worker registration with hostname/PID tracking and graceful shutdown
+      - Stale job reassignment when workers die (heartbeat timeout: 2x interval)
+      - Job event logging for lifecycle tracking and debugging
+      - Usage: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 15`
 
 ## External Dependencies
 - **Streamlit**: Web application framework.
