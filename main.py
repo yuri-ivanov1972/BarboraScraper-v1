@@ -156,182 +156,92 @@ def section_category_processing():
                 remaining = incomplete_job['total_products'] - incomplete_job['processed_count']
                 st.metric("Remaining", remaining)
     
-    # Processing controls
-    col_btn1, col_btn2 = st.columns(2)
+    # Job queueing controls
+    col_btn1, col_btn2, col_btn3 = st.columns(3)
     
     with col_btn1:
-        start_new = st.button("▶️ Start New Processing", type="primary", disabled=not category_code)
+        priority = st.number_input("Priority", min_value=1, max_value=10, value=5, help="Higher = more urgent")
     
     with col_btn2:
-        resume_processing = st.button("🔄 Resume Processing", type="secondary", disabled=not incomplete_job)
+        st.write("")
+        st.write("")
+        queue_job = st.button("📥 Queue Job", type="primary", disabled=not category_code)
     
-    if start_new or resume_processing:
+    with col_btn3:
+        st.write("")
+        st.write("")
+        if incomplete_job:
+            st.info(f"Job #{incomplete_job['job_id']} in queue")
+    
+    if queue_job:
         from core_parser import RimiParser
-        from batch_processor import BatchProcessor
+        import psycopg2
         
-        # Create UI containers for real-time updates
-        progress_bar = st.progress(0)
-        status_container = st.container()
-        
-        # Metrics display
-        col1, col2, col3, col4, col5 = st.columns(5)
-        
-        with col1:
-            metric_processed = st.empty()
-        with col2:
-            metric_success = st.empty()
-        with col3:
-            metric_failed = st.empty()
-        with col4:
-            metric_speed = st.empty()
-        with col5:
-            metric_total_time = st.empty()
-        
-        # Initialize metrics
-        metric_processed.metric("Processed", "0 / 0")
-        metric_success.metric("Success", "0")
-        metric_failed.metric("Failed", "0")
-        metric_speed.metric("Speed", "- sec/prod")
-        metric_total_time.metric("Total Time", "0s")
-        
-        # Processing state
-        processing_state = {
-            'total_skus': 0,
-            'processed': 0,
-            'success': 0,
-            'failed': 0,
-            'start_time': time.time()
-        }
-        
-        def update_progress(msg: str):
-            """Callback for status updates"""
-            with status_container:
-                st.text(f"[{time.strftime('%H:%M:%S')}] {msg}")
-            
-            # Update metrics if processing
-            if processing_state['total_skus'] > 0:
-                elapsed = time.time() - processing_state['start_time']
-                speed = elapsed / processing_state['processed'] if processing_state['processed'] > 0 else 0
-                
-                progress = min(processing_state['processed'] / processing_state['total_skus'], 1.0)
-                progress_bar.progress(progress)
-                
-                metric_processed.metric("Processed", f"{processing_state['processed']} / {processing_state['total_skus']}")
-                metric_success.metric("Success", str(processing_state['success']))
-                metric_failed.metric("Failed", str(processing_state['failed']))
-                metric_speed.metric("Speed", f"{speed:.2f} sec/prod")
-                metric_total_time.metric("Total Time", f"{elapsed:.1f}s")
-        
-        try:
-            from progress_manager import ProgressManager
-            progress_mgr = ProgressManager(update_progress)
-            
-            # Determine job_id based on resume or new processing
-            if resume_processing and incomplete_job:
-                # Resume existing job
-                job_id = incomplete_job['job_id']
-                update_progress(f"🔄 Resuming job #{job_id} for category {category_code}")
-                
-                # Reset any interrupted SKUs from 'processing' back to 'pending'
-                reset_count = progress_mgr.reset_stale_processing_records(job_id)
-                if reset_count > 0:
-                    update_progress(f"↺ Reset {reset_count} interrupted products to pending")
-                
-                # Get stats
-                stats = progress_mgr.get_job_statistics(job_id)
-                processing_state['total_skus'] = stats['total_products']
-                processing_state['processed'] = stats['completed'] + stats['skipped']
-                processing_state['success'] = stats['completed']
-                processing_state['failed'] = stats['failed']
-                
-                update_progress(f"📊 Job status: {stats['completed']} completed, {stats['pending']} pending, {stats['failed']} failed")
-                
-            else:
-                # Start new processing job
-                update_progress(f"📥 Collecting products from {category_code}...")
-                parser = RimiParser(update_progress)
-                
+        with st.spinner("Collecting products and creating job..."):
+            try:
+                # Collect SKUs from category
+                parser = RimiParser(lambda msg: st.text(msg))
                 all_skus = parser.collect_category_skus(category_code)
                 
                 if not all_skus:
                     st.error(f"No products found in category {category_code}")
-                    return
-                
-                processing_state['total_skus'] = len(all_skus)
-                update_progress(f"✅ Found {len(all_skus)} products to process")
-                
-                # Create processing job (category_id can be NULL for now)
-                job_id = progress_mgr.create_job(category_code, None, len(all_skus), all_skus)
-                update_progress(f"✓ Created processing job #{job_id}")
-            
-            # Step 2: Process SKUs in chunks with progress tracking
-            update_progress(f"🔄 Starting chunked batch processing...")
-            
-            def batch_callback(msg: str):
-                """Track batch processing progress"""
-                update_progress(msg)
-                
-                # Track success/failure from batch processor messages
-                if msg.startswith("✓") and "processed successfully" in msg:
-                    processing_state['success'] += 1
-                    processing_state['processed'] += 1
-                elif msg.startswith("✗") and "failed" in msg:
-                    processing_state['failed'] += 1
-                    processing_state['processed'] += 1
-                
-                # Update display in real-time whenever we have progress
-                if processing_state['total_skus'] > 0:
-                    elapsed = time.time() - processing_state['start_time']
-                    speed = elapsed / processing_state['processed'] if processing_state['processed'] > 0 else 0
-                    progress = min(processing_state['processed'] / processing_state['total_skus'], 1.0)
+                else:
+                    # Create job in database
+                    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+                    cur = conn.cursor()
                     
-                    progress_bar.progress(progress)
-                    metric_processed.metric("Processed", f"{processing_state['processed']} / {processing_state['total_skus']}")
-                    metric_success.metric("Success", str(processing_state['success']))
-                    metric_failed.metric("Failed", str(processing_state['failed']))
-                    metric_speed.metric("Speed", f"{speed:.2f} sec/prod")
-                    metric_total_time.metric("Total Time", f"{elapsed:.1f}s")
-            
-            processor = BatchProcessor(batch_callback, max_workers=3)
-            
-            # Use chunked processing method with job tracking
-            results = processor.process_sku_list_chunked(job_id, chunk_size=15, force_update=force_update)
-            
-            processor.close()
-            
-            # Update final statistics from results
-            processing_state['success'] = results['successful']
-            processing_state['failed'] = results['failed']
-            processing_state['processed'] = results['total_products']
-            
-            # Update final metrics with accurate timing
-            total_elapsed = time.time() - processing_state['start_time']
-            final_speed = results['processing_time'] / results['total_products'] if results['total_products'] > 0 else 0
-            metric_speed.metric("Speed", f"{final_speed:.2f} sec/prod")
-            metric_total_time.metric("Total Time", f"{total_elapsed:.1f}s")
-            
-            # Final progress update
-            progress_bar.progress(1.0)
-            update_progress(f"✅ Processing complete!")
-            
-            # Show summary
-            st.success(f"✅ Category {category_code} processed successfully!")
-            
-            summary_col1, summary_col2, summary_col3 = st.columns(3)
-            with summary_col1:
-                st.metric("Total Products", results['total_products'])
-            with summary_col2:
-                st.metric("Successful", results['successful'], delta=f"{(results['successful']/results['total_products']*100):.1f}%")
-            with summary_col3:
-                st.metric("Failed", results['failed'])
-            
-            st.info(f"⏱️ Processing time: {results['processing_time']:.1f}s")
-            
-        except Exception as e:
-            st.error(f"❌ Processing error: {str(e)}")
-            import traceback
-            with st.expander("Error details"):
-                st.code(traceback.format_exc())
+                    try:
+                        # Create job
+                        cur.execute("""
+                            INSERT INTO category_processing_jobs 
+                            (category_code, category_id, total_products, processed_count, status, priority, requested_by)
+                            VALUES (%s, NULL, %s, 0, 'queued', %s, 'streamlit_ui')
+                            RETURNING id
+                        """, (category_code, len(all_skus), priority))
+                        
+                        job_id = cur.fetchone()[0]
+                        
+                        # Log all SKUs as pending
+                        for sku in all_skus:
+                            cur.execute("""
+                                INSERT INTO product_processing_log (job_id, sku, status)
+                                VALUES (%s, %s, 'pending')
+                            """, (job_id, sku))
+                        
+                        # Log event
+                        cur.execute("""
+                            INSERT INTO job_events (job_id, event_type, message)
+                            VALUES (%s, 'job_created', %s)
+                        """, (job_id, f"Job created via Streamlit UI for {category_code} with {len(all_skus)} products (priority: {priority})"))
+                        
+                        conn.commit()
+                        
+                        st.success(f"✅ Job #{job_id} created successfully!")
+                        st.info(f"📦 Queued {len(all_skus)} products from category {category_code}")
+                        st.info(f"🔧 Run the worker to process: `python worker.py --resume-all`")
+                        
+                        with st.expander("View job details"):
+                            st.json({
+                                "job_id": job_id,
+                                "category_code": category_code,
+                                "total_products": len(all_skus),
+                                "priority": priority,
+                                "status": "queued"
+                            })
+                        
+                    except psycopg2.IntegrityError as e:
+                        if 'idx_unique_active_category' in str(e):
+                            st.warning(f"⚠️ Job already exists for category {category_code}")
+                        else:
+                            raise
+                    finally:
+                        conn.close()
+                        
+            except Exception as e:
+                st.error(f"❌ Error creating job: {str(e)}")
+                import traceback
+                with st.expander("Error details"):
+                    st.code(traceback.format_exc())
     
     # Help section
     with st.expander("ℹ️ Help"):
