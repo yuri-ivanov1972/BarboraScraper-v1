@@ -34,6 +34,10 @@ The application features a modular Python architecture comprising:
 - **UI/UX Decisions**: The Streamlit interface focuses on clear presentation of product data, nutritional information, and additive analysis.
 - **Deployment**: Configured for Replit with Python 3.11, PostgreSQL 16, Streamlit on port 5000 (exposed as 80), and autoscale deployment.
 - **Database Schema**: Key tables include `Products` (SKU, name, price), `Nutritional Information` (detailed nutrition), `Additives` (E-number catalog), and `Product-Additive Relationships`.
+  - **Enrichment Tracking**: Products table includes columns for nutrition data enrichment:
+    - `nutrition_source`: Tracks data origin ('rimi_scraped', 'ai_generated', 'manual_entry')
+    - `needs_enrichment`: Flags products requiring AI enrichment for missing nutrition data
+    - `enrichment_reviewed`: Tracks manual review status of AI-generated nutrition data
 - **Core Features**:
     - Complete photo extraction and storage from Rimi's CDN, distinguishing between parsing and database saving failures.
     - Robust nutrition data parsing, including handling Latvian labels and Unicode characters, with auto-calculation of nutri-scores.
