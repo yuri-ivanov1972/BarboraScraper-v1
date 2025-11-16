@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
 Batch Processor - Optimized batch processing for multiple products
-Includes connection pooling, progress tracking, and error recovery
+Includes connection pooling, progress tracking, error recovery, and smart updates
 """
+import os
 import time
 import threading
 from typing import Dict, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from update_coordinator import UpdateCoordinator
+from smart_updater import SmartUpdater, UpdateStatisticsCollector
 
 class BatchProcessor:
     """Handles batch processing of products with robust connection management"""
@@ -226,7 +228,7 @@ class BatchProcessor:
         products = [{'sku': sku} for sku in sku_list]
         return self.process_product_batch(products, None, force_update=force_update)  # None triggers auto-extraction
     
-    def process_sku_list_chunked(self, job_id: int, chunk_size: int = 15, force_update: bool = False) -> Dict:
+    def process_sku_list_chunked(self, job_id: int, chunk_size: int = 15, force_update: bool = False, smart_mode: bool = False) -> Dict:
         """
         Process SKUs in chunks with progress tracking for large batches
         
@@ -234,6 +236,7 @@ class BatchProcessor:
             job_id: Processing job ID for progress tracking
             chunk_size: Number of products to process in each chunk (default: 15)
             force_update: Whether to force update existing products
+            smart_mode: Enable smart updates (only update changed fields, skip photos)
             
         Returns:
             Batch processing results with chunk progress
@@ -252,6 +255,22 @@ class BatchProcessor:
         }
         
         progress_mgr = ProgressManager(self.status_callback)
+        
+        # Initialize smart updater and statistics collector if in smart mode
+        stats_collector = None
+        if smart_mode:
+            db_url = os.environ['DATABASE_URL']
+            
+            # Get category code from job
+            import psycopg2
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("SELECT category_code FROM category_processing_jobs WHERE id = %s", (job_id,))
+            category_code = cur.fetchone()[0]
+            conn.close()
+            
+            stats_collector = UpdateStatisticsCollector(db_url, job_id, category_code)
+            self.status_callback(f"🎯 Smart mode enabled: will update only changed fields")
         
         try:
             # Get all pending SKUs for this job
@@ -308,14 +327,33 @@ class BatchProcessor:
             progress_mgr.complete_job(job_id)
             self.status_callback(f"✅ All chunks processed successfully!")
             
+            # Save statistics if in smart mode
+            if stats_collector:
+                stats_collector.save_to_database()
+                self.status_callback(f"\n📊 {stats_collector.get_summary()}")
+            
         except KeyboardInterrupt:
             self.status_callback("⚠️ Processing interrupted by user - progress saved")
             total_results['interrupted'] = True
             progress_mgr.update_job_progress(job_id)
+            
+            # Save partial statistics if in smart mode
+            if stats_collector:
+                try:
+                    stats_collector.save_to_database()
+                except Exception as e:
+                    self.status_callback(f"⚠️ Could not save statistics: {e}")
         except Exception as e:
             self.status_callback(f"❌ Error during chunked processing: {str(e)}")
             total_results['errors'].append(str(e))
             progress_mgr.update_job_progress(job_id)
+            
+            # Save partial statistics if in smart mode
+            if stats_collector:
+                try:
+                    stats_collector.save_to_database()
+                except Exception as e:
+                    self.status_callback(f"⚠️ Could not save statistics: {e}")
         
         total_results['processing_time'] = time.time() - start_time
         return total_results

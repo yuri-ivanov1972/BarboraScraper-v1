@@ -5,12 +5,26 @@ The standalone worker system processes Rimi product categories in the background
 
 ## Quick Start
 
-### 1. Queue a Job (via Streamlit UI)
+### 1. Queue Jobs
+
+**Option A: Queue Single Category (via Streamlit UI)**
 1. Open the Streamlit app
 2. Go to "Category Processing" section
 3. Enter category code (e.g., `SH-11-9-26`)
 4. Set priority (1-10, higher = more urgent)
 5. Click "Queue Job"
+
+**Option B: Queue All Categories (Automated)**
+```bash
+# Queue all 78 level2 categories for full database update
+python auto_update.py --queue-all --priority 5
+
+# Check queue status
+python auto_update.py --status
+
+# Queue only categories not updated in last 7 days
+python auto_update.py --queue-all --skip-recent-days 7
+```
 
 ### 2. Run the Worker
 
@@ -163,6 +177,87 @@ Jobs stuck in 'in_progress' will be reassigned after `2 × heartbeat_interval` s
 ### BrokenPipe errors
 Some products may fail with "Broken pipe" errors during processing. These are logged and counted as failures. The worker continues processing remaining products.
 
+## Update Statistics
+
+The system tracks detailed statistics for each job to monitor changes over time.
+
+### View Statistics for a Job
+```sql
+SELECT * FROM update_statistics WHERE job_id = 4;
+```
+
+### Statistics Tracked
+- **total_checked**: Total products processed
+- **new_products**: Products added to database
+- **price_changed**: Products with price changes (>0.01 EUR)
+- **availability_changed**: Products with availability status changes
+- **data_updated**: Products with other data updated
+- **unchanged**: Products with no changes
+- **failed**: Products that failed to process
+
+### Example Statistics Output
+```
+Update Statistics for SH-11-9-26:
+  Total checked: 122
+  New products: 5
+  Price changes: 23
+  Availability changes: 12
+  Data updates: 8
+  Unchanged: 72
+  Failed: 2
+```
+
+### Query Recent Updates
+```sql
+-- Summary of recent updates across all categories
+SELECT 
+    category_code,
+    total_checked,
+    new_products,
+    price_changed,
+    availability_changed,
+    unchanged,
+    created_at
+FROM update_statistics
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+## Full Database Update Workflow
+
+**Complete workflow for updating all categories:**
+
+```bash
+# Step 1: Queue all 78 level2 categories
+python auto_update.py --queue-all --priority 5
+
+# Step 2: Check what was queued
+python auto_update.py --status
+
+# Step 3: Run worker to process (can take 6-12 hours for initial run)
+nohup python worker.py --resume-all --heartbeat-interval 30 --chunk-size 15 > worker_overnight.log 2>&1 &
+
+# Step 4: Monitor progress
+tail -f logs/worker_*.log
+
+# Step 5: View statistics after completion
+psql $DATABASE_URL -c "SELECT category_code, new_products, price_changed, unchanged FROM update_statistics ORDER BY created_at DESC LIMIT 10;"
+```
+
+## Daily Update Strategy
+
+**For daily updates (after initial full run):**
+
+```bash
+# Queue only categories not updated in last 1 day
+python auto_update.py --queue-all --skip-recent-days 1 --priority 5
+
+# Run worker (much faster - only updates changed products)
+python worker.py --resume-all --chunk-size 15
+```
+
+**Expected daily update time:** 1-2 hours (most products unchanged)
+
 ## Best Practices
 
 1. **Chunk Size**: Use 10-20 for balance between progress tracking and performance
@@ -170,3 +265,4 @@ Some products may fail with "Broken pipe" errors during processing. These are lo
 3. **Priority**: Reserve 8-10 for urgent jobs, use 5 for normal processing
 4. **Monitoring**: Check logs periodically during long runs
 5. **Recovery**: Use `--resume-all` to continue after interruptions
+6. **Daily Updates**: Use `--skip-recent-days 1` to avoid re-processing recent categories
