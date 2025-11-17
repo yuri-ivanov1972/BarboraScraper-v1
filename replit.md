@@ -17,12 +17,32 @@ Preferred approach: Simplified category-by-category analysis in read-only mode w
 5. Do not create placeholder lists or fictional category mappings
 
 ## System Architecture
+
+### Deployment Architecture (Dual Deployment)
+
+The system uses a **dual deployment strategy** to optimize costs and performance:
+
+| Component | Deployment Type | Purpose | Cost Model |
+|-----------|----------------|---------|------------|
+| **Streamlit UI** | Autoscale | User interface, on-demand access | Pay-per-use (scales to zero when idle) |
+| **Worker System** | Reserved VM | 24/7 background processing, daily auto-updates | Flat $20/month (0.5 vCPU / 2GB RAM) |
+
+**Why Dual Deployment:**
+- Worker runs continuously → Reserved VM provides flat-rate pricing ($20/month vs. $60-100+/month on Autoscale)
+- Streamlit UI only active during user sessions → Autoscale scales to zero, minimizing compute unit costs
+- Scheduled daily updates at 2am Latvia time avoid Rimi's midnight maintenance window
+- Total cost: ~$23-26/month (vs. $80-120+/month with single Autoscale deployment)
+
+**See:** `RESERVED_VM_SETUP.md` for complete migration guide and setup instructions.
+
+### Application Architecture
+
 The application features a modular Python architecture comprising:
-- **Frontend**: Streamlit for the user interface and job queueing.
-- **Worker System**: Standalone CLI worker (`worker.py`) for background category processing, independent of Streamlit sessions.
+- **Frontend**: Streamlit for the user interface and job queueing (runs on Autoscale).
+- **Worker System**: Standalone CLI worker (`worker.py`) for background category processing (runs on Reserved VM), independent of Streamlit sessions.
 - **Job Queue**: PostgreSQL-based job queue with worker registration, heartbeat monitoring, and stale job reassignment.
 - **Backend**: Python modules for web scraping, data processing, and database interactions.
-- **Database**: PostgreSQL for persistent storage of product, nutritional, and additive data.
+- **Database**: PostgreSQL for persistent storage of product, nutritional, and additive data (shared between both deployments).
 - **Parsing Engine**: Custom logic for E-number extraction and ingredient analysis.
 
 **Key Technical Implementations:**
