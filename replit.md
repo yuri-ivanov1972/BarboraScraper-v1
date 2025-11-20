@@ -79,18 +79,18 @@ The application features a modular Python architecture comprising:
       - Stale job reassignment when workers die (heartbeat timeout: 2x interval)
       - Job event logging for lifecycle tracking and debugging
       - Memory monitoring with RSS tracking per chunk
-      - **Optimal Configuration for Reserved VM**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 15`
-      - **Autoscale Workaround Configuration**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 3`
+      - **Optimal Configuration for Reserved VM**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 15 --max-workers 3`
+      - **Autoscale Workaround Configuration**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 3 --max-workers 1`
       
-    - **Autoscale Deployment Limitations** (temporary until Reserved VM available):
+    - **Autoscale Deployment Limitations** (temporary until Reserved VM migration):
       - **90-second wall-clock timeout** for non-HTTP background processes
       - Worker must complete chunks within this limit or process is killed by watchdog
-      - **Required settings**: `max_workers=1`, `chunk_size=3` (processes ~3 products/60s safely)
+      - **Required settings**: `--max-workers 1 --chunk-size 3` (processes ~3 products/60s safely)
       - Memory usage: ~58 MB per chunk (well under 1GB limit)
       - Large jobs (45+ products) may timeout and need multiple worker runs
       - Worker exits after queue completion, requires manual restart
       - **Root cause**: Autoscale designed for bursty request/response workloads, incompatible with long-running scraping
-      - **Solution**: Migrate to Reserved VM when available for 24/7 uninterrupted processing
+      - **Solution**: Migrate to Reserved VM for 24/7 uninterrupted processing (see below)
 
 ## External Dependencies
 - **Streamlit**: Web application framework.

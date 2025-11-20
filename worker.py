@@ -25,10 +25,11 @@ from progress_manager import ProgressManager
 class ProcessingWorker:
     """Standalone worker for processing categories from job queue"""
     
-    def __init__(self, worker_id: str, heartbeat_interval: int = 30, chunk_size: int = 15, log_dir: str = "logs"):
+    def __init__(self, worker_id: str, heartbeat_interval: int = 30, chunk_size: int = 15, max_workers: int = 3, log_dir: str = "logs"):
         self.worker_id = worker_id
         self.heartbeat_interval = heartbeat_interval
         self.chunk_size = chunk_size
+        self.max_workers = max_workers
         self.log_dir = log_dir
         self.running = True
         self.current_job_id = None
@@ -256,8 +257,8 @@ class ProcessingWorker:
                     current_memory = self._get_memory_usage_mb()
                     self.logger.info(f"💾 Memory after chunk: {current_memory:.1f} MB (Δ{current_memory - initial_memory:+.1f} MB)")
             
-            # Use max_workers=1 to avoid OOM kills on 1GB RAM environments
-            processor = BatchProcessor(status_callback, max_workers=1)
+            # Use configured max_workers (1 for Autoscale, 3 for Reserved VM)
+            processor = BatchProcessor(status_callback, max_workers=self.max_workers)
             
             # Process in chunks
             results = processor.process_sku_list_chunked(
@@ -456,6 +457,7 @@ def main():
     parser.add_argument('--resume-all', action='store_true', help='Resume all incomplete jobs')
     parser.add_argument('--priority', type=int, default=5, help='Job priority (1-10, higher = more urgent)')
     parser.add_argument('--chunk-size', type=int, default=15, help='Number of products per chunk')
+    parser.add_argument('--max-workers', type=int, default=3, help='Maximum concurrent workers (use 1 for Autoscale, 3 for Reserved VM)')
     parser.add_argument('--heartbeat-interval', type=int, default=30, help='Heartbeat interval in seconds')
     parser.add_argument('--log-dir', type=str, default='logs', help='Log directory')
     parser.add_argument('--worker-id', type=str, default=None, help='Worker ID (auto-generated if not provided)')
@@ -470,6 +472,7 @@ def main():
         worker_id=worker_id,
         heartbeat_interval=args.heartbeat_interval,
         chunk_size=args.chunk_size,
+        max_workers=args.max_workers,
         log_dir=args.log_dir
     )
     
