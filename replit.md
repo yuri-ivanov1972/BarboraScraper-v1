@@ -33,6 +33,8 @@ The system uses a **dual deployment strategy** to optimize costs and performance
 - Scheduled daily updates at 2am Latvia time avoid Rimi's midnight maintenance window
 - Total cost: ~$23-26/month (vs. $80-120+/month with single Autoscale deployment)
 
+**Current Status:** Reserved VM deployment unavailable - using Autoscale workaround (see limitations below)
+
 **See:** `RESERVED_VM_SETUP.md` for complete migration guide and setup instructions.
 
 ### Application Architecture
@@ -72,11 +74,23 @@ The application features a modular Python architecture comprising:
       - Background processing via `worker.py` CLI independent of Streamlit sessions
       - Job queue with priority scheduling, heartbeat monitoring, and fault tolerance
       - Prevents SessionInfo errors by decoupling processing from web session lifecycle
-      - Supports overnight processing of 9000+ products
+      - Supports overnight processing of 9000+ products (intended for Reserved VM)
       - Worker registration with hostname/PID tracking and graceful shutdown
       - Stale job reassignment when workers die (heartbeat timeout: 2x interval)
       - Job event logging for lifecycle tracking and debugging
-      - Usage: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 15`
+      - Memory monitoring with RSS tracking per chunk
+      - **Optimal Configuration for Reserved VM**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 15`
+      - **Autoscale Workaround Configuration**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 3`
+      
+    - **Autoscale Deployment Limitations** (temporary until Reserved VM available):
+      - **90-second wall-clock timeout** for non-HTTP background processes
+      - Worker must complete chunks within this limit or process is killed by watchdog
+      - **Required settings**: `max_workers=1`, `chunk_size=3` (processes ~3 products/60s safely)
+      - Memory usage: ~58 MB per chunk (well under 1GB limit)
+      - Large jobs (45+ products) may timeout and need multiple worker runs
+      - Worker exits after queue completion, requires manual restart
+      - **Root cause**: Autoscale designed for bursty request/response workloads, incompatible with long-running scraping
+      - **Solution**: Migrate to Reserved VM when available for 24/7 uninterrupted processing
 
 ## External Dependencies
 - **Streamlit**: Web application framework.
