@@ -66,7 +66,21 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None)
             print(f"\n[{idx}/{len(categories)}] {category_name} ({category_code})")
             print(f"  Current products in DB: {existing_products}")
             
-            # Check if we should skip this category
+            # Check if job already exists BEFORE scraping (optimization)
+            cur.execute("""
+                SELECT id, status
+                FROM category_processing_jobs
+                WHERE category_code = %s
+                AND status IN ('queued', 'in_progress')
+            """, (category_code,))
+            
+            existing_job = cur.fetchone()
+            if existing_job:
+                print(f"  ⏭️  Job already exists (status: {existing_job['status']})")
+                jobs_skipped += 1
+                continue
+            
+            # Check if we should skip this category (completed recently)
             if skip_recent_days:
                 cur.execute("""
                     SELECT MAX(last_updated) as last_update
