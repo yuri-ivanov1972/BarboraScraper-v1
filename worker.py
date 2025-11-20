@@ -11,6 +11,7 @@ import socket
 import time
 import logging
 import json
+import resource
 from datetime import datetime
 from typing import Optional, List
 import psycopg2
@@ -216,6 +217,11 @@ class ProcessingWorker:
             if conn:
                 conn.close()
     
+    def _get_memory_usage_mb(self) -> float:
+        """Get current memory usage in MB"""
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        return usage.ru_maxrss / 1024  # Convert KB to MB
+    
     def process_job(self, job: dict):
         """Process a single job"""
         job_id = job['id']
@@ -223,6 +229,10 @@ class ProcessingWorker:
         
         self.current_job_id = job_id
         self.log_event(job_id, 'job_started', f"Worker {self.worker_id} started processing {category_code}")
+        
+        # Log initial memory usage
+        initial_memory = self._get_memory_usage_mb()
+        self.logger.info(f"💾 Initial memory usage: {initial_memory:.1f} MB")
         
         try:
             self.logger.info(f"Processing job #{job_id}: {category_code}")
@@ -242,8 +252,12 @@ class ProcessingWorker:
                 # Update heartbeat periodically during processing
                 if "Chunk" in msg and "completed" in msg:
                     self.update_heartbeat('processing', job_id)
+                    # Log memory after each chunk
+                    current_memory = self._get_memory_usage_mb()
+                    self.logger.info(f"💾 Memory after chunk: {current_memory:.1f} MB (Δ{current_memory - initial_memory:+.1f} MB)")
             
-            processor = BatchProcessor(status_callback, max_workers=3)
+            # Use max_workers=1 to avoid OOM kills on 1GB RAM environments
+            processor = BatchProcessor(status_callback, max_workers=1)
             
             # Process in chunks
             results = processor.process_sku_list_chunked(
