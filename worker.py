@@ -59,8 +59,11 @@ class ProcessingWorker:
             self.db_url = os.environ.get('PROD_DATABASE_URL')
             if not self.db_url:
                 raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
+            # CRITICAL: Override DATABASE_URL so all downstream components use production
+            os.environ['DATABASE_URL'] = self.db_url
             self.logger.info("=" * 60)
             self.logger.info("🚀 PRODUCTION MODE: Using production database")
+            self.logger.info("   DATABASE_URL overridden for all components")
             self.logger.info("=" * 60)
         else:
             self.db_url = os.environ['DATABASE_URL']
