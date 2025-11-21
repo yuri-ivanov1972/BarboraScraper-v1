@@ -1,0 +1,43 @@
+============================================================
+              SIMPLIFIED MIGRATION: DEV → PROD              
+============================================================
+
+ℹ Optimized for migrating to an EMPTY production database
+
+ℹ Connecting to development database...
+✓ Connected to development database
+ℹ Connecting to production database...
+✓ Connected to production database
+
+============================================================
+                     STARTING MIGRATION                     
+============================================================
+
+ℹ Migrating table: normalized_categories
+ℹ   Source records: 394
+✗ Migration failed: insert or update on table "normalized_categories" violates foreign key constraint "normalized_categories_parent_category_id_fkey"
+DETAIL:  Key (parent_category_id)=(63) is not present in table "normalized_categories".
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/migrate_simple.py", line 242, in main
+    source_count, dest_count = migrate_table(dev_conn, prod_conn, table)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/migrate_simple.py", line 146, in migrate_table
+    execute_batch(prod_cursor, insert_query, batch)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1216, in execute_batch
+    cur.execute(b";".join(sqls))
+psycopg2.errors.ForeignKeyViolation: insert or update on table "normalized_categories" violates foreign key constraint "normalized_categories_parent_category_id_fkey"
+DETAIL:  Key (parent_category_id)=(63) is not present in table "normalized_categories".
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/migrate_simple.py", line 310, in <module>
+    main()
+  File "/home/runner/workspace/migrate_simple.py", line 242, in main
+    source_count, dest_count = migrate_table(dev_conn, prod_conn, table)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/migrate_simple.py", line 146, in migrate_table
+    execute_batch(prod_cursor, insert_query, batch)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1216, in execute_batch
+    cur.execute(b";".join(sqls))
+psycopg2.errors.ForeignKeyViolation: insert or update on table "normalized_categories" violates foreign key constraint "normalized_categories_parent_category_id_fkey"
+DETAIL:  Key (parent_category_id)=(63) is not present in table "normalized_categories".

@@ -131,8 +131,15 @@ def migrate_table(dev_conn: Any, prod_conn: Any, table_name: str,
     column_list = ', '.join(columns)
     placeholders = ', '.join(['%s'] * len(columns))
     
-    # Read all data from source
-    dev_cursor.execute(f"SELECT {column_list} FROM {table_name}")
+    # Special handling for normalized_categories (hierarchical data)
+    if table_name == 'normalized_categories':
+        print_info(f"  Using hierarchical ordering for normalized_categories")
+        # Order by level to ensure parents are inserted before children
+        dev_cursor.execute(f"SELECT {column_list} FROM {table_name} ORDER BY level, category_id")
+    else:
+        # Read all data from source
+        dev_cursor.execute(f"SELECT {column_list} FROM {table_name}")
+    
     all_rows = dev_cursor.fetchall()
     dev_cursor.close()
     
