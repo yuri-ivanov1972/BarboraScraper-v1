@@ -1,0 +1,44 @@
+============================================================
+              SIMPLIFIED MIGRATION: DEV → PROD              
+============================================================
+
+ℹ Optimized for migrating to an EMPTY production database
+
+ℹ Connecting to development database...
+✓ Connected to development database
+ℹ Connecting to production database...
+✓ Connected to production database
+
+============================================================
+                     STARTING MIGRATION                     
+============================================================
+
+ℹ Migrating table: normalized_categories
+ℹ   Source records: 394
+ℹ   Using hierarchical ordering for normalized_categories
+✗ Migration failed: duplicate key value violates unique constraint "normalized_categories_pkey"
+DETAIL:  Key (category_id)=(1) already exists.
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/migrate_simple.py", line 250, in main
+    source_count, dest_count = migrate_table(dev_conn, prod_conn, table)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/migrate_simple.py", line 154, in migrate_table
+    execute_batch(prod_cursor, insert_query, batch)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1216, in execute_batch
+    cur.execute(b";".join(sqls))
+psycopg2.errors.UniqueViolation: duplicate key value violates unique constraint "normalized_categories_pkey"
+DETAIL:  Key (category_id)=(1) already exists.
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/migrate_simple.py", line 318, in <module>
+    main()
+  File "/home/runner/workspace/migrate_simple.py", line 250, in main
+    source_count, dest_count = migrate_table(dev_conn, prod_conn, table)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/migrate_simple.py", line 154, in migrate_table
+    execute_batch(prod_cursor, insert_query, batch)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1216, in execute_batch
+    cur.execute(b";".join(sqls))
+psycopg2.errors.UniqueViolation: duplicate key value violates unique constraint "normalized_categories_pkey"
+DETAIL:  Key (category_id)=(1) already exists.

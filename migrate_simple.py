@@ -197,6 +197,29 @@ def reset_sequences(prod_conn: Any):
     prod_conn.commit()
     cursor.close()
 
+def clear_production_database(prod_conn: Any, tables: list):
+    """Delete all data from production tables in reverse order (to respect FK constraints)."""
+    print_header("CLEARING PRODUCTION DATABASE")
+    print_warning("This will DELETE all existing data from production tables!")
+    
+    cursor = prod_conn.cursor()
+    
+    # Delete in reverse order to respect foreign keys
+    for table in reversed(tables):
+        try:
+            cursor.execute(f"DELETE FROM {table}")
+            deleted = cursor.rowcount
+            if deleted > 0:
+                print_info(f"  Deleted {deleted} records from {table}")
+            prod_conn.commit()
+        except Exception as e:
+            print_warning(f"  Could not delete from {table}: {e}")
+            prod_conn.rollback()
+    
+    cursor.close()
+    print_success("Production database cleared!")
+    print()
+
 def main():
     """Main migration function."""
     print_header("SIMPLIFIED MIGRATION: DEV → PROD")
@@ -241,6 +264,9 @@ def main():
     
     # Track migration results
     results = {}
+    
+    # Clear existing data from production database first
+    clear_production_database(prod_conn, migration_order)
     
     print_header("STARTING MIGRATION")
     
