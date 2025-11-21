@@ -222,7 +222,7 @@ class IngredientDeduplicator:
             cursor.close()
             
             if result:
-                ingredient_id = result['id']
+                ingredient_id = result[0]
                 self._return_connection(conn)
                 return ingredient_id
             
