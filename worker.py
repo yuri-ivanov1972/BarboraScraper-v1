@@ -25,7 +25,7 @@ from progress_manager import ProgressManager
 class ProcessingWorker:
     """Standalone worker for processing categories from job queue"""
     
-    def __init__(self, worker_id: str, heartbeat_interval: int = 30, chunk_size: int = 15, max_workers: int = 3, log_dir: str = "logs"):
+    def __init__(self, worker_id: str, heartbeat_interval: int = 30, chunk_size: int = 15, max_workers: int = 3, log_dir: str = "logs", use_production: bool = False):
         self.worker_id = worker_id
         self.heartbeat_interval = heartbeat_interval
         self.chunk_size = chunk_size
@@ -33,6 +33,7 @@ class ProcessingWorker:
         self.log_dir = log_dir
         self.running = True
         self.current_job_id = None
+        self.use_production = use_production
         
         # Setup logging
         os.makedirs(log_dir, exist_ok=True)
@@ -53,8 +54,19 @@ class ProcessingWorker:
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         
-        # Database connection
-        self.db_url = os.environ['DATABASE_URL']
+        # Database connection - select based on environment
+        if use_production:
+            self.db_url = os.environ.get('PROD_DATABASE_URL')
+            if not self.db_url:
+                raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
+            self.logger.info("=" * 60)
+            self.logger.info("🚀 PRODUCTION MODE: Using production database")
+            self.logger.info("=" * 60)
+        else:
+            self.db_url = os.environ['DATABASE_URL']
+            self.logger.info("=" * 60)
+            self.logger.info("🔧 DEVELOPMENT MODE: Using development database")
+            self.logger.info("=" * 60)
         
     def _signal_handler(self, signum, frame):
         """Handle shutdown signals gracefully"""
@@ -461,6 +473,7 @@ def main():
     parser.add_argument('--heartbeat-interval', type=int, default=30, help='Heartbeat interval in seconds')
     parser.add_argument('--log-dir', type=str, default='logs', help='Log directory')
     parser.add_argument('--worker-id', type=str, default=None, help='Worker ID (auto-generated if not provided)')
+    parser.add_argument('--production', action='store_true', help='Use production database (PROD_DATABASE_URL) instead of development')
     
     args = parser.parse_args()
     
@@ -473,7 +486,8 @@ def main():
         heartbeat_interval=args.heartbeat_interval,
         chunk_size=args.chunk_size,
         max_workers=args.max_workers,
-        log_dir=args.log_dir
+        log_dir=args.log_dir,
+        use_production=args.production
     )
     
     # Determine mode and categories
