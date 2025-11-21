@@ -27,7 +27,7 @@ Tables migrated (in correct dependency order):
 import os
 import sys
 import psycopg2
-from psycopg2.extras import execute_batch
+from psycopg2.extras import execute_batch, Json
 from typing import Tuple, Any
 import time
 
@@ -119,16 +119,18 @@ def migrate_table(dev_conn: Any, prod_conn: Any, table_name: str,
         print_warning(f"  No records to migrate from {table_name}")
         return 0, 0
     
-    # Get column names (excluding generated columns which can't be inserted)
+    # Get column names and types (excluding generated columns which can't be inserted)
     dev_cursor = dev_conn.cursor()
     dev_cursor.execute(f"""
-        SELECT column_name 
+        SELECT column_name, data_type
         FROM information_schema.columns 
         WHERE table_name = '{table_name}' 
           AND (is_generated = 'NEVER' OR is_generated IS NULL)
         ORDER BY ordinal_position
     """)
-    columns = [row[0] for row in dev_cursor.fetchall()]
+    column_info = dev_cursor.fetchall()
+    columns = [row[0] for row in column_info]
+    column_types = {row[0]: row[1] for row in column_info}
     column_list = ', '.join(columns)
     placeholders = ', '.join(['%s'] * len(columns))
     
@@ -143,6 +145,19 @@ def migrate_table(dev_conn: Any, prod_conn: Any, table_name: str,
     
     all_rows = dev_cursor.fetchall()
     dev_cursor.close()
+    
+    # Convert JSONB columns (dict -> Json object)
+    jsonb_columns = [i for i, col in enumerate(columns) if column_types[col] == 'jsonb']
+    if jsonb_columns:
+        print_info(f"  Converting JSONB columns: {', '.join([columns[i] for i in jsonb_columns])}")
+        converted_rows = []
+        for row in all_rows:
+            row_list = list(row)
+            for idx in jsonb_columns:
+                if row_list[idx] is not None and isinstance(row_list[idx], dict):
+                    row_list[idx] = Json(row_list[idx])
+            converted_rows.append(tuple(row_list))
+        all_rows = converted_rows
     
     # Insert in batches to destination
     prod_cursor = prod_conn.cursor()

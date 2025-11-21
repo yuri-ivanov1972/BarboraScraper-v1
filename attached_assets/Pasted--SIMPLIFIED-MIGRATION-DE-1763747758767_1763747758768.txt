@@ -1,0 +1,99 @@
+============================================================
+              SIMPLIFIED MIGRATION: DEV → PROD              
+============================================================
+
+ℹ Optimized for migrating to an EMPTY production database
+
+ℹ Connecting to development database...
+✓ Connected to development database
+ℹ Connecting to production database...
+✓ Connected to production database
+
+============================================================
+                   CHECKING EXISTING DATA                   
+============================================================
+
+ℹ   normalized_categories: 394 records (will skip)
+ℹ   ingredient_analysis: 2828 records (will skip)
+ℹ   products: empty (will migrate)
+ℹ   category_processing_jobs: empty (will migrate)
+ℹ   processing_workers: empty (will migrate)
+ℹ   nutritionfacts: empty (will migrate)
+ℹ   productphotos: empty (will migrate)
+ℹ   product_price_history: empty (will migrate)
+ℹ   job_events: empty (will migrate)
+ℹ   product_processing_log: empty (will migrate)
+ℹ   update_statistics: empty (will migrate)
+ℹ   ingredient_product_mapping: empty (will migrate)
+
+
+============================================================
+                     STARTING MIGRATION                     
+============================================================
+
+⚠ Skipping normalized_categories - already has 394 records
+
+⚠ Skipping ingredient_analysis - already has 2828 records
+
+ℹ Migrating table: products
+ℹ   Source records: 704
+ℹ   Inserted 704/704 records...
+✓   ✓ Migration complete: 704 records
+
+ℹ Migrating table: category_processing_jobs
+ℹ   Source records: 80
+ℹ   Inserted 80/80 records...
+✓   ✓ Migration complete: 80 records
+
+ℹ Migrating table: processing_workers
+ℹ   Source records: 12
+ℹ   Inserted 12/12 records...
+✓   ✓ Migration complete: 12 records
+
+ℹ Migrating table: nutritionfacts
+ℹ   Source records: 703
+ℹ   Inserted 703/703 records...
+✓   ✓ Migration complete: 703 records
+
+ℹ Migrating table: productphotos
+ℹ   Source records: 702
+ℹ   Inserted 702/702 records...
+✓   ✓ Migration complete: 702 records
+
+ℹ Migrating table: product_price_history
+ℹ   Source records: 1378
+ℹ   Inserted 1000/1378 records...
+ℹ   Inserted 1378/1378 records...
+✓   ✓ Migration complete: 1378 records
+
+ℹ Migrating table: job_events
+ℹ   Source records: 96
+✗ Migration failed: can't adapt type 'dict'
+Traceback (most recent call last):
+  File "/home/runner/workspace/migrate_simple.py", line 280, in main
+    source_count, dest_count = migrate_table(dev_conn, prod_conn, table)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/migrate_simple.py", line 154, in migrate_table
+    execute_batch(prod_cursor, insert_query, batch)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1215, in execute_batch
+    sqls = [cur.mogrify(sql, args) for args in page]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1215, in <listcomp>
+    sqls = [cur.mogrify(sql, args) for args in page]
+            ^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.ProgrammingError: can't adapt type 'dict'
+Traceback (most recent call last):
+  File "/home/runner/workspace/migrate_simple.py", line 359, in <module>
+    main()
+  File "/home/runner/workspace/migrate_simple.py", line 280, in main
+    source_count, dest_count = migrate_table(dev_conn, prod_conn, table)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/migrate_simple.py", line 154, in migrate_table
+    execute_batch(prod_cursor, insert_query, batch)
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1215, in execute_batch
+    sqls = [cur.mogrify(sql, args) for args in page]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/psycopg2/extras.py", line 1215, in <listcomp>
+    sqls = [cur.mogrify(sql, args) for args in page]
+            ^^^^^^^^^^^^^^^^^^^^^^
+psycopg2.ProgrammingError: can't adapt type 'dict'
