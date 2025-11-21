@@ -83,7 +83,7 @@ class IngredientDeduplicator:
         conn = None
         try:
             conn = self._get_connection()
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             
             # Get all ingredients
             cursor.execute("SELECT id, ingredient, frequency FROM ingredient_analysis ORDER BY ingredient")
@@ -128,7 +128,7 @@ class IngredientDeduplicator:
             # Disable autocommit for transaction handling
             conn.autocommit = False
             
-            cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             
             primary = group['primary']
             duplicates = group['duplicates']
@@ -211,7 +211,7 @@ class IngredientDeduplicator:
             normalized_input = self._normalize_for_comparison(ingredient_name)
             
             conn = self._get_connection()
-            cursor = conn.cursor()
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
             cursor.execute("""
                 SELECT id, ingredient, frequency 
                 FROM ingredient_analysis 
@@ -222,7 +222,7 @@ class IngredientDeduplicator:
             cursor.close()
             
             if result:
-                ingredient_id = result[0]
+                ingredient_id = result['id']
                 self._return_connection(conn)
                 return ingredient_id
             
