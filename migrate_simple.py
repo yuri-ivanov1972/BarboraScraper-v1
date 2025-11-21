@@ -197,28 +197,21 @@ def reset_sequences(prod_conn: Any):
     prod_conn.commit()
     cursor.close()
 
-def clear_production_database(prod_conn: Any, tables: list):
-    """Delete all data from production tables in reverse order (to respect FK constraints)."""
-    print_header("CLEARING PRODUCTION DATABASE")
-    print_warning("This will DELETE all existing data from production tables!")
+def check_existing_data(prod_conn: Any, tables: list):
+    """Check which tables already have data in production."""
+    print_header("CHECKING EXISTING DATA")
     
-    cursor = prod_conn.cursor()
+    existing = {}
+    for table in tables:
+        count = count_records(prod_conn, table)
+        existing[table] = count
+        if count > 0:
+            print_info(f"  {table}: {count} records (will skip)")
+        else:
+            print_info(f"  {table}: empty (will migrate)")
     
-    # Delete in reverse order to respect foreign keys
-    for table in reversed(tables):
-        try:
-            cursor.execute(f"DELETE FROM {table}")
-            deleted = cursor.rowcount
-            if deleted > 0:
-                print_info(f"  Deleted {deleted} records from {table}")
-            prod_conn.commit()
-        except Exception as e:
-            print_warning(f"  Could not delete from {table}: {e}")
-            prod_conn.rollback()
-    
-    cursor.close()
-    print_success("Production database cleared!")
     print()
+    return existing
 
 def main():
     """Main migration function."""
@@ -265,19 +258,31 @@ def main():
     # Track migration results
     results = {}
     
-    # Clear existing data from production database first
-    clear_production_database(prod_conn, migration_order)
+    # Check which tables already have data (from previous failed attempts)
+    existing_data = check_existing_data(prod_conn, migration_order)
     
     print_header("STARTING MIGRATION")
     
     try:
-        # Migrate each table (no need to disable FK checks - we respect dependencies!)
+        # Migrate each table (skip tables that already have data)
         for table in migration_order:
+            if existing_data[table] > 0:
+                print_warning(f"Skipping {table} - already has {existing_data[table]} records")
+                results[table] = {
+                    'source': existing_data[table],
+                    'destination': existing_data[table],
+                    'success': True,
+                    'skipped': True
+                }
+                print()
+                continue
+            
             source_count, dest_count = migrate_table(dev_conn, prod_conn, table)
             results[table] = {
                 'source': source_count,
                 'destination': dest_count,
-                'success': source_count == dest_count
+                'success': source_count == dest_count,
+                'skipped': False
             }
             print()  # Blank line for readability
         
@@ -315,20 +320,30 @@ def main():
     
     total_records = 0
     failed_tables = []
+    skipped_tables = []
     
     for table, result in results.items():
         total_records += result['destination']
-        status = "✓" if result['success'] else "✗"
-        color = Colors.OKGREEN if result['success'] else Colors.FAIL
+        
+        if result.get('skipped', False):
+            status = "⊘"  # Skipped symbol
+            color = Colors.WARNING
+            skipped_tables.append(table)
+        elif result['success']:
+            status = "✓"
+            color = Colors.OKGREEN
+        else:
+            status = "✗"
+            color = Colors.FAIL
+            failed_tables.append(table)
         
         print(f"{color}{status} {table:30s} {result['source']:>8d} → {result['destination']:>8d}{Colors.ENDC}")
-        
-        if not result['success']:
-            failed_tables.append(table)
     
     print()
-    print_info(f"Total records migrated: {total_records}")
-    print_info(f"Total tables migrated: {len(results)}")
+    if skipped_tables:
+        print_warning(f"Skipped tables (already had data): {', '.join(skipped_tables)}")
+    print_info(f"Total records in production: {total_records}")
+    print_info(f"Total tables processed: {len(results)}")
     
     elapsed = time.time() - start_time
     print_info(f"Migration completed in {elapsed:.2f} seconds")
