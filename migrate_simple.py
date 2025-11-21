@@ -119,12 +119,13 @@ def migrate_table(dev_conn: Any, prod_conn: Any, table_name: str,
         print_warning(f"  No records to migrate from {table_name}")
         return 0, 0
     
-    # Get column names
+    # Get column names (excluding generated columns which can't be inserted)
     dev_cursor = dev_conn.cursor()
     dev_cursor.execute(f"""
         SELECT column_name 
         FROM information_schema.columns 
         WHERE table_name = '{table_name}' 
+          AND (is_generated = 'NEVER' OR is_generated IS NULL)
         ORDER BY ordinal_position
     """)
     columns = [row[0] for row in dev_cursor.fetchall()]
