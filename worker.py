@@ -477,6 +477,7 @@ def main():
     parser.add_argument('--log-dir', type=str, default='logs', help='Log directory')
     parser.add_argument('--worker-id', type=str, default=None, help='Worker ID (auto-generated if not provided)')
     parser.add_argument('--production', action='store_true', help='Use production database (PROD_DATABASE_URL) instead of development')
+    parser.add_argument('--daemon', action='store_true', help='Run in daemon mode (keep running, wait for new jobs instead of exiting when queue is empty)')
     
     args = parser.parse_args()
     
@@ -494,7 +495,10 @@ def main():
     )
     
     # Determine mode and categories
-    if args.resume_all:
+    if args.daemon:
+        # Daemon mode - keep running and wait for new jobs
+        worker.run(mode='continuous')
+    elif args.resume_all:
         worker.run(mode='resume-all')
     elif args.category or args.categories:
         categories = []
@@ -504,7 +508,7 @@ def main():
             categories.extend(args.categories.split(','))
         worker.run(mode='single', categories=categories)
     else:
-        # Continuous mode (for daemon/service)
+        # Default to continuous mode
         worker.run(mode='continuous')
 
 

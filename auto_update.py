@@ -8,21 +8,35 @@ import sys
 import argparse
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from datetime import datetime, timedelta
 from core_parser import RimiParser
+from update_report import UpdateReport
 
 
-def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None):
+def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None, use_production: bool = False):
     """
     Queue all level2 categories for processing
     
     Args:
         priority: Job priority (1-10, higher = more urgent)
         skip_recent_days: Skip categories updated within this many days (None = don't skip)
+        use_production: Whether to use production database (default: False)
     
     Returns:
         Number of jobs created
     """
-    db_url = os.environ['DATABASE_URL']
+    if use_production:
+        db_url = os.environ.get('PROD_DATABASE_URL')
+        if not db_url:
+            raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
+        print("=" * 60)
+        print("🚀 PRODUCTION MODE: Queueing jobs to production database")
+        print("=" * 60)
+    else:
+        db_url = os.environ['DATABASE_URL']
+        print("=" * 60)
+        print("🔧 DEVELOPMENT MODE: Queueing jobs to development database")
+        print("=" * 60)
     conn = None
     jobs_created = 0
     jobs_skipped = 0
@@ -57,7 +71,7 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None)
         
         parser = RimiParser(parser_callback)
         
-        # Process each category
+        # Process each category - isolated transactions for reliability
         for idx, category in enumerate(categories, 1):
             category_code = category['rimi_category_code']
             category_name = category['name_lv']
@@ -66,43 +80,48 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None)
             print(f"\n[{idx}/{len(categories)}] {category_name} ({category_code})")
             print(f"  Current products in DB: {existing_products}")
             
-            # Check if job already exists BEFORE scraping (optimization)
-            cur.execute("""
-                SELECT id, status
-                FROM category_processing_jobs
-                WHERE category_code = %s
-                AND status IN ('queued', 'in_progress')
-            """, (category_code,))
-            
-            existing_job = cur.fetchone()
-            if existing_job:
-                print(f"  ⏭️  Job already exists (status: {existing_job['status']})")
-                jobs_skipped += 1
-                continue
-            
-            # Check if we should skip this category (completed recently)
-            if skip_recent_days:
+            # Each category is processed in its own try-catch block to ensure
+            # failures in one category don't abort remaining categories
+            try:
+                # Check if job already exists BEFORE scraping (optimization)
                 cur.execute("""
-                    SELECT MAX(last_updated) as last_update
+                    SELECT id, status
                     FROM category_processing_jobs
                     WHERE category_code = %s
-                    AND status = 'completed'
-                    AND last_updated > CURRENT_TIMESTAMP - (%s * INTERVAL '1 day')
-                """, (category_code, skip_recent_days))
+                    AND status IN ('queued', 'in_progress')
+                """, (category_code,))
                 
-                recent_update = cur.fetchone()
-                if recent_update and recent_update['last_update']:
-                    print(f"  ⏭️  Skipping (updated {recent_update['last_update']})")
+                existing_job = cur.fetchone()
+                if existing_job:
+                    print(f"  ⏭️  Job already exists (status: {existing_job['status']})")
                     jobs_skipped += 1
+                    conn.commit()  # Commit read to release locks
                     continue
-            
-            # Collect SKUs from category
-            print(f"  📥 Collecting products from Rimi...")
-            try:
+                
+                # Check if we should skip this category (completed recently)
+                if skip_recent_days:
+                    cur.execute("""
+                        SELECT MAX(last_updated) as last_update
+                        FROM category_processing_jobs
+                        WHERE category_code = %s
+                        AND status = 'completed'
+                        AND last_updated > CURRENT_TIMESTAMP - (%s * INTERVAL '1 day')
+                    """, (category_code, skip_recent_days))
+                    
+                    recent_update = cur.fetchone()
+                    if recent_update and recent_update['last_update']:
+                        print(f"  ⏭️  Skipping (updated {recent_update['last_update']})")
+                        jobs_skipped += 1
+                        conn.commit()  # Commit read to release locks
+                        continue
+                
+                # Collect SKUs from category (network operation - can fail)
+                print(f"  📥 Collecting products from Rimi...")
                 all_skus = parser.collect_category_skus(category_code)
                 
                 if not all_skus:
                     print(f"  ⚠️  No products found on Rimi website")
+                    conn.commit()  # Commit to ensure transaction is closed
                     continue
                 
                 print(f"  ✓ Found {len(all_skus)} products on Rimi")
@@ -131,6 +150,8 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None)
                         VALUES (%s, 'job_created', %s)
                     """, (job_id, f"Auto-queued {category_name} with {len(all_skus)} products (priority: {priority})"))
                     
+                    # CRITICAL: Commit after EACH successful category
+                    # This ensures one category failure doesn't abort all remaining categories
                     conn.commit()
                     
                     jobs_created += 1
@@ -142,10 +163,15 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None)
                         print(f"  ⚠️  Job already queued for this category")
                         jobs_skipped += 1
                     else:
-                        raise
+                        print(f"  ❌ Database integrity error: {e}")
+                        # Rollback and continue to next category
+                        conn.rollback()
                 
             except Exception as e:
-                print(f"  ❌ Error collecting SKUs: {e}")
+                # Category-level exception handler - logs error and continues
+                print(f"  ❌ Error processing category: {e}")
+                conn.rollback()  # Rollback failed category transaction
+                # Continue to next category instead of aborting entire queue run
                 continue
         
         # Print summary
@@ -172,9 +198,16 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None)
             conn.close()
 
 
-def show_queue_status():
+def show_queue_status(use_production: bool = False):
     """Show current job queue status"""
-    db_url = os.environ['DATABASE_URL']
+    if use_production:
+        db_url = os.environ.get('PROD_DATABASE_URL')
+        if not db_url:
+            raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
+        print("🚀 PRODUCTION MODE: Showing production queue status")
+    else:
+        db_url = os.environ['DATABASE_URL']
+        print("🔧 DEVELOPMENT MODE: Showing development queue status")
     conn = None
     
     try:
@@ -208,17 +241,77 @@ def show_queue_status():
             conn.close()
 
 
+def generate_update_report(hours: int = 24, use_production: bool = False, save: bool = True):
+    """
+    Generate and display update report for recent period
+    
+    Args:
+        hours: Report time window in hours
+        use_production: Use production database
+        save: Save report to database
+    """
+    # Select database
+    db_url = None
+    if use_production:
+        db_url = os.environ.get('PROD_DATABASE_URL')
+        if not db_url:
+            raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
+    else:
+        db_url = os.environ['DATABASE_URL']
+    
+    # Generate report
+    reporter = UpdateReport(db_url)
+    end_time = datetime.now()
+    start_time = end_time - timedelta(hours=hours)
+    
+    print(f"\n🔍 Generating report for last {hours} hours...")
+    report = reporter.generate_update_report(start_time, end_time)
+    
+    if report:
+        reporter.print_report(report)
+        
+        if save:
+            log_id = reporter.save_report_to_database(report, update_type='daily' if hours >= 20 else 'manual')
+            if not log_id:
+                print("⚠️  Warning: Failed to save report to database")
+                sys.exit(1)
+        
+        # Exit non-zero if there are stuck jobs or failures
+        if report.get('jobs_stuck', 0) > 0:
+            print(f"\n⚠️  WARNING: {report['jobs_stuck']} stuck jobs detected!")
+            sys.exit(1)
+        
+        if report.get('jobs_failed', 0) > 0:
+            print(f"\n⚠️  WARNING: {report['jobs_failed']} failed jobs detected!")
+            sys.exit(1)
+        
+        sys.exit(0)
+    else:
+        print("❌ Failed to generate report")
+        sys.exit(1)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Auto-update script for category processing')
     parser.add_argument('--queue-all', action='store_true', help='Queue all level2 categories')
     parser.add_argument('--priority', type=int, default=5, help='Job priority (1-10, default: 5)')
     parser.add_argument('--skip-recent-days', type=int, default=None, help='Skip categories updated within N days')
     parser.add_argument('--status', action='store_true', help='Show queue status')
+    parser.add_argument('--report', action='store_true', help='Generate update report')
+    parser.add_argument('--report-hours', type=int, default=24, help='Report time window in hours (default: 24)')
+    parser.add_argument('--no-save', action='store_true', help='Do not save report to database')
+    parser.add_argument('--production', action='store_true', help='Use production database instead of development')
     
     args = parser.parse_args()
     
     if args.status:
-        show_queue_status()
+        show_queue_status(use_production=args.production)
+    elif args.report:
+        generate_update_report(
+            hours=args.report_hours,
+            use_production=args.production,
+            save=not args.no_save
+        )
     elif args.queue_all:
         print("🚀 Auto-Update: Queueing all level2 categories")
         print(f"   Priority: {args.priority}")
@@ -228,7 +321,8 @@ def main():
         
         jobs_created = queue_all_level2_categories(
             priority=args.priority,
-            skip_recent_days=args.skip_recent_days
+            skip_recent_days=args.skip_recent_days,
+            use_production=args.production
         )
         
         if jobs_created == 0:
