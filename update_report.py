@@ -77,16 +77,18 @@ class UpdateReport:
             
             # Detect stuck jobs with robust criteria to avoid false positives
             # 
-            # Workers now send heartbeats every 3 products (~3 minutes typical)
+            # Workers send heartbeats every 30 seconds (throttled to prevent excessive DB writes)
+            # BatchProcessor calls heartbeat after each product, but worker throttles to 30s interval
+            # 
             # A job is truly stuck if ALL of the following are true:
             # 1. Status is 'in_progress' for > 15 minutes (grace period for new jobs)
-            # 2. Worker heartbeat is stale (> 15 minutes with mid-chunk heartbeats)
-            # 3. Worker is completely dead (> 30 minutes no heartbeat = 10x heartbeat interval)
+            # 2. Worker heartbeat is stale (> 15 minutes with 30s heartbeat interval)
+            # 3. Worker is completely dead (> 30 minutes no heartbeat = 60x heartbeat interval)
             #
-            # With mid-chunk heartbeats every 3 products:
-            # - Healthy workers: heartbeat every ~3 minutes
-            # - Slow processing (2 min/product): heartbeat every ~6 minutes
-            # - 30-minute threshold = 5-10x normal heartbeat interval = truly stuck
+            # With 30-second heartbeats:
+            # - Healthy workers: heartbeat every 30 seconds (regardless of product speed)
+            # - 15-minute threshold = 30 heartbeats missed = clearly stuck
+            # - 30-minute threshold = 60 heartbeats missed = completely dead
             cur.execute("""
                 WITH job_progress AS (
                     SELECT 

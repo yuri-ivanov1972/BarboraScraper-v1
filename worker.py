@@ -31,6 +31,9 @@ class ProcessingWorker:
         self.chunk_size = chunk_size
         self.max_workers = max_workers
         self.log_dir = log_dir
+        self.last_heartbeat_time = 0  # Track last heartbeat timestamp for throttling
+        self.last_heartbeat_status = None  # Track last status to detect changes
+        self.last_heartbeat_job_id = None  # Track last job_id to detect changes
         self.running = True
         self.current_job_id = None
         self.use_production = use_production
@@ -115,8 +118,33 @@ class ProcessingWorker:
             if conn:
                 conn.close()
     
-    def update_heartbeat(self, status: str = 'processing', job_id: Optional[int] = None):
-        """Update worker heartbeat and status"""
+    def update_heartbeat(self, status: str = 'processing', job_id: Optional[int] = None, force: bool = False):
+        """
+        Update worker heartbeat and status with intelligent throttling
+        
+        Throttles mid-chunk heartbeats to 30s interval to prevent excessive DB writes,
+        but always forces updates when status or job_id changes to maintain accuracy.
+        
+        Args:
+            status: Worker status ('processing', 'idle', etc.)
+            job_id: Current job ID being processed
+            force: If True, bypass throttling and update immediately
+        """
+        import time
+        
+        # Always force update if status or job_id changed (critical state transitions)
+        status_changed = status != self.last_heartbeat_status
+        job_changed = job_id != self.last_heartbeat_job_id
+        
+        if status_changed or job_changed:
+            force = True  # Force update on state change
+        
+        # Throttle heartbeats to prevent excessive database writes
+        # Only update if heartbeat_interval has elapsed since last update (unless forced)
+        current_time = time.time()
+        if not force and (current_time - self.last_heartbeat_time) < self.heartbeat_interval:
+            return  # Skip update - too soon since last heartbeat
+        
         conn = None
         try:
             conn = self._get_db_connection()
@@ -131,6 +159,11 @@ class ProcessingWorker:
             """, (status, job_id, self.worker_id))
             
             conn.commit()
+            
+            # Update tracking variables after successful write
+            self.last_heartbeat_time = current_time
+            self.last_heartbeat_status = status
+            self.last_heartbeat_job_id = job_id
             
         except Exception as e:
             self.logger.error(f"Failed to update heartbeat: {e}")

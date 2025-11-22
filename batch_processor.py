@@ -22,7 +22,6 @@ class BatchProcessor:
         self._thread_coordinators = {}  # {thread_id: {"regular": coord, "enhanced": coord}}
         self._all_coordinators = []  # Track all coordinators for cleanup
         self._lock = threading.Lock()
-        self._products_since_heartbeat = 0  # Track products processed since last heartbeat
         
     def _get_coordinator(self, enhanced: bool = False) -> UpdateCoordinator:
         """Get or create a coordinator for the current thread - reuse per thread and type"""
@@ -184,14 +183,12 @@ class BatchProcessor:
                         results['errors'].append(result['error'])
                         self.status_callback(f"✗ {result['sku']} failed: {result['error']}")
                     
-                    # Send heartbeat every 3 products to prevent long gaps during chunk processing
-                    self._products_since_heartbeat += 1
-                    if self._products_since_heartbeat >= 3:
-                        try:
-                            self.heartbeat_callback()
-                            self._products_since_heartbeat = 0
-                        except Exception as hb_error:
-                            print(f"⚠️ Heartbeat callback error: {hb_error}")
+                    # Send heartbeat after each product to prevent long gaps
+                    # This ensures maximum granularity and eliminates stuck job false positives
+                    try:
+                        self.heartbeat_callback()
+                    except Exception as hb_error:
+                        print(f"⚠️ Heartbeat callback error: {hb_error}")
                         
                 except Exception as e:
                     results['failed'] += 1
