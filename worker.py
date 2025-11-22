@@ -132,18 +132,23 @@ class ProcessingWorker:
         """
         import time
         
-        # Always force update if status or job_id changed (critical state transitions)
-        status_changed = status != self.last_heartbeat_status
-        job_changed = job_id != self.last_heartbeat_job_id
+        current_time = time.time()
         
-        if status_changed or job_changed:
-            force = True  # Force update on state change
+        # Check if this is a forced update (explicit parameter or state change)
+        if not force:
+            # Auto-detect critical state transitions that should force an update
+            status_changed = status != self.last_heartbeat_status
+            job_changed = job_id != self.last_heartbeat_job_id
+            
+            if status_changed or job_changed:
+                force = True  # Force update on state change
         
         # Throttle heartbeats to prevent excessive database writes
-        # Only update if heartbeat_interval has elapsed since last update (unless forced)
-        current_time = time.time()
-        if not force and (current_time - self.last_heartbeat_time) < self.heartbeat_interval:
-            return  # Skip update - too soon since last heartbeat
+        # Skip update only if not forced AND throttle interval hasn't elapsed
+        if not force:
+            time_since_last = current_time - self.last_heartbeat_time
+            if time_since_last < self.heartbeat_interval:
+                return  # Skip update - throttled (not forced, too soon since last heartbeat)
         
         conn = None
         try:
