@@ -14,13 +14,15 @@ from smart_updater import SmartUpdater, UpdateStatisticsCollector
 class BatchProcessor:
     """Handles batch processing of products with robust connection management"""
     
-    def __init__(self, status_callback=None, max_workers=3):
+    def __init__(self, status_callback=None, max_workers=3, heartbeat_callback=None):
         self.status_callback = status_callback or (lambda x: None)
+        self.heartbeat_callback = heartbeat_callback or (lambda: None)
         self.max_workers = max_workers
         # Thread-local storage for coordinators by type to enable reuse per thread
         self._thread_coordinators = {}  # {thread_id: {"regular": coord, "enhanced": coord}}
         self._all_coordinators = []  # Track all coordinators for cleanup
         self._lock = threading.Lock()
+        self._products_since_heartbeat = 0  # Track products processed since last heartbeat
         
     def _get_coordinator(self, enhanced: bool = False) -> UpdateCoordinator:
         """Get or create a coordinator for the current thread - reuse per thread and type"""
@@ -181,6 +183,15 @@ class BatchProcessor:
                         results['failed'] += 1
                         results['errors'].append(result['error'])
                         self.status_callback(f"✗ {result['sku']} failed: {result['error']}")
+                    
+                    # Send heartbeat every 3 products to prevent long gaps during chunk processing
+                    self._products_since_heartbeat += 1
+                    if self._products_since_heartbeat >= 3:
+                        try:
+                            self.heartbeat_callback()
+                            self._products_since_heartbeat = 0
+                        except Exception as hb_error:
+                            print(f"⚠️ Heartbeat callback error: {hb_error}")
                         
                 except Exception as e:
                     results['failed'] += 1

@@ -76,12 +76,17 @@ class UpdateReport:
                 report['categories_processed'] = job_stats['categories'] or 0
             
             # Detect stuck jobs with robust criteria to avoid false positives
+            # 
+            # Workers now send heartbeats every 3 products (~3 minutes typical)
             # A job is truly stuck if ALL of the following are true:
-            # 1. Status is 'in_progress' for > 30 minutes (grace period for new jobs)
-            # 2. Worker heartbeat is stale (> 30 minutes, allowing for long chunks)
-            # 3. No progress made (processed_count unchanged for > 30 minutes)
+            # 1. Status is 'in_progress' for > 15 minutes (grace period for new jobs)
+            # 2. Worker heartbeat is stale (> 15 minutes with mid-chunk heartbeats)
+            # 3. Worker is completely dead (> 30 minutes no heartbeat = 10x heartbeat interval)
             #
-            # This prevents false positives when workers are actively processing large chunks
+            # With mid-chunk heartbeats every 3 products:
+            # - Healthy workers: heartbeat every ~3 minutes
+            # - Slow processing (2 min/product): heartbeat every ~6 minutes
+            # - 30-minute threshold = 5-10x normal heartbeat interval = truly stuck
             cur.execute("""
                 WITH job_progress AS (
                     SELECT 
@@ -109,14 +114,14 @@ class UpdateReport:
                     processed_count
                 FROM job_progress
                 WHERE 
-                    -- Job has been running for at least 30 minutes (grace period)
-                    minutes_in_progress > 30
-                    -- AND heartbeat is stale (> 30 minutes for long chunks)
-                    AND minutes_since_heartbeat > 30
-                    -- AND either no worker assigned OR worker is dead
+                    -- Job has been running for at least 15 minutes (grace period)
+                    minutes_in_progress > 15
+                    -- AND heartbeat is stale (> 15 minutes with mid-chunk heartbeats)
+                    AND minutes_since_heartbeat > 15
+                    -- AND either no worker assigned OR worker is truly dead
                     AND (
                         worker_id IS NULL
-                        OR minutes_since_heartbeat > 60  -- Worker heartbeat dead for >1 hour
+                        OR minutes_since_heartbeat > 30  -- Worker heartbeat dead for >30 min (10x heartbeat interval)
                     )
                 ORDER BY minutes_in_progress DESC
             """)

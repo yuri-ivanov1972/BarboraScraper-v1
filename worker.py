@@ -272,8 +272,12 @@ class ProcessingWorker:
                     current_memory = self._get_memory_usage_mb()
                     self.logger.info(f"💾 Memory after chunk: {current_memory:.1f} MB (Δ{current_memory - initial_memory:+.1f} MB)")
             
+            # Heartbeat callback for mid-chunk updates (every 3 products)
+            def heartbeat_callback():
+                self.update_heartbeat('processing', job_id)
+            
             # Use configured max_workers (1 for Autoscale, 3 for Reserved VM)
-            processor = BatchProcessor(status_callback, max_workers=self.max_workers)
+            processor = BatchProcessor(status_callback, max_workers=self.max_workers, heartbeat_callback=heartbeat_callback)
             
             # Process in chunks
             results = processor.process_sku_list_chunked(
