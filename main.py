@@ -6,6 +6,7 @@ Two-section interface: Category Processing + Product View
 import streamlit as st
 from product_view_db import ProductViewDatabase
 import time
+import os
 
 st.set_page_config(
     page_title="Rimi Product Scraper",
