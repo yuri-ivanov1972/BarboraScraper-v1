@@ -192,13 +192,16 @@ def section_category_processing():
                     cur = conn.cursor()
                     
                     try:
+                        # Determine update mode based on Force Update checkbox
+                        update_mode = 'full' if force_update else 'incremental'
+                        
                         # Create job
                         cur.execute("""
                             INSERT INTO category_processing_jobs 
-                            (category_code, category_id, total_products, processed_count, status, priority, requested_by)
-                            VALUES (%s, NULL, %s, 0, 'queued', %s, 'streamlit_ui')
+                            (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
+                            VALUES (%s, NULL, %s, 0, 'queued', %s, 'streamlit_ui', %s)
                             RETURNING id
-                        """, (category_code, len(all_skus), priority))
+                        """, (category_code, len(all_skus), priority, update_mode))
                         
                         job_id = cur.fetchone()[0]
                         

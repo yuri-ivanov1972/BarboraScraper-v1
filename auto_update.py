@@ -13,7 +13,7 @@ from core_parser import RimiParser
 from update_report import UpdateReport
 
 
-def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None, use_production: bool = False):
+def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None, use_production: bool = False, update_mode: str = 'incremental'):
     """
     Queue all level2 categories for processing
     
@@ -21,6 +21,7 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None,
         priority: Job priority (1-10, higher = more urgent)
         skip_recent_days: Skip categories updated within this many days (None = don't skip)
         use_production: Whether to use production database (default: False)
+        update_mode: Update mode - 'full' (complete re-scrape) or 'incremental' (new products + price/availability, default)
     
     Returns:
         Number of jobs created
@@ -130,10 +131,10 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None,
                 try:
                     cur.execute("""
                         INSERT INTO category_processing_jobs 
-                        (category_code, category_id, total_products, processed_count, status, priority, requested_by)
-                        VALUES (%s, %s, %s, 0, 'queued', %s, 'auto_update')
+                        (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
+                        VALUES (%s, %s, %s, 0, 'queued', %s, 'auto_update', %s)
                         RETURNING id
-                    """, (category_code, category['category_id'], len(all_skus), priority))
+                    """, (category_code, category['category_id'], len(all_skus), priority, update_mode))
                     
                     job_id = cur.fetchone()['id']
                     
@@ -296,6 +297,7 @@ def main():
     parser.add_argument('--queue-all', action='store_true', help='Queue all level2 categories')
     parser.add_argument('--priority', type=int, default=5, help='Job priority (1-10, default: 5)')
     parser.add_argument('--skip-recent-days', type=int, default=None, help='Skip categories updated within N days')
+    parser.add_argument('--full-update', action='store_true', help='Force full re-scrape (default: incremental)')
     parser.add_argument('--status', action='store_true', help='Show queue status')
     parser.add_argument('--report', action='store_true', help='Generate update report')
     parser.add_argument('--report-hours', type=int, default=24, help='Report time window in hours (default: 24)')
@@ -313,8 +315,10 @@ def main():
             save=not args.no_save
         )
     elif args.queue_all:
+        update_mode = 'full' if args.full_update else 'incremental'
         print("🚀 Auto-Update: Queueing all level2 categories")
         print(f"   Priority: {args.priority}")
+        print(f"   Update Mode: {update_mode}")
         if args.skip_recent_days:
             print(f"   Skip recent: {args.skip_recent_days} days")
         print()
@@ -322,7 +326,8 @@ def main():
         jobs_created = queue_all_level2_categories(
             priority=args.priority,
             skip_recent_days=args.skip_recent_days,
-            use_production=args.production
+            use_production=args.production,
+            update_mode=update_mode
         )
         
         if jobs_created == 0:
