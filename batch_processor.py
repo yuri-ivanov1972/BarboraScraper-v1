@@ -292,9 +292,69 @@ class BatchProcessor:
                 return total_results
             
             total_results['total_products'] = len(pending_skus)
-            self.status_callback(f"📦 Processing {len(pending_skus)} products in chunks of {chunk_size}")
             
-            # Process in chunks
+            # INCREMENTAL MODE: Classify SKUs and use lightweight updates for existing products
+            new_skus = pending_skus  # Default: treat all as new (full scrape)
+            existing_skus_data = {}  # SKU -> listing data mapping
+            
+            if update_mode == 'incremental':
+                self.status_callback(f"🔄 Incremental mode: classifying {len(pending_skus)} SKUs...")
+                
+                # Get category code from job
+                import psycopg2
+                from sku_classifier import SkuClassifier
+                from lightweight_updater import LightweightUpdater
+                
+                db_url = os.environ['DATABASE_URL']
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                cur.execute("SELECT category_code FROM category_processing_jobs WHERE id = %s", (job_id,))
+                category_code = cur.fetchone()[0]
+                conn.close()
+                
+                # Classify SKUs
+                classifier = SkuClassifier()
+                classification = classifier.classify_skus(category_code, pending_skus)
+                
+                new_skus = classification['new']
+                existing_skus = classification['existing']
+                removed_skus = classification['removed']
+                
+                self.status_callback(f"  ✨ New products: {len(new_skus)} (will do full scrape)")
+                self.status_callback(f"  🔄 Existing products: {len(existing_skus)} (lightweight update)")
+                self.status_callback(f"  ❌ Removed products: {len(removed_skus)} (mark inactive)")
+                
+                # Mark removed products as inactive
+                if removed_skus:
+                    removed_count = classifier.mark_products_inactive(removed_skus, category_code)
+                    self.status_callback(f"  ✓ Marked {removed_count} products as inactive")
+                    total_results['removed_products'] = removed_count
+                
+                # For existing products: mark as completed (skip full scrape for MVP)
+                # In future: can add lightweight price/availability updates here
+                if existing_skus:
+                    self.status_callback(f"  ⏭️  Skipping {len(existing_skus)} existing products (already in database)")
+                    for sku in existing_skus:
+                        progress_mgr.update_product_status(job_id, sku, 'completed')
+                    total_results['successful'] += len(existing_skus)
+                
+                total_results['new_products'] = len(new_skus)
+                total_results['updated_products'] = len(existing_skus)
+                
+                # Update pending_skus to only include new products
+                pending_skus = new_skus
+            
+            if not pending_skus:
+                self.status_callback("✓ No new products to scrape (all existing)")
+                # CRITICAL: Must complete job even when no new products to scrape
+                progress_mgr.update_job_progress(job_id)
+                progress_mgr.complete_job(job_id)
+                total_results['processing_time'] = time.time() - start_time
+                return total_results
+            
+            self.status_callback(f"📦 Processing {len(pending_skus)} NEW products in chunks of {chunk_size}")
+            
+            # Process in chunks (only new products in incremental mode)
             for chunk_num, i in enumerate(range(0, len(pending_skus), chunk_size), 1):
                 chunk_skus = pending_skus[i:i + chunk_size]
                 chunk_start = time.time()
