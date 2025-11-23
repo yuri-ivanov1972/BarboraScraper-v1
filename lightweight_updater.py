@@ -2,9 +2,9 @@
 Lightweight updater for existing products - updates price/availability without detail page scraping
 """
 
+import os
 import psycopg2
 from typing import Optional, Dict
-from database_config import get_db_connection
 import re
 
 
@@ -28,7 +28,7 @@ class LightweightUpdater:
         """Get database connection (create if needed)"""
         if self.db_connection:
             return self.db_connection
-        return get_db_connection()
+        return psycopg2.connect(os.environ['DATABASE_URL'])
     
     def _parse_price(self, price_str: str) -> Optional[float]:
         """

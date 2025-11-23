@@ -2,9 +2,9 @@
 SKU Classification - Determine which products are new vs existing for incremental updates
 """
 
+import os
 import psycopg2
 from typing import Dict, List, Set
-from database_config import get_db_connection
 
 
 class SkuClassifier:
@@ -24,7 +24,7 @@ class SkuClassifier:
         """Get database connection (create if needed)"""
         if self.db_connection:
             return self.db_connection
-        return get_db_connection()
+        return psycopg2.connect(os.environ['DATABASE_URL'])
     
     def classify_skus(self, category_code: str, listing_skus: List[str]) -> Dict[str, List[str]]:
         """
