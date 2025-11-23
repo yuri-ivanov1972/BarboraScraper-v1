@@ -216,7 +216,8 @@ class ProcessingWorker:
             # 2. 'in_progress' jobs with stale heartbeat (worker died)
             cur.execute("""
                 SELECT id, category_code, category_id, total_products, processed_count,
-                       priority, scheduled_for, retry_count, max_retries, current_worker_id
+                       priority, scheduled_for, retry_count, max_retries, current_worker_id,
+                       update_mode
                 FROM category_processing_jobs
                 WHERE (
                     (status = 'queued') OR
@@ -280,9 +281,10 @@ class ProcessingWorker:
         """Process a single job"""
         job_id = job['id']
         category_code = job['category_code']
+        update_mode = job.get('update_mode', 'full')  # Default to 'full' for backward compatibility
         
         self.current_job_id = job_id
-        self.log_event(job_id, 'job_started', f"Worker {self.worker_id} started processing {category_code}")
+        self.log_event(job_id, 'job_started', f"Worker {self.worker_id} started processing {category_code} (mode: {update_mode})")
         
         # Log initial memory usage
         initial_memory = self._get_memory_usage_mb()
@@ -317,11 +319,17 @@ class ProcessingWorker:
             # Use configured max_workers (1 for Autoscale, 3 for Reserved VM)
             processor = BatchProcessor(status_callback, max_workers=self.max_workers, heartbeat_callback=heartbeat_callback)
             
+            # Map update_mode to force_update parameter for backward compatibility
+            # 'full' = force re-scrape everything
+            # 'incremental' = smart update (new products + price/availability only)
+            force_update = (update_mode == 'full')
+            
             # Process in chunks
             results = processor.process_sku_list_chunked(
                 job_id, 
                 chunk_size=self.chunk_size,
-                force_update=False
+                force_update=force_update,
+                update_mode=update_mode
             )
             
             processor.close()

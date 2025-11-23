@@ -236,7 +236,7 @@ class BatchProcessor:
         products = [{'sku': sku} for sku in sku_list]
         return self.process_product_batch(products, None, force_update=force_update)  # None triggers auto-extraction
     
-    def process_sku_list_chunked(self, job_id: int, chunk_size: int = 15, force_update: bool = False, smart_mode: bool = False) -> Dict:
+    def process_sku_list_chunked(self, job_id: int, chunk_size: int = 15, force_update: bool = False, smart_mode: bool = False, update_mode: str = 'full') -> Dict:
         """
         Process SKUs in chunks with progress tracking for large batches
         
@@ -245,6 +245,7 @@ class BatchProcessor:
             chunk_size: Number of products to process in each chunk (default: 15)
             force_update: Whether to force update existing products
             smart_mode: Enable smart updates (only update changed fields, skip photos)
+            update_mode: Update mode - 'full' (complete re-scrape) or 'incremental' (new products + price/availability)
             
         Returns:
             Batch processing results with chunk progress
@@ -259,7 +260,9 @@ class BatchProcessor:
             'errors': [],
             'processing_time': 0,
             'chunks_processed': 0,
-            'interrupted': False
+            'interrupted': False,
+            'new_products': 0,  # Track new products in incremental mode
+            'updated_products': 0  # Track updated existing products
         }
         
         progress_mgr = ProgressManager(self.status_callback)
