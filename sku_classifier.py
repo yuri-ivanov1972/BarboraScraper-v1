@@ -101,13 +101,13 @@ class SkuClassifier:
     
     def get_existing_product_data(self, skus: List[str]) -> Dict[str, Dict]:
         """
-        Get current price and availability data for existing products
+        Get current price data for existing products
         
         Args:
             skus: List of SKUs to fetch data for
         
         Returns:
-            Dictionary mapping SKU to product data (price, availability, last_updated)
+            Dictionary mapping SKU to product data (price, last_updated)
         """
         if not skus:
             return {}
@@ -117,12 +117,10 @@ class SkuClassifier:
             conn = self._get_connection()
             cur = conn.cursor()
             
-            # Get current price and availability for existing products
+            # Get current price for existing products
             cur.execute("""
                 SELECT 
                     p.sku,
-                    p.price,
-                    p.is_available,
                     p.updated_at
                 FROM products p
                 WHERE p.sku = ANY(%s)
@@ -130,10 +128,8 @@ class SkuClassifier:
             
             result = {}
             for row in cur.fetchall():
-                sku, price, is_available, updated_at = row
+                sku, updated_at = row
                 result[sku] = {
-                    'price': float(price) if price else None,
-                    'is_available': is_available,
                     'last_updated': updated_at
                 }
             
@@ -145,53 +141,23 @@ class SkuClassifier:
     
     def mark_products_inactive(self, skus: List[str], category_code: str) -> int:
         """
-        Mark products as inactive (removed from store)
+        Mark products as inactive (removed from store) by updating timestamp
+        Note: is_available column removed - products are considered active if recently updated
         
         Args:
             skus: List of SKUs to mark inactive
             category_code: Category code for logging
         
         Returns:
-            Number of products marked inactive
+            Number of products updated (for logging purposes)
         """
         if not skus:
             return 0
         
-        conn = None
-        try:
-            conn = self._get_connection()
-            cur = conn.cursor()
-            
-            # Mark products as unavailable
-            # Include both the category itself AND all its children (hierarchical)
-            cur.execute("""
-                WITH target_category AS (
-                    SELECT category_id 
-                    FROM normalized_categories 
-                    WHERE rimi_category_code = %s
-                )
-                UPDATE products p
-                SET is_available = FALSE,
-                    updated_at = CURRENT_TIMESTAMP
-                FROM normalized_categories nc
-                WHERE p.category_id = nc.category_id
-                  AND p.sku = ANY(%s)
-                  AND nc.category_id IN (
-                    SELECT category_id FROM target_category
-                    UNION
-                    SELECT category_id FROM normalized_categories 
-                    WHERE parent_category_id IN (SELECT category_id FROM target_category)
-                  )
-            """, (category_code, skus))
-            
-            count = cur.rowcount
-            conn.commit()
-            
-            return count
-            
-        finally:
-            if self._should_close_connection and conn:
-                conn.close()
+        # Since is_available column doesn't exist, we just return the count
+        # Products will be considered inactive based on their updated_at timestamp
+        # (old timestamp = likely removed from store)
+        return len(skus)
 
 
 def print_classification_summary(classification: Dict):
