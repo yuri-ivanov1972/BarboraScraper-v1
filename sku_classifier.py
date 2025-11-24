@@ -51,9 +51,10 @@ class SkuClassifier:
             
             # Get all existing SKUs for this category from database
             cur.execute("""
-                SELECT DISTINCT sku 
-                FROM products 
-                WHERE category_code = %s
+                SELECT DISTINCT p.sku 
+                FROM products p
+                JOIN normalized_categories nc ON p.category_id = nc.category_id
+                WHERE nc.rimi_category_code = %s
             """, (category_code,))
             
             db_skus = set(row[0] for row in cur.fetchall())
@@ -152,10 +153,13 @@ class SkuClassifier:
             
             # Mark products as unavailable
             cur.execute("""
-                UPDATE products
+                UPDATE products p
                 SET is_available = FALSE,
                     updated_at = CURRENT_TIMESTAMP
-                WHERE sku = ANY(%s) AND category_code = %s
+                FROM normalized_categories nc
+                WHERE p.category_id = nc.category_id
+                  AND p.sku = ANY(%s) 
+                  AND nc.rimi_category_code = %s
             """, (skus, category_code))
             
             count = cur.rowcount
