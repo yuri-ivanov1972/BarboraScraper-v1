@@ -1,0 +1,25 @@
+python worker.py --production --resume-all --chunk-size 15 --max-workers 3
+2025-11-24 11:18:02,947 - __main__ - INFO - Worker 9c746c05f2c4_3622_1763983082 initialized, log file: logs/worker_9c746c05f2c4_3622_1763983082_20251124_111802.log
+2025-11-24 11:18:02,947 - __main__ - INFO - ============================================================
+2025-11-24 11:18:02,947 - __main__ - INFO - 🚀 PRODUCTION MODE: Using production database
+2025-11-24 11:18:02,947 - __main__ - INFO -    DATABASE_URL overridden for all components
+2025-11-24 11:18:02,947 - __main__ - INFO - ============================================================
+2025-11-24 11:18:02,947 - __main__ - INFO - Worker 9c746c05f2c4_3622_1763983082 starting in resume-all mode
+2025-11-24 11:18:05,326 - __main__ - INFO - Worker registered: 9c746c05f2c4_3622_1763983082 on 9c746c05f2c4 (PID: 3622)
+2025-11-24 11:18:06,013 - __main__ - INFO - Acquired job #340: SH-11-6 (priority: 5)
+2025-11-24 11:18:06,328 - __main__ - INFO - 💾 Initial memory usage: 45.8 MB
+2025-11-24 11:18:06,328 - __main__ - INFO - Processing job #340: SH-11-6
+2025-11-24 11:18:06,612 - __main__ - INFO - 🔄 Incremental mode: classifying 17 SKUs...
+2025-11-24 11:18:07,240 - __main__ - INFO -   ✨ New products: 0 (will do full scrape)
+2025-11-24 11:18:07,241 - __main__ - INFO -   🔄 Existing products: 17 (lightweight update)
+2025-11-24 11:18:07,241 - __main__ - INFO -   ❌ Removed products: 1 (mark inactive)
+2025-11-24 11:18:07,535 - __main__ - INFO - ❌ Error during chunked processing: column "is_available" of relation "products" does not exist
+LINE 8:                 SET is_available = FALSE,
+                            ^
+
+🔧 BATCH: Closed 0 reused coordinators
+2025-11-24 11:18:07,904 - __main__ - INFO - Batch processor closed 0 coordinator connections
+2025-11-24 11:18:08,227 - __main__ - INFO - Job #340 completed: 0/17 successful
+2025-11-24 11:18:08,532 - __main__ - INFO - No more jobs in queue, exiting
+2025-11-24 11:18:08,532 - __main__ - INFO - Shutting down worker...
+2025-11-24 11:18:08,894 - __main__ - INFO - Worker 9c746c05f2c4_3622_1763983082 shutdown complete
