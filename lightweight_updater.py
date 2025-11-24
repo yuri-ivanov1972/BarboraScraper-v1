@@ -55,6 +55,7 @@ class LightweightUpdater:
     def update_from_listing_data(self, sku: str, listing_data: Dict) -> Dict:
         """
         Update existing product using listing-level data (price only, no detail scraping)
+        Note: Prices are stored in product_price_history table, not products table
         
         Args:
             sku: Product SKU
@@ -79,11 +80,22 @@ class LightweightUpdater:
                     'error': f'Could not parse price: {price_str}'
                 }
             
-            # Get current product data
+            # Get current product data and latest price from price_history
             cur.execute("""
-                SELECT price, is_available, name
-                FROM products
-                WHERE sku = %s
+                SELECT 
+                    p.product_id,
+                    p.name,
+                    pph.price,
+                    pph.is_available
+                FROM products p
+                LEFT JOIN LATERAL (
+                    SELECT price, is_available, recorded_at
+                    FROM product_price_history
+                    WHERE product_id = p.product_id
+                    ORDER BY recorded_at DESC
+                    LIMIT 1
+                ) pph ON true
+                WHERE p.sku = %s
             """, (sku,))
             
             row = cur.fetchone()
@@ -94,24 +106,30 @@ class LightweightUpdater:
                     'error': 'Product not found in database'
                 }
             
-            old_price, old_availability, old_name = row
-            old_price = float(old_price) if old_price else None
+            product_id, product_name, old_price, old_availability = row
+            old_price = float(old_price) if old_price is not None else None
             
             # Track changes
-            price_changed = (old_price != price) if old_price else True
+            price_changed = (old_price != price) if old_price is not None else True
             availability_changed = False  # Assume available if in listing
             
-            if not old_availability:
+            if old_availability is False:
                 availability_changed = True  # Product back in stock
             
-            # Update product (lightweight - only price and availability)
+            # Only insert new price history record if price actually changed
+            # or if availability changed
+            if price_changed or availability_changed:
+                cur.execute("""
+                    INSERT INTO product_price_history (product_id, price, is_available, data_source, recorded_at)
+                    VALUES (%s, %s, TRUE, 'lightweight_update', CURRENT_TIMESTAMP)
+                """, (product_id, price))
+            
+            # Update product timestamp
             cur.execute("""
                 UPDATE products
-                SET price = %s,
-                    is_available = TRUE,
-                    updated_at = CURRENT_TIMESTAMP
+                SET updated_at = CURRENT_TIMESTAMP
                 WHERE sku = %s
-            """, (price, sku))
+            """, (sku,))
             
             conn.commit()
             
