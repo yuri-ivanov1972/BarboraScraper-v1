@@ -50,11 +50,22 @@ class SkuClassifier:
             listing_skus_set = set(listing_skus)
             
             # Get all existing SKUs for this category from database
+            # Include both the category itself AND all its children (hierarchical)
             cur.execute("""
+                WITH target_category AS (
+                    SELECT category_id 
+                    FROM normalized_categories 
+                    WHERE rimi_category_code = %s
+                )
                 SELECT DISTINCT p.sku 
                 FROM products p
                 JOIN normalized_categories nc ON p.category_id = nc.category_id
-                WHERE nc.rimi_category_code = %s
+                WHERE nc.category_id IN (
+                    SELECT category_id FROM target_category
+                    UNION
+                    SELECT category_id FROM normalized_categories 
+                    WHERE parent_category_id IN (SELECT category_id FROM target_category)
+                )
             """, (category_code,))
             
             db_skus = set(row[0] for row in cur.fetchall())
@@ -152,15 +163,26 @@ class SkuClassifier:
             cur = conn.cursor()
             
             # Mark products as unavailable
+            # Include both the category itself AND all its children (hierarchical)
             cur.execute("""
+                WITH target_category AS (
+                    SELECT category_id 
+                    FROM normalized_categories 
+                    WHERE rimi_category_code = %s
+                )
                 UPDATE products p
                 SET is_available = FALSE,
                     updated_at = CURRENT_TIMESTAMP
                 FROM normalized_categories nc
                 WHERE p.category_id = nc.category_id
-                  AND p.sku = ANY(%s) 
-                  AND nc.rimi_category_code = %s
-            """, (skus, category_code))
+                  AND p.sku = ANY(%s)
+                  AND nc.category_id IN (
+                    SELECT category_id FROM target_category
+                    UNION
+                    SELECT category_id FROM normalized_categories 
+                    WHERE parent_category_id IN (SELECT category_id FROM target_category)
+                  )
+            """, (category_code, skus))
             
             count = cur.rowcount
             conn.commit()
