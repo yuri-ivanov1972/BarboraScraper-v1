@@ -117,21 +117,30 @@ class SkuClassifier:
             conn = self._get_connection()
             cur = conn.cursor()
             
-            # Get current price and availability for existing products
+            # Get current price and availability from price history (latest record per product)
             cur.execute("""
                 SELECT 
                     p.sku,
-                    p.is_available,
+                    pph.price,
+                    pph.is_available,
                     p.updated_at
                 FROM products p
+                LEFT JOIN LATERAL (
+                    SELECT price, is_available, recorded_at
+                    FROM product_price_history
+                    WHERE product_id = p.product_id
+                    ORDER BY recorded_at DESC
+                    LIMIT 1
+                ) pph ON true
                 WHERE p.sku = ANY(%s)
             """, (skus,))
             
             result = {}
             for row in cur.fetchall():
-                sku, is_available, updated_at = row
+                sku, price, is_available, updated_at = row
                 result[sku] = {
-                    'is_available': is_available,
+                    'price': float(price) if price else None,
+                    'is_available': is_available if is_available is not None else True,
                     'last_updated': updated_at
                 }
             
@@ -143,7 +152,8 @@ class SkuClassifier:
     
     def mark_products_inactive(self, skus: List[str], category_code: str) -> int:
         """
-        Mark products as inactive (removed from store)
+        Mark products as inactive (removed from store) by adding price history record
+        Note: is_available is stored in product_price_history table, not products table
         
         Args:
             skus: List of SKUs to mark inactive
@@ -160,26 +170,34 @@ class SkuClassifier:
             conn = self._get_connection()
             cur = conn.cursor()
             
-            # Mark products as unavailable
+            # Add price history records marking products as unavailable
             # Include both the category itself AND all its children (hierarchical)
             cur.execute("""
                 WITH target_category AS (
                     SELECT category_id 
                     FROM normalized_categories 
                     WHERE rimi_category_code = %s
+                ),
+                matching_products AS (
+                    SELECT p.product_id, p.sku
+                    FROM products p
+                    JOIN normalized_categories nc ON p.category_id = nc.category_id
+                    WHERE p.sku = ANY(%s)
+                      AND nc.category_id IN (
+                        SELECT category_id FROM target_category
+                        UNION
+                        SELECT category_id FROM normalized_categories 
+                        WHERE parent_category_id IN (SELECT category_id FROM target_category)
+                      )
                 )
-                UPDATE products p
-                SET is_available = FALSE,
-                    updated_at = CURRENT_TIMESTAMP
-                FROM normalized_categories nc
-                WHERE p.category_id = nc.category_id
-                  AND p.sku = ANY(%s)
-                  AND nc.category_id IN (
-                    SELECT category_id FROM target_category
-                    UNION
-                    SELECT category_id FROM normalized_categories 
-                    WHERE parent_category_id IN (SELECT category_id FROM target_category)
-                  )
+                INSERT INTO product_price_history (product_id, price, is_available, data_source, recorded_at)
+                SELECT 
+                    product_id,
+                    0.00,
+                    FALSE,
+                    'incremental_update',
+                    CURRENT_TIMESTAMP
+                FROM matching_products
             """, (category_code, skus))
             
             count = cur.rowcount
