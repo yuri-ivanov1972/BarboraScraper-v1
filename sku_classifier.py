@@ -139,7 +139,7 @@ class SkuClassifier:
             for row in cur.fetchall():
                 sku, price, is_available, updated_at = row
                 result[sku] = {
-                    'price': float(price) if price else None,
+                    'price': float(price) if price is not None else None,
                     'is_available': is_available if is_available is not None else True,
                     'last_updated': updated_at
                 }
