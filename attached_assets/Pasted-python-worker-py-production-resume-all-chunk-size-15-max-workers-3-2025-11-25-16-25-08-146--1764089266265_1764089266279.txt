@@ -1,0 +1,175 @@
+python worker.py --production --resume-all --chunk-size 15 --max-workers 3
+2025-11-25 16:25:08,146 - __main__ - INFO - Worker 87fab5e3046a_148_1764087908 initialized, log file: logs/worker_87fab5e3046a_148_1764087908_20251125_162508.log
+2025-11-25 16:25:08,146 - __main__ - INFO - ============================================================
+2025-11-25 16:25:08,146 - __main__ - INFO - 🚀 PRODUCTION MODE: Using production database
+2025-11-25 16:25:08,146 - __main__ - INFO -    DATABASE_URL overridden for all components
+2025-11-25 16:25:08,146 - __main__ - INFO - ============================================================
+2025-11-25 16:25:08,146 - __main__ - INFO - Worker 87fab5e3046a_148_1764087908 starting in resume-all mode
+2025-11-25 16:25:08,493 - __main__ - INFO - Worker registered: 87fab5e3046a_148_1764087908 on 87fab5e3046a (PID: 148)
+2025-11-25 16:25:09,186 - __main__ - INFO - Acquired job #343: SH-2-2-12 (priority: 5)
+2025-11-25 16:25:09,503 - __main__ - INFO - 💾 Initial memory usage: 45.6 MB
+2025-11-25 16:25:09,503 - __main__ - INFO - Processing job #343: SH-2-2-12
+2025-11-25 16:25:09,805 - __main__ - INFO - 🔄 Incremental mode: classifying 25 SKUs...
+2025-11-25 16:25:10,402 - __main__ - INFO -   ✨ New products: 1 (will do full scrape)
+2025-11-25 16:25:10,402 - __main__ - INFO -   🔄 Existing products: 24 (lightweight update)
+2025-11-25 16:25:10,402 - __main__ - INFO -   ❌ Removed products: 0 (mark inactive)
+2025-11-25 16:25:10,402 - __main__ - INFO -   ⏭️  Skipping 24 existing products (already in database)
+2025-11-25 16:25:18,029 - __main__ - INFO - 📦 Processing 1 NEW products in chunks of 15
+2025-11-25 16:25:18,029 - __main__ - INFO - 
+🔄 Chunk 1: Processing 1 products (SKUs 1-1)
+2025-11-25 16:25:18,342 - __main__ - INFO - Starting batch processing of 1 products
+🚀 BATCH: Starting thread processing for 987593
+🔄 BATCH: Processing product 987593
+🔄 BATCH: Using automatic category extraction for 987593
+🔄 BATCH: Thread ID: 140192222541504
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+[COORDINATOR] 🔧 COORDINATOR: Initializing components (attempt 1/3)
+[COORDINATOR] 🔧 COORDINATOR: Importing RobustWebClient...
+[COORDINATOR] 🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...
+[COORDINATOR] 🔧 COORDINATOR: Creating RobustWebClient instance...
+[COORDINATOR] 🔧 COORDINATOR: Web client created: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...
+[COORDINATOR] Connected to DEVELOPMENT (DATABASE_URL) database: neondb @ 169.254.254.254:5432
+[COORDINATOR] 🔧 COORDINATOR: DB updater created: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] ✅ COORDINATOR: Enhanced coordinator initialized with robust components
+🔧 BATCH: Created reusable enhanced coordinator for thread 140192222541504
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 987593 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 140192222541504
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(987593)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/987593
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/987593
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/987593
+[COORDINATOR] Found valid product: Tomāti Miss Perfect 1.šķ., 200g
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_987593_PCE_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2
+[COORDINATOR] ✅ Category extraction successful: SH-2-2
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Beļģija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Beļģija'
+[COORDINATOR] ✅ Found country of origin: Beļģija
+[COORDINATOR] Found ingredients (method 2, nested): Tomatoes...
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2 from path: SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 987593 ===
+[COORDINATOR] Product 987593 exists with valid data - no update needed
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/987593
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/987593
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/987593
+[COORDINATOR] Found valid product: Tomāti Miss Perfect 1.šķ., 200g
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_987593_PCE_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2
+[COORDINATOR] ✅ Category extraction successful: SH-2-2
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Beļģija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Beļģija'
+[COORDINATOR] ✅ Found country of origin: Beļģija
+[COORDINATOR] Found ingredients (method 2, nested): Tomatoes...
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Performing regular update...
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Force updating product data for SKU: 987593
+[COORDINATOR] Updating country_of_origin: Beļģija
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 2 product fields
+[COORDINATOR] Successfully force-updated product 987593
+[COORDINATOR] Force updating ingredients for SKU: 987593
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Removed existing ingredient mappings
+[COORDINATOR] Ingredient processor initialized thread-safe connection pool
+[COORDINATOR] Deduplicator using thread-safe connection pool
+[COORDINATOR] Processed 1 ingredients for product 987593 (0 new)
+[COORDINATOR] Ingredient processor connection pool closed
+[COORDINATOR] Successfully processed 1 ingredients
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1974
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1974
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_987593_PCE_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1974
+[COORDINATOR] Processing completed in 3.98s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 987593...
+🔍 BATCH: Success status for 987593: True
+✅ BATCH: 987593 processed successfully
+2025-11-25 16:25:23,841 - __main__ - INFO - ✓ 987593 processed successfully
+[COORDINATOR] Database connection closed
+[COORDINATOR] Enhanced coordinator closed
+🔧 BATCH: Closed 1 reused coordinators
+2025-11-25 16:25:24,166 - __main__ - INFO - Batch processor closed 1 coordinator connections
+2025-11-25 16:25:24,166 - __main__ - INFO - Batch processing completed: 1 successful, 0 failed
+2025-11-25 16:25:24,837 - __main__ - INFO - ✓ Chunk 1 completed in 6.8s (1/1 successful)
+2025-11-25 16:25:24,837 - __main__ - INFO - 💾 Memory after chunk: 51.1 MB (Δ+5.5 MB)
+2025-11-25 16:25:25,147 - __main__ - INFO - ✓ Job #343 marked as completed
+2025-11-25 16:25:25,147 - __main__ - INFO - ✅ All chunks processed successfully!
+🔧 BATCH: Closed 0 reused coordinators
+2025-11-25 16:25:25,148 - __main__ - INFO - Batch processor closed 0 coordinator connections
+2025-11-25 16:25:25,474 - __main__ - INFO - Job #343 completed: 25/25 successful
+2025-11-25 16:25:26,063 - __main__ - INFO - No more jobs in queue, exiting
+2025-11-25 16:25:26,063 - __main__ - INFO - Shutting down worker...
+2025-11-25 16:25:26,382 - __main__ - INFO - Worker 87fab5e3046a_148_1764087908 shutdown complete
