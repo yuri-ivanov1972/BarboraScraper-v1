@@ -1,0 +1,1814 @@
+python worker.py --production --resume-all --chunk-size 15 --max-workers 3
+2025-11-25 19:28:25,553 - __main__ - INFO - Worker 87fab5e3046a_3107_1764098905 initialized, log file: logs/worker_87fab5e3046a_3107_1764098905_20251125_192825.log
+2025-11-25 19:28:25,553 - __main__ - INFO - ============================================================
+2025-11-25 19:28:25,553 - __main__ - INFO - 🚀 PRODUCTION MODE: Using production database
+2025-11-25 19:28:25,553 - __main__ - INFO -    DATABASE_URL overridden for all components
+2025-11-25 19:28:25,553 - __main__ - INFO - ============================================================
+2025-11-25 19:28:25,553 - __main__ - INFO - Worker 87fab5e3046a_3107_1764098905 starting in resume-all mode
+2025-11-25 19:28:25,909 - __main__ - INFO - Worker registered: 87fab5e3046a_3107_1764098905 on 87fab5e3046a (PID: 3107)
+2025-11-25 19:28:26,640 - __main__ - INFO - Acquired job #345: SH-2-2-9 (priority: 5)
+2025-11-25 19:28:26,964 - __main__ - INFO - 💾 Initial memory usage: 45.4 MB
+2025-11-25 19:28:26,964 - __main__ - INFO - Processing job #345: SH-2-2-9
+2025-11-25 19:28:27,261 - __main__ - INFO - 📦 Processing 10 NEW products in chunks of 15
+2025-11-25 19:28:27,262 - __main__ - INFO - 
+🔄 Chunk 1: Processing 10 products (SKUs 1-10)
+2025-11-25 19:28:30,468 - __main__ - INFO - Starting batch processing of 10 products
+🚀 BATCH: Starting thread processing for 269171
+🔄 BATCH: Processing product 269171
+🔄 BATCH: Using automatic category extraction for 269171
+🔄 BATCH: Thread ID: 139684934055616
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🚀 BATCH: Starting thread processing for 212564
+🔄 BATCH: Processing product 212564
+🔄 BATCH: Using automatic category extraction for 212564
+🔄 BATCH: Thread ID: 139684925662912
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_1
+🔄 BATCH: Getting reusable enhanced coordinator...
+🚀 BATCH: Starting thread processing for 916576
+🔄 BATCH: Processing product 916576
+🔄 BATCH: Using automatic category extraction for 916576
+🔄 BATCH: Thread ID: 139684917270208
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_2
+🔄 BATCH: Getting reusable enhanced coordinator...
+[COORDINATOR] 🔧 COORDINATOR: Initializing components (attempt 1/3)
+[COORDINATOR] 🔧 COORDINATOR: Importing RobustWebClient...
+[COORDINATOR] 🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...
+[COORDINATOR] 🔧 COORDINATOR: Creating RobustWebClient instance...
+[COORDINATOR] 🔧 COORDINATOR: Web client created: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...
+[COORDINATOR] Connected to DEVELOPMENT (DATABASE_URL) database: neondb @ 169.254.254.254:5432
+[COORDINATOR] 🔧 COORDINATOR: DB updater created: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] ✅ COORDINATOR: Enhanced coordinator initialized with robust components
+🔧 BATCH: Created reusable enhanced coordinator for thread 139684934055616
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 269171 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684934055616
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(269171)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/269171
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/269171
+[COORDINATOR] 🔧 COORDINATOR: Initializing components (attempt 1/3)
+[COORDINATOR] 🔧 COORDINATOR: Importing RobustWebClient...
+[COORDINATOR] 🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...
+[COORDINATOR] 🔧 COORDINATOR: Creating RobustWebClient instance...
+[COORDINATOR] 🔧 COORDINATOR: Web client created: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...
+[COORDINATOR] Connected to DEVELOPMENT (DATABASE_URL) database: neondb @ 169.254.254.254:5432
+[COORDINATOR] 🔧 COORDINATOR: DB updater created: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] ✅ COORDINATOR: Enhanced coordinator initialized with robust components
+🔧 BATCH: Created reusable enhanced coordinator for thread 139684925662912
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 212564 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684925662912
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_1
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔧 COORDINATOR: Initializing components (attempt 1/3)
+[COORDINATOR] 🔧 COORDINATOR: Importing RobustWebClient...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...
+[COORDINATOR] 🔧 COORDINATOR: Creating RobustWebClient instance...
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(212564)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/212564
+[COORDINATOR] 🔧 COORDINATOR: Web client created: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/212564
+[COORDINATOR] Connected to DEVELOPMENT (DATABASE_URL) database: neondb @ 169.254.254.254:5432
+[COORDINATOR] 🔧 COORDINATOR: DB updater created: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] ✅ COORDINATOR: Enhanced coordinator initialized with robust components
+🔧 BATCH: Created reusable enhanced coordinator for thread 139684917270208
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 916576 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684917270208
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_2
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(916576)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/916576
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/916576
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/269171
+[COORDINATOR] Found valid product: Cukini zaļi 325-375g/gab kg
+[COORDINATOR] Price extraction: '199€/kg2,49€' -> '€1.99'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_269171_KGM_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Polija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Polija'
+[COORDINATOR] ✅ Found country of origin: Polija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 269171 ===
+[COORDINATOR] Found 1 corruption indicators for SKU 269171
+[COORDINATOR] Detected corrupted data for SKU 269171 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/269171
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/269171
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/212564
+[COORDINATOR] Found valid product: Ķirbji sviesta kg
+[COORDINATOR] Price extraction: '149€/kg' -> '€1.49'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_212564_KGM_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 212564 ===
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/916576
+[COORDINATOR] Found valid product: Cukini I Love Eco zaļi 200g
+[COORDINATOR] Price extraction: '129€/gab.' -> '€1.29'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 3 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_916576_PCE_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] Found ingredients (method 2, nested): izcelsme: Lauksaimniecība ES...
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 916576 ===
+[COORDINATOR] Found 1 corruption indicators for SKU 212564
+[COORDINATOR] Detected corrupted data for SKU 212564 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/212564
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/212564
+[COORDINATOR] Found 1 corruption indicators for SKU 916576
+[COORDINATOR] Detected corrupted data for SKU 916576 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/916576
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/916576
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/269171
+[COORDINATOR] Found valid product: Cukini zaļi 325-375g/gab kg
+[COORDINATOR] Price extraction: '199€/kg2,49€' -> '€1.99'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_269171_KGM_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Polija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Polija'
+[COORDINATOR] ✅ Found country of origin: Polija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/916576
+[COORDINATOR] Found valid product: Cukini I Love Eco zaļi 200g
+[COORDINATOR] Price extraction: '129€/gab.' -> '€1.29'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 3 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_916576_PCE_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] Found ingredients (method 2, nested): izcelsme: Lauksaimniecība ES...
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/212564
+[COORDINATOR] Found valid product: Ķirbji sviesta kg
+[COORDINATOR] Price extraction: '149€/kg' -> '€1.49'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_212564_KGM_LV
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 269171
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/269171
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Cukini zaļi 325-375g/gab kg...
+[COORDINATOR] Updating quantity_value: 375
+[COORDINATOR] Updating quantity_unit: g
+[COORDINATOR] Updating country_of_origin: Polija
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1719
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 916576
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/916576
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Cukini I Love Eco zaļi 200g...
+[COORDINATOR] Updating quantity_value: 200
+[COORDINATOR] Updating quantity_unit: g
+[COORDINATOR] Updating country_of_origin: Spānija
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 212564
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/212564
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Ķirbji sviesta kg...
+[COORDINATOR] Updating quantity_value: None
+[COORDINATOR] Updating quantity_unit: None
+[COORDINATOR] Updating country_of_origin: Spānija
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1776
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1757
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] Updating ingredients_text: izcelsme: Lauksaimniecība ES -> izcelsme: Lauksaimniecība ES
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €1.99 (available: True)
+[COORDINATOR] Successfully force-updated product 269171
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1719
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €1.29 (available: True)
+[COORDINATOR] Force updating ingredients for SKU: 916576
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1719
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €1.49 (available: True)
+[COORDINATOR] Successfully force-updated product 212564
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1757
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_269171_KGM_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1719
+[COORDINATOR] Photos processing: Successfully saved photo for product 269171
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 269171
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.23s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 269171...
+🔍 BATCH: Success status for 269171: True
+✅ BATCH: 269171 processed successfully
+🚀 BATCH: Starting thread processing for 287802
+🔄 BATCH: Processing product 287802
+🔄 BATCH: Using automatic category extraction for 287802
+🔄 BATCH: Thread ID: 139684934055616
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 287802 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684934055616
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(287802)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/287802
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/287802
+2025-11-25 19:28:36,147 - __main__ - INFO - ✓ 269171 processed successfully
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1757
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Removed existing ingredient mappings
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_212564_KGM_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1757
+[COORDINATOR] Photos processing: Successfully saved photo for product 212564
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 212564
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.26s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 212564...
+🔍 BATCH: Success status for 212564: True
+✅ BATCH: 212564 processed successfully
+🚀 BATCH: Starting thread processing for 967432
+🔄 BATCH: Processing product 967432
+🔄 BATCH: Using automatic category extraction for 967432
+🔄 BATCH: Thread ID: 139684925662912
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_1
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 967432 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684925662912
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_1
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(967432)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/967432
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/967432
+[COORDINATOR] Ingredient processor initialized thread-safe connection pool
+[COORDINATOR] Deduplicator using thread-safe connection pool
+[COORDINATOR] No ingredients extracted from text for product 916576
+[COORDINATOR] Ingredient processor connection pool closed
+[COORDINATOR] No ingredients could be processed from text: 'izcelsme: Lauksaimniecība ES...' - this may be normal for basic products
+[COORDINATOR] Successfully force-updated product 916576
+2025-11-25 19:28:36,477 - __main__ - INFO - ✓ 212564 processed successfully
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1776
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1776
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_916576_PCE_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1776
+[COORDINATOR] Photos processing: Successfully saved photo for product 916576
+[COORDINATOR] Force updating ingredients for SKU: 916576
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Removed existing ingredient mappings
+[COORDINATOR] Ingredient processor initialized thread-safe connection pool
+[COORDINATOR] Deduplicator using thread-safe connection pool
+[COORDINATOR] No ingredients extracted from text for product 916576
+[COORDINATOR] Ingredient processor connection pool closed
+[COORDINATOR] No ingredients could be processed from text: 'izcelsme: Lauksaimniecība ES...' - this may be normal for basic products
+[COORDINATOR] Ingredients processing: Successfully saved for product 916576
+[COORDINATOR] Force update completed successfully with photos saved and ingredients saved
+[COORDINATOR] Processing completed in 3.99s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 916576...
+🔍 BATCH: Success status for 916576: True
+✅ BATCH: 916576 processed successfully
+🚀 BATCH: Starting thread processing for 299947
+🔄 BATCH: Processing product 299947
+🔄 BATCH: Using automatic category extraction for 299947
+🔄 BATCH: Thread ID: 139684917270208
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_2
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 299947 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684917270208
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_2
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(299947)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/299947
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/299947
+2025-11-25 19:28:37,258 - __main__ - INFO - ✓ 916576 processed successfully
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/287802
+[COORDINATOR] Found valid product: Ķirbji ar riekstu garšu kg
+[COORDINATOR] Price extraction: '149€/kg' -> '€1.49'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 3 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_287802_KGM_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Latvija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Latvija'
+[COORDINATOR] ✅ Found country of origin: Latvija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 287802 ===
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/967432
+[COORDINATOR] Found valid product: Ķirbis fasēts BIO 1gab
+[COORDINATOR] Price extraction: '299€/gab.' -> '€2.99'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 4 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_967432_PCE_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Latvija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Latvija'
+[COORDINATOR] ✅ Found country of origin: Latvija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 967432 ===
+[COORDINATOR] Found 1 corruption indicators for SKU 287802
+[COORDINATOR] Detected corrupted data for SKU 287802 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/287802
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/287802
+[COORDINATOR] Found 1 corruption indicators for SKU 967432
+[COORDINATOR] Detected corrupted data for SKU 967432 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/967432
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/967432
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/299947
+[COORDINATOR] Found valid product: Ķirbis Muskata kg
+[COORDINATOR] Price extraction: '149€/kg' -> '€1.49'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_299947_KGM_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Portugāle</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Portugāle'
+[COORDINATOR] ✅ Found country of origin: Portugāle
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 299947 ===
+[COORDINATOR] Found 1 corruption indicators for SKU 299947
+[COORDINATOR] Detected corrupted data for SKU 299947 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/299947
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/299947
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/967432
+[COORDINATOR] Found valid product: Ķirbis fasēts BIO 1gab
+[COORDINATOR] Price extraction: '299€/gab.' -> '€2.99'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 4 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_967432_PCE_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Latvija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Latvija'
+[COORDINATOR] ✅ Found country of origin: Latvija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/287802
+[COORDINATOR] Found valid product: Ķirbji ar riekstu garšu kg
+[COORDINATOR] Price extraction: '149€/kg' -> '€1.49'
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 3 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_287802_KGM_LV
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 967432
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Latvija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Latvija'
+[COORDINATOR] ✅ Found country of origin: Latvija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/967432
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Ķirbis fasēts BIO 1gab...
+[COORDINATOR] Updating quantity_value: 1
+[COORDINATOR] Updating quantity_unit: gab
+[COORDINATOR] Updating country_of_origin: Latvija
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1889
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 287802
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/287802
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Ķirbji ar riekstu garšu kg...
+[COORDINATOR] Updating quantity_value: None
+[COORDINATOR] Updating quantity_unit: None
+[COORDINATOR] Updating country_of_origin: Latvija
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1819
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/299947
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] Found valid product: Ķirbis Muskata kg
+[COORDINATOR] Price extraction: '149€/kg' -> '€1.49'
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_299947_KGM_LV
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] Product is AVAILABLE (no unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Portugāle</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Portugāle'
+[COORDINATOR] ✅ Found country of origin: Portugāle
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €2.99 (available: True)
+[COORDINATOR] Successfully force-updated product 967432
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1889
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 299947
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/299947
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Ķirbis Muskata kg...
+[COORDINATOR] Updating quantity_value: None
+[COORDINATOR] Updating quantity_unit: None
+[COORDINATOR] Updating country_of_origin: Portugāle
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1889
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1936
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_967432_PCE_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1889
+[COORDINATOR] Photos processing: Successfully saved photo for product 967432
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 967432
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.08s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 967432...
+🔍 BATCH: Success status for 967432: True
+✅ BATCH: 967432 processed successfully
+🚀 BATCH: Starting thread processing for 269170
+🔄 BATCH: Processing product 269170
+🔄 BATCH: Using automatic category extraction for 269170
+🔄 BATCH: Thread ID: 139684925662912
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_1
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 269170 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684925662912
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_1
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(269170)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/269170
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/269170
+2025-11-25 19:28:40,962 - __main__ - INFO - ✓ 967432 processed successfully
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €1.49 (available: True)
+[COORDINATOR] Successfully force-updated product 287802
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1819
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1819
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_287802_KGM_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1819
+[COORDINATOR] Photos processing: Successfully saved photo for product 287802
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 287802
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.53s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 287802...
+🔍 BATCH: Success status for 287802: True
+✅ BATCH: 287802 processed successfully
+🚀 BATCH: Starting thread processing for 299435
+🔄 BATCH: Processing product 299435
+🔄 BATCH: Using automatic category extraction for 299435
+🔄 BATCH: Thread ID: 139684934055616
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 299435 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684934055616
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(299435)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/299435
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/299435
+2025-11-25 19:28:41,371 - __main__ - INFO - ✓ 287802 processed successfully
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €1.49 (available: True)
+[COORDINATOR] Successfully force-updated product 299947
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1936
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1936
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_299947_KGM_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1936
+[COORDINATOR] Photos processing: Successfully saved photo for product 299947
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 299947
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.40s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 299947...
+🔍 BATCH: Success status for 299947: True
+✅ BATCH: 299947 processed successfully
+🚀 BATCH: Starting thread processing for 928058
+🔄 BATCH: Processing product 928058
+🔄 BATCH: Using automatic category extraction for 928058
+🔄 BATCH: Thread ID: 139684917270208
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_2
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 928058 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684917270208
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_2
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(928058)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/928058
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/928058
+2025-11-25 19:28:42,060 - __main__ - INFO - ✓ 299947 processed successfully
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/269170
+[COORDINATOR] Found valid product: Baklažāni 225-400g/gab kg
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_269170_KGM_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 269170 ===
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/299435
+[COORDINATOR] Found valid product: Ķirbis cepšanai Hokkaido, kg
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 3 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_299435_KGM_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] Found 1 corruption indicators for SKU 269170
+[COORDINATOR] Detected corrupted data for SKU 269170 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/269170
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/269170
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Latvija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Latvija'
+[COORDINATOR] ✅ Found country of origin: Latvija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 299435 ===
+[COORDINATOR] Found 1 corruption indicators for SKU 299435
+[COORDINATOR] Detected corrupted data for SKU 299435 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/299435
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/299435
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/928058
+[COORDINATOR] Found valid product: Baklažāns japāņu 300g
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_928058_PCE_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 928058 ===
+[COORDINATOR] Found 1 corruption indicators for SKU 928058
+[COORDINATOR] Detected corrupted data for SKU 928058 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/928058
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/928058
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/269170
+[COORDINATOR] Found valid product: Baklažāni 225-400g/gab kg
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_269170_KGM_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/299435
+[COORDINATOR] Found valid product: Ķirbis cepšanai Hokkaido, kg
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 3 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_299435_KGM_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Latvija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Latvija'
+[COORDINATOR] ✅ Found country of origin: Latvija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 269170
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/269170
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Baklažāni 225-400g/gab kg...
+[COORDINATOR] Updating quantity_value: 400
+[COORDINATOR] Updating quantity_unit: g
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Updating country_of_origin: Spānija
+[COORDINATOR] Force updating product data for SKU: 299435
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/299435
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Ķirbis cepšanai Hokkaido, kg...
+[COORDINATOR] Updating quantity_value: None
+[COORDINATOR] Updating quantity_unit: None
+[COORDINATOR] Updating country_of_origin: Latvija
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1964
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1798
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/928058
+[COORDINATOR] Found valid product: Baklažāns japāņu 300g
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Found 2 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_928058_PCE_LV
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 928058
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/928058
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Baklažāns japāņu 300g...
+[COORDINATOR] Updating quantity_value: 300
+[COORDINATOR] Updating quantity_unit: g
+[COORDINATOR] Updating country_of_origin: Spānija
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1911
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €0.00 (available: False)
+[COORDINATOR] Successfully force-updated product 269170
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1964
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €0.00 (available: False)
+[COORDINATOR] Successfully force-updated product 299435
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1798
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1964
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_269170_KGM_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1964
+[COORDINATOR] Photos processing: Successfully saved photo for product 269170
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 269170
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.15s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 269170...
+🔍 BATCH: Success status for 269170: True
+✅ BATCH: 269170 processed successfully
+🚀 BATCH: Starting thread processing for 988582
+🔄 BATCH: Processing product 988582
+🔄 BATCH: Using automatic category extraction for 988582
+🔄 BATCH: Thread ID: 139684925662912
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_1
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=True)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 988582 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139684925662912
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_1
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(988582)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/988582
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/988582
+2025-11-25 19:28:45,918 - __main__ - INFO - ✓ 269170 processed successfully
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1798
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_299435_KGM_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1798
+[COORDINATOR] Photos processing: Successfully saved photo for product 299435
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 299435
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.10s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 299435...
+🔍 BATCH: Success status for 299435: True
+✅ BATCH: 299435 processed successfully
+2025-11-25 19:28:46,062 - __main__ - INFO - ✓ 299435 processed successfully
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €0.00 (available: False)
+[COORDINATOR] Successfully force-updated product 928058
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1911
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1911
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_928058_PCE_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1911
+[COORDINATOR] Photos processing: Successfully saved photo for product 928058
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 928058
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 2.98s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 928058...
+🔍 BATCH: Success status for 928058: True
+✅ BATCH: 928058 processed successfully
+2025-11-25 19:28:46,641 - __main__ - INFO - ✓ 928058 processed successfully
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/988582
+[COORDINATOR] Found valid product: Baklažāns Graffiti gab
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 1 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_988582_PCE_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'dict'>, keys: ['name', 'photos', 'price', 'is_available', 'url', 'soup']
+[COORDINATOR] 🔄 COORDINATOR: Step 2: Extracting category from product page...
+[COORDINATOR] 🔄 COORDINATOR: Calling extract_nutrition_data...
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] 🔍 COORDINATOR: Nutrition data keys: ['has_nutrition', 'ingredients_text', 'category_code', 'category_path_full', 'country_of_origin', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated', 'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber', 'ingredients']
+[COORDINATOR] 🔍 COORDINATOR: Extracted category: 'SH-2-2-9'
+[COORDINATOR] 🔍 COORDINATOR: Category path: 'SH-2-2-9/SH-2-2/SH-2/SH'
+[COORDINATOR] ✅ COORDINATOR: Successfully extracted category: SH-2-2-9 from path: SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] 🔄 COORDINATOR: Step 3: Processing with category SH-2-2-9
+[COORDINATOR] 🔄 COORDINATOR: Calling process_single_product_enhanced...
+[COORDINATOR] === Enhanced Processing: SKU 988582 ===
+[COORDINATOR] Found 1 corruption indicators for SKU 988582
+[COORDINATOR] Detected corrupted data for SKU 988582 - will force update
+[COORDINATOR] Fetching product data with retry logic...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/988582
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/988582
+[COORDINATOR] Successfully fetched https://www.rimi.lv/e-veikals/lv/produkti/p/988582
+[COORDINATOR] Found valid product: Baklažāns Graffiti gab
+[COORDINATOR] Starting primary photo extraction...
+[COORDINATOR] Trying selector: img[src*="cloudinary"]
+[COORDINATOR] Found 1 images with selector 'img[src*="cloudinary"]'
+[COORDINATOR] Improved image quality: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c... -> https://rimibaltic-res.cloudinary.com/image/upload/b_white,c...
+[COORDINATOR] Successfully extracted primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_988582_PCE_LV
+[COORDINATOR] Product is UNAVAILABLE (found unavailability message)
+[COORDINATOR] Extracting nutrition and additional data...
+[COORDINATOR] === NUTRITION DATA PARSING ===
+[COORDINATOR] === PHASE 1 CATEGORY EXTRACTION ===
+[COORDINATOR] Method 1: Searching product metadata for category...
+[COORDINATOR] ✓ Found category in metadata (pattern 1): SH-2-2-9/SH-2-2/SH-2/SH
+[COORDINATOR] ✓ Extracted code: SH-2-2-9
+[COORDINATOR] ✅ Category extraction successful: SH-2-2-9
+[COORDINATOR] ========================================
+[COORDINATOR] Found product details script - extracting HTML content
+[COORDINATOR] Successfully decoded HTML using JSON parser
+[COORDINATOR] Successfully parsed product details HTML with Unicode decoding
+[COORDINATOR] COUNTRY DEBUG: Found 'Izcelsmes valsts' in HTML
+[COORDINATOR] COUNTRY DEBUG: Found span #1 with 'Izcelsmes valsts'
+[COORDINATOR] COUNTRY DEBUG: Parent tag: li
+[COORDINATOR] COUNTRY DEBUG: Parent HTML: <li class="item">
+<span>Izcelsmes valsts</span>
+<div class="text">
+<p>Spānija</p>
+</div>
+</li>...
+[COORDINATOR] COUNTRY DEBUG: Found text div: True
+[COORDINATOR] COUNTRY DEBUG: Found p tag: True
+[COORDINATOR] COUNTRY DEBUG: p tag content: 'Spānija'
+[COORDINATOR] ✅ Found country of origin: Spānija
+[COORDINATOR] ○ No nutrition table found in product details
+[COORDINATOR] ○ No nutrition labels found on product page
+[COORDINATOR]   (Normal for oils, single ingredients, etc.)
+[COORDINATOR] ===================================
+[COORDINATOR] Performing force update of corrupted existing product...
+[COORDINATOR] Force updating product data for SKU: 988582
+[COORDINATOR] Updating rimi_url: https://www.rimi.lv/e-veikals/lv/produkti/p/988582
+[COORDINATOR] Updating category_id: 185
+[COORDINATOR] Updating name: Baklažāns Graffiti gab...
+[COORDINATOR] Updating quantity_value: None
+[COORDINATOR] Updating quantity_unit: None
+[COORDINATOR] Updating country_of_origin: Spānija
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated 7 product fields
+[COORDINATOR] Force updating nutrition data for product ID: 1978
+[COORDINATOR] Updating ingredients_text:  -> 
+[COORDINATOR] Updating energy_kcal: 0 -> 0
+[COORDINATOR] Updating energy_kj: 0 -> 0
+[COORDINATOR] Updating fat_total: 0.00 -> 0
+[COORDINATOR] Updating fat_saturated: 0.00 -> 0
+[COORDINATOR] Updating carbs_total: 0.00 -> 0
+[COORDINATOR] Updating carbs_sugars: 0.00 -> 0
+[COORDINATOR] Updating protein: 0.00 -> 0
+[COORDINATOR] Updating salt: 0.00 -> 0
+[COORDINATOR] Updating fiber: 0.00 -> 0
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] ✓ Successfully updated 10 nutrition fields in nutritionfacts table
+[COORDINATOR] === NUTRITIONFACTS TABLE SAVE RESULTS ===
+[COORDINATOR]   ✓ ingredients_text saved to database
+[COORDINATOR]   ✓ energy_kcal saved to database
+[COORDINATOR]   ✓ energy_kj saved to database
+[COORDINATOR]   ✓ fat_total saved to database
+[COORDINATOR]   ✓ fat_saturated saved to database
+[COORDINATOR]   ✓ carbs_total saved to database
+[COORDINATOR]   ✓ carbs_sugars saved to database
+[COORDINATOR]   ✓ protein saved to database
+[COORDINATOR]   ✓ salt saved to database
+[COORDINATOR]   ✓ fiber saved to database
+[COORDINATOR] =============================================
+[COORDINATOR] === NUTRI-SCORE CALCULATION ANALYSIS ===
+[COORDINATOR] Present fields (7):
+[COORDINATOR]   ✓ energy_kcal: 0
+[COORDINATOR]   ✓ fat_total: 0.00
+[COORDINATOR]   ✓ fat_saturated: 0.00
+[COORDINATOR]   ✓ carbs_total: 0.00
+[COORDINATOR]   ✓ carbs_sugars: 0.00
+[COORDINATOR]   ✓ protein: 0.00
+[COORDINATOR]   ✓ salt: 0.00
+[COORDINATOR] ⚠ ALL BASIC NUTRITION VALUES ARE ZERO
+[COORDINATOR]   This product needs nutrition data enrichment
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Set needs_enrichment = TRUE on products table
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR]   ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)
+[COORDINATOR] ==================================================
+[COORDINATOR] ✓ Committed nutrition update to database
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Updated price: €0.00 (available: False)
+[COORDINATOR] Successfully force-updated product 988582
+[COORDINATOR] Attempting to save 1 photo(s) for product ID 1978
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Cleared existing photos for product ID 1978
+[COORDINATOR] ✓ Database commit succeeded
+[COORDINATOR] Successfully saved primary photo: https://rimibaltic-res.cloudinary.com/image/upload/b_white,c_limit,dpr_auto,f_auto,q_auto:low,w_auto/d_ecommerce:backend-fallback.png/MAT_988582_PCE_LV
+[COORDINATOR] Successfully committed 1 photo(s) to database for product ID 1978
+[COORDINATOR] Photos processing: Successfully saved photo for product 988582
+[COORDINATOR] Ingredients processing: No ingredients extracted for product 988582
+[COORDINATOR] Force update completed successfully with photos saved
+[COORDINATOR] Processing completed in 3.29s
+[COORDINATOR] 🔍 COORDINATOR: Enhanced processing result: success=True, operation=force_update
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: True
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 988582...
+🔍 BATCH: Success status for 988582: True
+✅ BATCH: 988582 processed successfully
+2025-11-25 19:28:50,542 - __main__ - INFO - ✓ 988582 processed successfully
+[COORDINATOR] Database connection closed
+[COORDINATOR] Enhanced coordinator closed
+[COORDINATOR] Database connection closed
+[COORDINATOR] Enhanced coordinator closed
+[COORDINATOR] Database connection closed
+[COORDINATOR] Enhanced coordinator closed
+🔧 BATCH: Closed 3 reused coordinators
+2025-11-25 19:28:50,545 - __main__ - INFO - Batch processor closed 3 coordinator connections
+2025-11-25 19:28:50,545 - __main__ - INFO - Batch processing completed: 10 successful, 0 failed
+2025-11-25 19:28:54,123 - __main__ - INFO - ✓ Chunk 1 completed in 26.9s (10/10 successful)
+2025-11-25 19:28:54,123 - __main__ - INFO - 💾 Memory after chunk: 74.6 MB (Δ+29.1 MB)
+2025-11-25 19:28:54,456 - __main__ - INFO - ✓ Job #345 marked as completed
+2025-11-25 19:28:54,457 - __main__ - INFO - ✅ All chunks processed successfully!
+🔧 BATCH: Closed 0 reused coordinators
+2025-11-25 19:28:54,458 - __main__ - INFO - Batch processor closed 0 coordinator connections
+2025-11-25 19:28:54,772 - __main__ - INFO - Job #345 completed: 10/10 successful
+2025-11-25 19:28:55,375 - __main__ - INFO - No more jobs in queue, exiting
+2025-11-25 19:28:55,375 - __main__ - INFO - Shutting down worker...
+2025-11-25 19:28:55,695 - __main__ - INFO - Worker 87fab5e3046a_3107_1764098905 shutdown complete
