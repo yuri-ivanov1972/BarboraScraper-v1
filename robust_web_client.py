@@ -150,6 +150,9 @@ class RobustWebClient:
     
     def _extract_price(self, soup: BeautifulSoup) -> str:
         """Extract price from product page with robust parsing"""
+        import re
+        import json
+        
         price = "0.00"
         
         # Try multiple price selector patterns
@@ -167,7 +170,6 @@ class RobustWebClient:
                 price_text = price_elem.get_text(strip=True)
                 
                 # Extract price number - handle newlines and spaces in price format
-                import re
                 # Remove all whitespace including newlines, then look for price pattern
                 clean_text = re.sub(r'\s+', '', price_text)
                 price_match = re.search(r'(\d+[.,]?\d*)', clean_text)
@@ -184,7 +186,96 @@ class RobustWebClient:
                     self.status_callback(f"Price extraction: '{price_text}' -> '€{price}'")
                     break
         
+        # If HTML price extraction failed or returned 0, try Schema.org JSON-LD fallback
+        # This handles geo-blocked products where HTML shows "unavailable" but JSON has real price
+        if price == "0.00" or price == "0":
+            schema_price = self._extract_price_from_schema(soup)
+            if schema_price and schema_price != "0.00":
+                self.status_callback(f"Price fallback from Schema.org: €{schema_price}")
+                price = schema_price
+        
         return price
+    
+    def _extract_price_from_schema(self, soup: BeautifulSoup) -> Optional[str]:
+        """
+        Extract price from Schema.org JSON-LD structured data.
+        This is a fallback for geo-blocked products where HTML shows unavailable
+        but the structured data still contains the real price.
+        """
+        import re
+        import json
+        
+        try:
+            # Find all script tags with JSON-LD data
+            script_tags = soup.find_all('script', type='application/ld+json')
+            
+            for script in script_tags:
+                try:
+                    data = json.loads(script.string)
+                    
+                    # Check for direct Product type with offers
+                    if isinstance(data, dict):
+                        price = self._find_price_in_schema(data)
+                        if price:
+                            return price
+                    
+                    # Check for array of schema objects
+                    elif isinstance(data, list):
+                        for item in data:
+                            if isinstance(item, dict):
+                                price = self._find_price_in_schema(item)
+                                if price:
+                                    return price
+                                    
+                except json.JSONDecodeError:
+                    continue
+            
+            # Also try to find price in inline scripts (non-JSON-LD structured data)
+            all_scripts = soup.find_all('script')
+            for script in all_scripts:
+                if script.string and '"price"' in script.string:
+                    # Look for offers object with price
+                    match = re.search(r'"offers"\s*:\s*\{[^}]*"price"\s*:\s*["\']?(\d+\.?\d*)["\']?', script.string)
+                    if match:
+                        price_val = match.group(1)
+                        if float(price_val) > 0:
+                            return price_val
+                    
+                    # Direct price pattern
+                    match = re.search(r'"price"\s*:\s*["\']?(\d+\.?\d*)["\']?', script.string)
+                    if match:
+                        price_val = match.group(1)
+                        if float(price_val) > 0:
+                            return price_val
+                            
+        except Exception as e:
+            self.status_callback(f"Schema.org price extraction error: {str(e)}")
+        
+        return None
+    
+    def _find_price_in_schema(self, data: dict) -> Optional[str]:
+        """Helper to find price in Schema.org data structure"""
+        # Check for Offer type
+        if data.get('@type') == 'Offer' and 'price' in data:
+            price = str(data['price'])
+            if float(price) > 0:
+                return price
+        
+        # Check for Product type with offers
+        if data.get('@type') == 'Product' and 'offers' in data:
+            offers = data['offers']
+            if isinstance(offers, dict) and 'price' in offers:
+                price = str(offers['price'])
+                if float(price) > 0:
+                    return price
+            elif isinstance(offers, list):
+                for offer in offers:
+                    if isinstance(offer, dict) and 'price' in offer:
+                        price = str(offer['price'])
+                        if float(price) > 0:
+                            return price
+        
+        return None
     
     def _extract_availability(self, soup: BeautifulSoup) -> bool:
         """
