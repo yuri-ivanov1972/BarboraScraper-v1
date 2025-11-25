@@ -357,8 +357,36 @@ class EnhancedDatabaseUpdater:
                 self.status_callback("=" * 50)
                 return False
             
+            # Check if ALL basic nutrition values are zero (needs enrichment case)
+            # These products have no real nutrition data - likely from Rimi pages without nutrition table
+            basic_nutrition_fields = ['energy_kcal', 'fat_total', 'carbs_total', 'protein', 'salt']
+            all_zeros = all(
+                (nutrition.get(field) or 0) == 0 
+                for field in basic_nutrition_fields
+            )
+            
+            if all_zeros:
+                self.status_callback("⚠ ALL BASIC NUTRITION VALUES ARE ZERO")
+                self.status_callback("  This product needs nutrition data enrichment")
+                
+                # Set needs_enrichment = TRUE on products table
+                self._execute_query(
+                    "UPDATE products SET needs_enrichment = TRUE WHERE product_id = %s",
+                    (product_id,)
+                )
+                self.status_callback("  ✓ Set needs_enrichment = TRUE on products table")
+                
+                # Clear nutri-score (should not have a score if no real data)
+                self._execute_query(
+                    "UPDATE nutritionfacts SET nutri_score_grade = NULL, nutri_score_points = NULL WHERE product_id = %s",
+                    (product_id,)
+                )
+                self.status_callback("  ✓ Cleared nutri_score_grade and nutri_score_points (set to NULL)")
+                self.status_callback("=" * 50)
+                return False
+            
             # Calculate nutri-score using the calculator
-            self.status_callback("✓ All required fields present - proceeding with calculation")
+            self.status_callback("✓ All required fields present with non-zero values - proceeding with calculation")
             try:
                 from nutriscore_calculator import calculate_nutriscore
                 
