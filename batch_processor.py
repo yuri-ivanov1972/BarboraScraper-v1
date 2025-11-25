@@ -55,14 +55,15 @@ class BatchProcessor:
             print(f"🔧 BATCH: Created reusable {coord_type} coordinator for thread {thread_id}")
             return coordinator
     
-    def process_product_batch(self, products: List[Dict], category_code: Optional[str] = None, force_update: bool = False) -> Dict:
+    def process_product_batch(self, products: List[Dict], category_code: Optional[str] = None, force_update: bool = False, fallback_category_code: Optional[str] = None) -> Dict:
         """
         Process a batch of products with optimized connection handling
         
         Args:
             products: List of product dictionaries with 'sku' and optionally 'name'
-            category_code: Default category code to use
+            category_code: Default category code to use (if set, skips auto-extraction)
             force_update: Whether to force update existing products (default: False)
+            fallback_category_code: Category code to use if auto-extracted category doesn't exist in DB
             
         Returns:
             Dictionary with batch processing results
@@ -103,6 +104,8 @@ class BatchProcessor:
                 # Use automatic category extraction if no category_code provided
                 if category_code is None:
                     print(f"🔄 BATCH: Using automatic category extraction for {sku}")
+                    if fallback_category_code:
+                        print(f"🔄 BATCH: Fallback category if extraction fails: {fallback_category_code}")
                     print(f"🔄 BATCH: Thread ID: {threading.current_thread().ident}")
                     print(f"🔄 BATCH: Thread name: {threading.current_thread().name}")
                     
@@ -112,7 +115,7 @@ class BatchProcessor:
                         enhanced_coordinator = self._get_coordinator(enhanced=True)
                         
                         print(f"🔄 BATCH: Calling process_single_product_with_auto_category (force_update={force_update})...")
-                        result = enhanced_coordinator.process_single_product_with_auto_category(sku, force_update=force_update)
+                        result = enhanced_coordinator.process_single_product_with_auto_category(sku, force_update=force_update, fallback_category_code=fallback_category_code)
                         
                         print(f"🔄 BATCH: Processing completed, result type: {type(result)}")
                         print(f"🔄 BATCH: Result success: {getattr(result, 'success', 'N/A')}")
@@ -267,20 +270,23 @@ class BatchProcessor:
         
         progress_mgr = ProgressManager(self.status_callback)
         
+        # Always get category code from job for fallback when auto-extraction fails
+        import psycopg2
+        db_url = os.environ['DATABASE_URL']
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("SELECT category_code FROM category_processing_jobs WHERE id = %s", (job_id,))
+        job_category_row = cur.fetchone()
+        job_category_code = job_category_row[0] if job_category_row else None
+        conn.close()
+        
+        if job_category_code:
+            self.status_callback(f"📌 Job category: {job_category_code} (fallback for invalid extracted categories)")
+        
         # Initialize smart updater and statistics collector if in smart mode
         stats_collector = None
         if smart_mode:
-            db_url = os.environ['DATABASE_URL']
-            
-            # Get category code from job
-            import psycopg2
-            conn = psycopg2.connect(db_url)
-            cur = conn.cursor()
-            cur.execute("SELECT category_code FROM category_processing_jobs WHERE id = %s", (job_id,))
-            category_code = cur.fetchone()[0]
-            conn.close()
-            
-            stats_collector = UpdateStatisticsCollector(db_url, job_id, category_code)
+            stats_collector = UpdateStatisticsCollector(db_url, job_id, job_category_code)
             self.status_callback(f"🎯 Smart mode enabled: will update only changed fields")
         
         try:
@@ -300,21 +306,12 @@ class BatchProcessor:
             if update_mode == 'incremental':
                 self.status_callback(f"🔄 Incremental mode: classifying {len(pending_skus)} SKUs...")
                 
-                # Get category code from job
-                import psycopg2
                 from sku_classifier import SkuClassifier
                 from lightweight_updater import LightweightUpdater
                 
-                db_url = os.environ['DATABASE_URL']
-                conn = psycopg2.connect(db_url)
-                cur = conn.cursor()
-                cur.execute("SELECT category_code FROM category_processing_jobs WHERE id = %s", (job_id,))
-                category_code = cur.fetchone()[0]
-                conn.close()
-                
-                # Classify SKUs
+                # Classify SKUs using already-fetched job category
                 classifier = SkuClassifier()
-                classification = classifier.classify_skus(category_code, pending_skus)
+                classification = classifier.classify_skus(job_category_code, pending_skus)
                 
                 new_skus = classification['new']
                 existing_skus = classification['existing']
@@ -326,7 +323,7 @@ class BatchProcessor:
                 
                 # Mark removed products as inactive
                 if removed_skus:
-                    removed_count = classifier.mark_products_inactive(removed_skus, category_code)
+                    removed_count = classifier.mark_products_inactive(removed_skus, job_category_code)
                     self.status_callback(f"  ✓ Marked {removed_count} products as inactive")
                     total_results['removed_products'] = removed_count
                 
@@ -365,9 +362,9 @@ class BatchProcessor:
                 for sku in chunk_skus:
                     progress_mgr.update_product_status(job_id, sku, 'processing')
                 
-                # Process chunk
+                # Process chunk with job category as fallback for invalid extracted categories
                 products = [{'sku': sku} for sku in chunk_skus]
-                chunk_results = self.process_product_batch(products, None, force_update=force_update)
+                chunk_results = self.process_product_batch(products, None, force_update=force_update, fallback_category_code=job_category_code)
                 
                 # Update individual product statuses based on results
                 for product_result in chunk_results['products_processed']:

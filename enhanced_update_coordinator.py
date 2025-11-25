@@ -69,13 +69,14 @@ class EnhancedUpdateCoordinator:
                     self.web_client = None
                     self.db_updater = None
     
-    def process_single_product_with_auto_category(self, sku: str, force_update: bool = False) -> ProcessingResult:
+    def process_single_product_with_auto_category(self, sku: str, force_update: bool = False, fallback_category_code: Optional[str] = None) -> ProcessingResult:
         """
         Process single product with automatic category extraction from product page
         
         Args:
             sku: Product SKU to process
             force_update: Whether to force update existing data
+            fallback_category_code: Category code to use if extracted category doesn't exist in DB
             
         Returns:
             ProcessingResult with success status and details
@@ -145,13 +146,28 @@ class EnhancedUpdateCoordinator:
             self.status_callback(f"🔍 COORDINATOR: Category path: '{category_path}'")
             
             if extracted_category:
-                self.status_callback(f"✅ COORDINATOR: Successfully extracted category: {extracted_category} from path: {category_path}")
-                category_code = extracted_category
+                # Validate that extracted category exists in normalized_categories
+                extracted_category_id = self._get_category_id(extracted_category)
+                
+                if extracted_category_id:
+                    self.status_callback(f"✅ COORDINATOR: Successfully extracted category: {extracted_category} from path: {category_path}")
+                    category_code = extracted_category
+                elif fallback_category_code:
+                    # Extracted category doesn't exist in DB, use fallback from job
+                    self.status_callback(f"⚠️ COORDINATOR: Extracted category {extracted_category} not found in DB, using job fallback: {fallback_category_code}")
+                    category_code = fallback_category_code
+                else:
+                    self.status_callback(f"⚠️ COORDINATOR: Extracted category {extracted_category} not found in DB, using default SH-1-1-1")
+                    category_code = 'SH-1-1-1'
             else:
-                self.status_callback("⚠️ COORDINATOR: No category found on product page, using default SH-1-1-1")
-                category_code = 'SH-1-1-1'  # Default fallback
+                if fallback_category_code:
+                    self.status_callback(f"⚠️ COORDINATOR: No category found on product page, using job fallback: {fallback_category_code}")
+                    category_code = fallback_category_code
+                else:
+                    self.status_callback("⚠️ COORDINATOR: No category found on product page, using default SH-1-1-1")
+                    category_code = 'SH-1-1-1'  # Default fallback
             
-            # Step 3: Process with extracted category
+            # Step 3: Process with validated category
             self.status_callback(f"🔄 COORDINATOR: Step 3: Processing with category {category_code}")
             self.status_callback(f"🔄 COORDINATOR: Calling process_single_product_enhanced...")
             
@@ -576,7 +592,14 @@ class EnhancedUpdateCoordinator:
             return False
     
     def _get_category_id(self, category_code: str) -> Optional[int]:
-        """Get category ID from category code"""
+        """Get category ID from category code
+        
+        Args:
+            category_code: The Rimi category code (e.g., 'SH-2-2-10')
+            
+        Returns:
+            Category ID if found, None if category doesn't exist in normalized_categories
+        """
         try:
             from database_integration import ExternalDatabaseManager
             ext_db = ExternalDatabaseManager()
@@ -586,12 +609,13 @@ class EnhancedUpdateCoordinator:
                 if category.rimi_category_code == category_code:
                     return category.category_id
             
-            self.status_callback(f"Category code {category_code} not found, using default category 298 for olive oil")
-            return 298  # Default to olive oil category for SKU 147762
+            # Category not found - return None so caller can handle fallback
+            self.status_callback(f"Category code {category_code} not found in normalized_categories")
+            return None
             
         except Exception as e:
-            self.status_callback(f"Error getting category ID: {str(e)}, using default 298")
-            return 298
+            self.status_callback(f"Error getting category ID: {str(e)}")
+            return None
     
     def _parse_quantity(self, product_name: str) -> tuple:
         """Parse quantity from product name"""
