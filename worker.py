@@ -5,6 +5,18 @@ Runs independently of Streamlit for robust overnight processing
 """
 import os
 import sys
+
+# CRITICAL: Parse --production flag BEFORE any imports that use DatabaseConfig
+# This ensures db_config.is_development returns False when running in production mode
+def _early_parse_production_flag():
+    """Parse --production flag early to set ENVIRONMENT before other imports"""
+    if '--production' in sys.argv:
+        os.environ['ENVIRONMENT'] = 'production'
+        return True
+    return False
+
+_use_production_early = _early_parse_production_flag()
+
 import argparse
 import signal
 import socket

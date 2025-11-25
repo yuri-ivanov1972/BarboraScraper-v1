@@ -50,22 +50,46 @@ class SkuClassifier:
             listing_skus_set = set(listing_skus)
             
             # Get all existing SKUs for this category from database
-            # Include both the category itself AND all its children (hierarchical)
+            # Include: 
+            # 1. The category itself
+            # 2. All its CHILDREN (descendants) - hierarchical DOWN
+            # 3. All its ANCESTORS (parents) - hierarchical UP
+            # This is critical because products may be stored in parent categories
+            # (e.g., product in SH-2-2 should be found when processing SH-2-2-12)
             cur.execute("""
-                WITH target_category AS (
-                    SELECT category_id 
+                WITH RECURSIVE 
+                -- Find the target category
+                target_category AS (
+                    SELECT category_id, parent_category_id
                     FROM normalized_categories 
                     WHERE rimi_category_code = %s
+                ),
+                -- Find all descendants (children, grandchildren, etc.) - search DOWN
+                descendants AS (
+                    SELECT category_id FROM target_category
+                    UNION ALL
+                    SELECT nc.category_id 
+                    FROM normalized_categories nc
+                    JOIN descendants d ON nc.parent_category_id = d.category_id
+                ),
+                -- Find all ancestors (parents, grandparents, etc.) - search UP
+                ancestors AS (
+                    SELECT category_id, parent_category_id FROM target_category
+                    UNION ALL
+                    SELECT nc.category_id, nc.parent_category_id
+                    FROM normalized_categories nc
+                    JOIN ancestors a ON nc.category_id = a.parent_category_id
+                    WHERE a.parent_category_id IS NOT NULL
+                ),
+                -- Combine all related categories
+                all_related_categories AS (
+                    SELECT category_id FROM descendants
+                    UNION
+                    SELECT category_id FROM ancestors
                 )
                 SELECT DISTINCT p.sku 
                 FROM products p
-                JOIN normalized_categories nc ON p.category_id = nc.category_id
-                WHERE nc.category_id IN (
-                    SELECT category_id FROM target_category
-                    UNION
-                    SELECT category_id FROM normalized_categories 
-                    WHERE parent_category_id IN (SELECT category_id FROM target_category)
-                )
+                WHERE p.category_id IN (SELECT category_id FROM all_related_categories)
             """, (category_code,))
             
             db_skus = set(row[0] for row in cur.fetchall())
@@ -171,24 +195,43 @@ class SkuClassifier:
             cur = conn.cursor()
             
             # Add price history records marking products as unavailable
-            # Include both the category itself AND all its children (hierarchical)
+            # Include: target category + all descendants + all ancestors (bidirectional)
             cur.execute("""
-                WITH target_category AS (
-                    SELECT category_id 
+                WITH RECURSIVE 
+                -- Find the target category
+                target_category AS (
+                    SELECT category_id, parent_category_id
                     FROM normalized_categories 
                     WHERE rimi_category_code = %s
+                ),
+                -- Find all descendants (children, grandchildren, etc.) - search DOWN
+                descendants AS (
+                    SELECT category_id FROM target_category
+                    UNION ALL
+                    SELECT nc.category_id 
+                    FROM normalized_categories nc
+                    JOIN descendants d ON nc.parent_category_id = d.category_id
+                ),
+                -- Find all ancestors (parents, grandparents, etc.) - search UP
+                ancestors AS (
+                    SELECT category_id, parent_category_id FROM target_category
+                    UNION ALL
+                    SELECT nc.category_id, nc.parent_category_id
+                    FROM normalized_categories nc
+                    JOIN ancestors a ON nc.category_id = a.parent_category_id
+                    WHERE a.parent_category_id IS NOT NULL
+                ),
+                -- Combine all related categories
+                all_related_categories AS (
+                    SELECT category_id FROM descendants
+                    UNION
+                    SELECT category_id FROM ancestors
                 ),
                 matching_products AS (
                     SELECT p.product_id, p.sku
                     FROM products p
-                    JOIN normalized_categories nc ON p.category_id = nc.category_id
                     WHERE p.sku = ANY(%s)
-                      AND nc.category_id IN (
-                        SELECT category_id FROM target_category
-                        UNION
-                        SELECT category_id FROM normalized_categories 
-                        WHERE parent_category_id IN (SELECT category_id FROM target_category)
-                      )
+                      AND p.category_id IN (SELECT category_id FROM all_related_categories)
                 )
                 INSERT INTO product_price_history (product_id, price, is_available, data_source, recorded_at)
                 SELECT 
