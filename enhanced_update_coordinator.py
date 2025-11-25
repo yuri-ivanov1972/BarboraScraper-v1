@@ -422,7 +422,8 @@ class EnhancedUpdateCoordinator:
         # Check nutrition data corruption
         try:
             nutrition_query = """
-                SELECT carbs_total, carbs_sugars, protein, salt, nutri_score_grade
+                SELECT carbs_total, carbs_sugars, protein, salt, nutri_score_grade,
+                       energy_kcal, fat_total
                 FROM nutritionfacts WHERE product_id = %s
             """
             nutrition_result = self.db_updater._execute_query(
@@ -431,14 +432,37 @@ class EnhancedUpdateCoordinator:
             
             if nutrition_result:
                 nutrition = nutrition_result[0]
-                # Check for NULL nutrition values where they shouldn't be
-                null_nutrition = [
-                    nutrition.get('carbs_total') is None,
-                    nutrition.get('carbs_sugars') is None,
-                    nutrition.get('protein') is None,
-                    nutrition.get('salt') is None,
-                    nutrition.get('nutri_score_grade') is None
-                ]
+                
+                # Check if this is a "needs enrichment" case (all basic nutrition = 0)
+                # In this case, NULL nutri_score is EXPECTED, not corruption
+                basic_nutrition_fields = ['energy_kcal', 'fat_total', 'carbs_total', 'protein', 'salt']
+                all_nutrition_zero = all(
+                    (nutrition.get(field) or 0) == 0 
+                    for field in basic_nutrition_fields
+                )
+                
+                # Also check if product is already flagged for enrichment
+                needs_enrichment = product.get('needs_enrichment', False)
+                
+                if all_nutrition_zero or needs_enrichment:
+                    # Product has no real nutrition data - don't check nutri_score
+                    # Only check for NULL values in core nutrition fields themselves
+                    null_nutrition = [
+                        nutrition.get('carbs_total') is None,
+                        nutrition.get('carbs_sugars') is None,
+                        nutrition.get('protein') is None,
+                        nutrition.get('salt') is None,
+                        # nutri_score_grade=NULL is EXPECTED here, not corruption
+                    ]
+                else:
+                    # Product has real nutrition data - nutri_score should exist
+                    null_nutrition = [
+                        nutrition.get('carbs_total') is None,
+                        nutrition.get('carbs_sugars') is None,
+                        nutrition.get('protein') is None,
+                        nutrition.get('salt') is None,
+                        nutrition.get('nutri_score_grade') is None
+                    ]
                 corruption_indicators.extend(null_nutrition)
                 
         except Exception as e:
