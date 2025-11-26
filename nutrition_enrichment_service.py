@@ -42,16 +42,31 @@ class ProductForEnrichment:
 
 @dataclass 
 class EnrichmentMatch:
-    """A product with its USDA match for review"""
+    """A product with its USDA match options for review"""
     product: ProductForEnrichment
     translation: TranslationResult
-    usda_match: Optional[USDAFoodMatch] = None
+    usda_options: List[USDAFoodMatch] = field(default_factory=list)
+    selected_index: int = 0
     status: str = 'pending'
+    
+    @property
+    def usda_match(self) -> Optional[USDAFoodMatch]:
+        """Get the currently selected USDA match"""
+        if self.usda_options and 0 <= self.selected_index < len(self.usda_options):
+            return self.usda_options[self.selected_index]
+        return None
+    
+    def select_option(self, index: int):
+        """Select a different USDA match option"""
+        if 0 <= index < len(self.usda_options):
+            self.selected_index = index
     
     def to_dict(self) -> Dict:
         return {
             'product': self.product.to_dict(),
             'translation': self.translation.to_dict(),
+            'usda_options': [opt.to_dict() for opt in self.usda_options],
+            'selected_index': self.selected_index,
             'usda_match': self.usda_match.to_dict() if self.usda_match else None,
             'status': self.status
         }
@@ -199,23 +214,24 @@ class NutritionEnrichmentService:
         finally:
             conn.close()
     
-    def process_single_product(self, product: ProductForEnrichment) -> EnrichmentMatch:
-        """Process a single product: translate and search USDA"""
+    def process_single_product(self, product: ProductForEnrichment, num_options: int = 5) -> EnrichmentMatch:
+        """Process a single product: translate and search USDA for multiple options"""
         self.status_callback(f"\n🔄 Processing: {product.name} (SKU: {product.sku})")
         
         translation = self.translator.translate(product.name)
         
-        usda_match = self.usda_client.search_and_get_best_match(translation.english)
+        usda_options = self.usda_client.search_and_get_top_matches(translation.english, num_options=num_options)
         
         match = EnrichmentMatch(
             product=product,
             translation=translation,
-            usda_match=usda_match,
-            status='pending' if usda_match else 'no_match'
+            usda_options=usda_options,
+            selected_index=0,
+            status='pending' if usda_options else 'no_match'
         )
         
-        if usda_match:
-            self.status_callback(f"✅ Match found: {usda_match.description} (Score: {usda_match.score:.1f})")
+        if usda_options:
+            self.status_callback(f"✅ Found {len(usda_options)} options. Top: {usda_options[0].description} (Score: {usda_options[0].score:.1f})")
         else:
             self.status_callback(f"⚠️ No USDA match found for '{translation.english}'")
         
@@ -240,11 +256,11 @@ class NutritionEnrichmentService:
         
         return batch
     
-    def search_custom_term(self, product: ProductForEnrichment, search_term: str) -> EnrichmentMatch:
+    def search_custom_term(self, product: ProductForEnrichment, search_term: str, num_options: int = 5) -> EnrichmentMatch:
         """Search USDA with a custom term provided by user"""
         self.status_callback(f"🔍 Custom search for '{search_term}'")
         
-        usda_match = self.usda_client.search_and_get_best_match(search_term)
+        usda_options = self.usda_client.search_and_get_top_matches(search_term, num_options=num_options)
         
         translation = TranslationResult(
             original=product.name,
@@ -256,8 +272,9 @@ class NutritionEnrichmentService:
         return EnrichmentMatch(
             product=product,
             translation=translation,
-            usda_match=usda_match,
-            status='pending' if usda_match else 'no_match'
+            usda_options=usda_options,
+            selected_index=0,
+            status='pending' if usda_options else 'no_match'
         )
     
     def save_enrichment(self, match: EnrichmentMatch) -> bool:

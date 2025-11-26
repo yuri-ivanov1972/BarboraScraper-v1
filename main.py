@@ -595,31 +595,47 @@ def section_nutrition_enrichment():
                         st.write(f"**Method:** {match.translation.method} ({match.translation.confidence:.0%})")
                     
                     with col2:
-                        if match.usda_match:
-                            st.markdown("**USDA Match:**")
-                            st.write(f"**Description:** {match.usda_match.description}")
-                            st.write(f"**Data Type:** {match.usda_match.data_type}")
-                            st.write(f"**Score:** {match.usda_match.score:.1f}")
+                        if match.usda_options:
+                            st.markdown("**USDA Match Options:**")
                             
-                            if match.usda_match.nutrition:
-                                n = match.usda_match.nutrition
-                                st.markdown("**Nutrition (per 100g):**")
-                                ncol1, ncol2, ncol3 = st.columns(3)
-                                with ncol1:
-                                    st.metric("Energy", f"{n.energy_kcal or 0:.0f} kcal")
-                                    st.metric("Protein", f"{n.protein or 0:.1f}g")
-                                with ncol2:
-                                    st.metric("Fat", f"{n.fat_total or 0:.1f}g")
-                                    st.metric("Sat. Fat", f"{n.fat_saturated or 0:.1f}g")
-                                with ncol3:
-                                    st.metric("Carbs", f"{n.carbs_total or 0:.1f}g")
-                                    st.metric("Sugars", f"{n.carbs_sugars or 0:.1f}g")
+                            option_labels = [
+                                f"{opt.description} (Score: {opt.score:.0f})"
+                                for opt in match.usda_options
+                            ]
+                            
+                            selected_idx = st.selectbox(
+                                "Select match:",
+                                options=range(len(option_labels)),
+                                format_func=lambda x: option_labels[x],
+                                index=match.selected_index,
+                                key=f"select_{i}"
+                            )
+                            
+                            if selected_idx != match.selected_index:
+                                match.select_option(selected_idx)
+                            
+                            if match.usda_match:
+                                st.write(f"**Data Type:** {match.usda_match.data_type}")
                                 
-                                scol1, scol2 = st.columns(2)
-                                with scol1:
-                                    st.metric("Salt", f"{n.salt or 0:.2f}g")
-                                with scol2:
-                                    st.metric("Fiber", f"{n.fiber or 0:.1f}g")
+                                if match.usda_match.nutrition:
+                                    n = match.usda_match.nutrition
+                                    st.markdown("**Nutrition (per 100g):**")
+                                    ncol1, ncol2, ncol3 = st.columns(3)
+                                    with ncol1:
+                                        st.metric("Energy", f"{n.energy_kcal or 0:.0f} kcal")
+                                        st.metric("Protein", f"{n.protein or 0:.1f}g")
+                                    with ncol2:
+                                        st.metric("Fat", f"{n.fat_total or 0:.1f}g")
+                                        st.metric("Sat. Fat", f"{n.fat_saturated or 0:.1f}g")
+                                    with ncol3:
+                                        st.metric("Carbs", f"{n.carbs_total or 0:.1f}g")
+                                        st.metric("Sugars", f"{n.carbs_sugars or 0:.1f}g")
+                                    
+                                    scol1, scol2 = st.columns(2)
+                                    with scol1:
+                                        st.metric("Salt", f"{n.salt or 0:.2f}g")
+                                    with scol2:
+                                        st.metric("Fiber", f"{n.fiber or 0:.1f}g")
                         else:
                             st.warning("No USDA match found")
                     

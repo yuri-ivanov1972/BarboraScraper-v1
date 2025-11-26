@@ -303,6 +303,35 @@ class USDAClient:
             return detailed
         
         return best_match
+    
+    def search_and_get_top_matches(self, query: str, num_options: int = 5) -> List[USDAFoodMatch]:
+        """
+        Search for food and return multiple matches with full nutrition data
+        
+        Args:
+            query: Food name to search (in English)
+            num_options: Number of options to return (default 5)
+            
+        Returns:
+            List of USDAFoodMatch objects with nutrition data
+        """
+        matches = self.search_food(query, page_size=num_options)
+        
+        if not matches:
+            return []
+        
+        detailed_matches = []
+        for match in matches:
+            if match.nutrition and match.nutrition.is_complete():
+                detailed_matches.append(match)
+            else:
+                detailed = self.get_food_details(match.fdc_id)
+                if detailed:
+                    detailed_matches.append(detailed)
+                else:
+                    detailed_matches.append(match)
+        
+        return detailed_matches
 
 
 def test_usda_client():
