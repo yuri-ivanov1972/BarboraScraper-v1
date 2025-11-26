@@ -644,22 +644,24 @@ def section_nutrition_enrichment():
                                         st.metric("Fiber", f"{n.fiber or 0:.1f}g")
                         else:
                             st.warning("No USDA match found")
+                            st.info("Use custom search below to find a match")
                     
-                    if match.status == 'pending':
+                    if match.status in ['pending', 'no_match', 'skipped']:
                         bcol1, bcol2, bcol3 = st.columns(3)
                         
                         with bcol1:
-                            if match.usda_match and st.button("✅ Approve", key=f"approve_{i}"):
+                            if match.usda_match and match.status == 'pending' and st.button("✅ Approve", key=f"approve_{i}"):
                                 service.save_enrichment(match)
                                 st.rerun()
                         
                         with bcol2:
-                            if st.button("⏭️ Skip", key=f"skip_{i}"):
+                            if match.status == 'pending' and st.button("⏭️ Skip", key=f"skip_{i}"):
                                 service.skip_product(match)
                                 st.rerun()
                         
                         with bcol3:
-                            custom_term = st.text_input("Custom search:", key=f"search_{i}")
+                            custom_term = st.text_input("Custom search:", key=f"search_{i}", 
+                                placeholder="e.g., pomegranate, lime, persimmon")
                             if custom_term and st.button("🔍 Search", key=f"dosearch_{i}"):
                                 new_match = service.search_custom_term(match.product, custom_term)
                                 batch.matches[i] = new_match
