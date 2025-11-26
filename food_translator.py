@@ -335,6 +335,8 @@ WEIGHT_PATTERNS = [
     r'\b\d+-\d+\s*mm\b',
     r'\b1\.šķira\b',
     r'\b2\.šķira\b',
+    r'\bšķira\b',
+    r'\bsulai\b',
 ]
 
 

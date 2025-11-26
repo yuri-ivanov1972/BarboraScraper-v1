@@ -555,7 +555,7 @@ def section_nutrition_enrichment():
         if st.session_state.enrichment_batch:
             batch = st.session_state.enrichment_batch
             
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button("✅ Approve All Matches", disabled=batch.pending == 0):
                     for match in batch.matches:
@@ -569,7 +569,13 @@ def section_nutrition_enrichment():
                             service.skip_product(match)
                     st.rerun()
             with col3:
-                if st.button("🔄 New Batch"):
+                if st.button("🔄 Reprocess Skipped", disabled=batch.skipped == 0):
+                    for match in batch.matches:
+                        if match.status == 'skipped':
+                            match.status = 'pending'
+                    st.rerun()
+            with col4:
+                if st.button("🆕 New Batch"):
                     st.session_state.enrichment_batch = None
                     st.session_state.enrichment_log = []
                     st.rerun()
