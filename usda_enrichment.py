@@ -204,12 +204,13 @@ class USDAClient:
         self.status_callback(f"✅ Found {len(matches)} matches for '{query}'")
         return matches
     
-    def get_food_details(self, fdc_id: int) -> Optional[USDAFoodMatch]:
+    def get_food_details(self, fdc_id: int, original_score: float = 0) -> Optional[USDAFoodMatch]:
         """
         Get detailed nutrition data for a specific food
         
         Args:
             fdc_id: USDA FoodData Central ID
+            original_score: Original relevance score from search results (preserved)
             
         Returns:
             USDAFoodMatch with complete nutrition data
@@ -225,7 +226,7 @@ class USDAClient:
             fdc_id=result.get('fdcId', fdc_id),
             description=result.get('description', 'Unknown'),
             data_type=result.get('dataType', 'Unknown'),
-            score=100,
+            score=original_score,
             brand_owner=result.get('brandOwner')
         )
         
@@ -298,7 +299,7 @@ class USDAClient:
         if best_match.nutrition and best_match.nutrition.is_complete():
             return best_match
         
-        detailed = self.get_food_details(best_match.fdc_id)
+        detailed = self.get_food_details(best_match.fdc_id, original_score=best_match.score)
         if detailed:
             return detailed
         
@@ -313,7 +314,7 @@ class USDAClient:
             num_options: Number of options to return (default 5)
             
         Returns:
-            List of USDAFoodMatch objects with nutrition data
+            List of USDAFoodMatch objects with nutrition data, sorted by score (higher = better match)
         """
         matches = self.search_food(query, page_size=num_options)
         
@@ -325,7 +326,7 @@ class USDAClient:
             if match.nutrition and match.nutrition.is_complete():
                 detailed_matches.append(match)
             else:
-                detailed = self.get_food_details(match.fdc_id)
+                detailed = self.get_food_details(match.fdc_id, original_score=match.score)
                 if detailed:
                     detailed_matches.append(detailed)
                 else:
