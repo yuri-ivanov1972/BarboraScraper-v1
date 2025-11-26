@@ -286,13 +286,29 @@ WEIGHT_PATTERNS = [
     r'\bA/M\b',
     r'\bA/LM\b',
     r'\bA/LMS\b',
+    r'\bA/ML\b',
     r'\bA/S\b',
-    r'\bNr\.\d+\b',
+    r'\bNr\.?\s*\d+\b',
     r'\bOluksne\b',
     r'\bkūtī\b',
     r'\bdētas\b',
     r'\blauksaimniecības\b',
     r'\bbioloģiskās\b',
+    r'\bbrīv\.?apst\.?\b',
+    r'\bb/k\b',
+    r'\bITUM\b',
+    r'\b\d+\.\s*šķ\.?\b',
+    r'\bgaišās\b',
+    r'\btumšās\b',
+    r'\bsarkanās\b',
+    r'\bzaļās\b',
+    r'\bSprīdīši\b',
+    r'\bGranny\s+Smith\b',
+    r'\bRoyal\s+Gala\b',
+    r'\bGolden\b',
+    r'\bFuji\b',
+    r'\bPink\s+Lady\b',
+    r'\bRed\s+Delicious\b',
 ]
 
 
@@ -338,7 +354,12 @@ class FoodTranslator:
         return normalized
     
     def _translate_with_dictionary(self, text: str) -> Tuple[str, float]:
-        """Translate using local dictionary"""
+        """Translate using local dictionary
+        
+        Uses exact matching first, then careful partial matching with:
+        - Minimum word length requirements to prevent false positives
+        - Overlap threshold to ensure meaningful matches
+        """
         words = text.lower().split()
         translated_words = []
         matches = 0
@@ -346,16 +367,34 @@ class FoodTranslator:
         for word in words:
             word_clean = word.strip('.,;:!?()[]{}')
             
+            if not word_clean:
+                continue
+            
             if word_clean in self.dictionary:
                 translated_words.append(self.dictionary[word_clean])
                 matches += 1
             else:
-                for lv, en in self.dictionary.items():
-                    if lv in word_clean or word_clean in lv:
-                        translated_words.append(en)
-                        matches += 0.7
-                        break
-                else:
+                found_partial = False
+                
+                if len(word_clean) >= 4:
+                    for lv, en in self.dictionary.items():
+                        if len(lv) >= 4:
+                            if lv in word_clean:
+                                overlap_ratio = len(lv) / len(word_clean)
+                                if overlap_ratio >= 0.6:
+                                    translated_words.append(en)
+                                    matches += 0.7
+                                    found_partial = True
+                                    break
+                            elif word_clean in lv:
+                                overlap_ratio = len(word_clean) / len(lv)
+                                if overlap_ratio >= 0.6:
+                                    translated_words.append(en)
+                                    matches += 0.7
+                                    found_partial = True
+                                    break
+                
+                if not found_partial:
                     if word_clean.isalpha() and len(word_clean) > 2:
                         translated_words.append(word_clean)
         
