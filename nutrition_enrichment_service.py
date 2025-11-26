@@ -19,6 +19,7 @@ from decimal import Decimal
 
 from food_translator import FoodTranslator, TranslationResult
 from usda_enrichment import USDAClient, USDAFoodMatch, NutritionData
+from nutriscore_calculator import calculate_nutriscore
 
 
 @dataclass
@@ -344,6 +345,18 @@ class NutritionEnrichmentService:
                     WHERE product_id = %s
                 """, (match.product.product_id,))
                 
+                nutri_score, nutri_grade = self._calculate_nutriscore(nutrition)
+                
+                if nutri_score is not None:
+                    cur.execute("""
+                        UPDATE nutritionfacts
+                        SET 
+                            nutri_score_points = %s,
+                            nutri_score_grade = %s
+                        WHERE product_id = %s
+                    """, (nutri_score, nutri_grade, match.product.product_id))
+                    self.status_callback(f"📊 Nutri-Score: {nutri_grade} ({nutri_score} points)")
+                
                 conn.commit()
                 
                 match.status = 'approved'
@@ -383,94 +396,42 @@ class NutritionEnrichmentService:
         finally:
             conn.close()
     
-    def calculate_nutri_score(self, nutrition: NutritionData) -> Optional[str]:
-        """Calculate nutri-score grade from nutrition data"""
-        if not nutrition.is_complete():
-            return None
+    def _calculate_nutriscore(self, nutrition: NutritionData) -> tuple:
+        """Calculate nutri-score points and grade from nutrition data
         
-        negative_points = 0
-        
-        if nutrition.energy_kcal:
-            if nutrition.energy_kcal > 800:
-                negative_points += 10
-            elif nutrition.energy_kcal > 600:
-                negative_points += 8
-            elif nutrition.energy_kcal > 400:
-                negative_points += 6
-            elif nutrition.energy_kcal > 200:
-                negative_points += 4
-            elif nutrition.energy_kcal > 80:
-                negative_points += 2
-        
-        if nutrition.fat_saturated:
-            if nutrition.fat_saturated > 10:
-                negative_points += 10
-            elif nutrition.fat_saturated > 6:
-                negative_points += 7
-            elif nutrition.fat_saturated > 3:
-                negative_points += 4
-            elif nutrition.fat_saturated > 1:
-                negative_points += 2
-        
-        if nutrition.carbs_sugars:
-            if nutrition.carbs_sugars > 45:
-                negative_points += 10
-            elif nutrition.carbs_sugars > 27:
-                negative_points += 7
-            elif nutrition.carbs_sugars > 13.5:
-                negative_points += 4
-            elif nutrition.carbs_sugars > 4.5:
-                negative_points += 2
-        
-        if nutrition.salt:
-            salt_mg = nutrition.salt * 1000
-            if salt_mg > 900:
-                negative_points += 10
-            elif salt_mg > 630:
-                negative_points += 7
-            elif salt_mg > 360:
-                negative_points += 4
-            elif salt_mg > 90:
-                negative_points += 2
-        
-        positive_points = 0
-        
-        if nutrition.protein:
-            if nutrition.protein > 8:
-                positive_points += 5
-            elif nutrition.protein > 6.4:
-                positive_points += 4
-            elif nutrition.protein > 4.8:
-                positive_points += 3
-            elif nutrition.protein > 3.2:
-                positive_points += 2
-            elif nutrition.protein > 1.6:
-                positive_points += 1
-        
-        if nutrition.fiber:
-            if nutrition.fiber > 4.7:
-                positive_points += 5
-            elif nutrition.fiber > 3.7:
-                positive_points += 4
-            elif nutrition.fiber > 2.8:
-                positive_points += 3
-            elif nutrition.fiber > 1.9:
-                positive_points += 2
-            elif nutrition.fiber > 0.9:
-                positive_points += 1
-        
-        score = negative_points - positive_points
-        
-        if score <= -1:
-            return 'A'
-        elif score <= 2:
-            return 'B'
-        elif score <= 10:
-            return 'C'
-        elif score <= 18:
-            return 'D'
-        else:
-            return 'E'
+        Returns:
+            Tuple of (score_points, grade) or (None, None) if calculation not possible
+        """
+        try:
+            energy_kj = nutrition.energy_kj or (nutrition.energy_kcal * 4.184 if nutrition.energy_kcal else 0)
+            sugars = nutrition.carbs_sugars or 0
+            saturated_fat = nutrition.fat_saturated or 0
+            sodium = (nutrition.salt or 0) * 400
+            protein = nutrition.protein or 0
+            fiber = nutrition.fiber or 0
+            
+            if energy_kj == 0 and sugars == 0 and saturated_fat == 0:
+                self.status_callback("⚠️ Insufficient data for Nutri-Score calculation")
+                return (None, None)
+            
+            score, grade, _ = calculate_nutriscore(
+                energy_kj=energy_kj,
+                sugars=sugars,
+                saturated_fat=saturated_fat,
+                sodium=sodium,
+                protein=protein,
+                fiber=fiber,
+                fruits_veg_nuts=0,
+                is_beverage=False,
+                is_fat=False,
+                is_cheese=False
+            )
+            
+            return (score, grade)
+            
+        except Exception as e:
+            self.status_callback(f"⚠️ Error calculating Nutri-Score: {str(e)}")
+            return (None, None)
 
 
 def test_enrichment_service():
