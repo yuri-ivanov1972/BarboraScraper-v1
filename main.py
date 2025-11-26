@@ -487,11 +487,173 @@ def render_product_detail_view():
     db.close()
 
 
+def section_nutrition_enrichment():
+    """Section 3: Nutrition Data Enrichment from USDA"""
+    from nutrition_enrichment_service import NutritionEnrichmentService, EnrichmentBatch
+    
+    st.header("🥗 Nutrition Data Enrichment")
+    st.caption("Enrich products with missing nutrition data using USDA FoodData Central")
+    
+    if 'enrichment_batch' not in st.session_state:
+        st.session_state.enrichment_batch = None
+    if 'enrichment_processing' not in st.session_state:
+        st.session_state.enrichment_processing = False
+    if 'enrichment_log' not in st.session_state:
+        st.session_state.enrichment_log = []
+    
+    def log_callback(msg):
+        st.session_state.enrichment_log.append(msg)
+    
+    try:
+        service = NutritionEnrichmentService(status_callback=log_callback)
+        stats = service.get_enrichment_stats()
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Needs Enrichment", stats['needs_enrichment'])
+        with col2:
+            st.metric("Reviewed", stats['reviewed'])
+        with col3:
+            st.metric("From USDA", stats['from_usda'])
+        with col4:
+            st.metric("From Rimi", stats['from_rimi'])
+        
+        st.divider()
+        
+        col1, col2, col3 = st.columns([1, 1, 2])
+        
+        with col1:
+            batch_size = st.selectbox("Batch Size", [10, 20, 30, 50], index=1)
+        
+        with col2:
+            if st.button("🔄 Load Batch", type="primary", disabled=st.session_state.enrichment_processing):
+                st.session_state.enrichment_log = []
+                st.session_state.enrichment_processing = True
+                st.rerun()
+        
+        with col3:
+            if st.session_state.enrichment_batch:
+                batch = st.session_state.enrichment_batch
+                st.info(f"Batch: {batch.approved} approved, {batch.skipped} skipped, {batch.pending} pending, {batch.no_match} no match")
+        
+        if st.session_state.enrichment_processing and not st.session_state.enrichment_batch:
+            with st.spinner("Loading and processing products..."):
+                products = service.get_products_needing_enrichment(limit=batch_size)
+                if products:
+                    batch = service.process_batch(products)
+                    st.session_state.enrichment_batch = batch
+                else:
+                    st.success("No products need enrichment!")
+                st.session_state.enrichment_processing = False
+                st.rerun()
+        
+        if st.session_state.enrichment_log:
+            with st.expander("Processing Log", expanded=False):
+                for log in st.session_state.enrichment_log[-50:]:
+                    st.text(log)
+        
+        if st.session_state.enrichment_batch:
+            batch = st.session_state.enrichment_batch
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("✅ Approve All Matches", disabled=batch.pending == 0):
+                    for match in batch.matches:
+                        if match.status == 'pending' and match.usda_match:
+                            service.save_enrichment(match)
+                    st.rerun()
+            with col2:
+                if st.button("⏭️ Skip All Remaining"):
+                    for match in batch.matches:
+                        if match.status == 'pending':
+                            service.skip_product(match)
+                    st.rerun()
+            with col3:
+                if st.button("🔄 New Batch"):
+                    st.session_state.enrichment_batch = None
+                    st.session_state.enrichment_log = []
+                    st.rerun()
+            
+            st.divider()
+            
+            for i, match in enumerate(batch.matches):
+                status_icon = {
+                    'pending': '⏳',
+                    'approved': '✅',
+                    'skipped': '⏭️',
+                    'no_match': '❌'
+                }.get(match.status, '❓')
+                
+                with st.expander(f"{status_icon} {match.product.name} (SKU: {match.product.sku})", expanded=(match.status == 'pending')):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**Product Info:**")
+                        st.write(f"**Name:** {match.product.name}")
+                        st.write(f"**Category:** {match.product.category_name or 'N/A'}")
+                        st.write(f"**Translation:** {match.translation.english}")
+                        st.write(f"**Method:** {match.translation.method} ({match.translation.confidence:.0%})")
+                    
+                    with col2:
+                        if match.usda_match:
+                            st.markdown("**USDA Match:**")
+                            st.write(f"**Description:** {match.usda_match.description}")
+                            st.write(f"**Data Type:** {match.usda_match.data_type}")
+                            st.write(f"**Score:** {match.usda_match.score:.1f}")
+                            
+                            if match.usda_match.nutrition:
+                                n = match.usda_match.nutrition
+                                st.markdown("**Nutrition (per 100g):**")
+                                ncol1, ncol2, ncol3 = st.columns(3)
+                                with ncol1:
+                                    st.metric("Energy", f"{n.energy_kcal or 0:.0f} kcal")
+                                    st.metric("Protein", f"{n.protein or 0:.1f}g")
+                                with ncol2:
+                                    st.metric("Fat", f"{n.fat_total or 0:.1f}g")
+                                    st.metric("Sat. Fat", f"{n.fat_saturated or 0:.1f}g")
+                                with ncol3:
+                                    st.metric("Carbs", f"{n.carbs_total or 0:.1f}g")
+                                    st.metric("Sugars", f"{n.carbs_sugars or 0:.1f}g")
+                                
+                                scol1, scol2 = st.columns(2)
+                                with scol1:
+                                    st.metric("Salt", f"{n.salt or 0:.2f}g")
+                                with scol2:
+                                    st.metric("Fiber", f"{n.fiber or 0:.1f}g")
+                        else:
+                            st.warning("No USDA match found")
+                    
+                    if match.status == 'pending':
+                        bcol1, bcol2, bcol3 = st.columns(3)
+                        
+                        with bcol1:
+                            if match.usda_match and st.button("✅ Approve", key=f"approve_{i}"):
+                                service.save_enrichment(match)
+                                st.rerun()
+                        
+                        with bcol2:
+                            if st.button("⏭️ Skip", key=f"skip_{i}"):
+                                service.skip_product(match)
+                                st.rerun()
+                        
+                        with bcol3:
+                            custom_term = st.text_input("Custom search:", key=f"search_{i}")
+                            if custom_term and st.button("🔍 Search", key=f"dosearch_{i}"):
+                                new_match = service.search_custom_term(match.product, custom_term)
+                                batch.matches[i] = new_match
+                                st.rerun()
+        
+    except Exception as e:
+        st.error(f"Error initializing enrichment service: {str(e)}")
+        st.info("Make sure USDA_API_KEY is set in secrets.")
+        import traceback
+        st.code(traceback.format_exc())
+
+
 def main():
     st.title("🛒 Rimi Product Scraper")
     
-    # Top navigation
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -505,13 +667,20 @@ def main():
             st.session_state.view_mode = 'product_view'
             st.rerun()
     
+    with col3:
+        if st.button("🥗 Nutrition Enrichment", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'nutrition_enrichment' else "secondary"):
+            st.session_state.view_mode = 'nutrition_enrichment'
+            st.rerun()
+    
     st.divider()
     
-    # Render selected section
     if st.session_state.view_mode == 'category_processing':
         section_category_processing()
-    else:
+    elif st.session_state.view_mode == 'product_view':
         section_product_view()
+    else:
+        section_nutrition_enrichment()
 
 
 if __name__ == "__main__":

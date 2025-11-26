@@ -1,0 +1,496 @@
+"""
+Nutrition Enrichment Service
+
+Orchestrates the nutrition data enrichment workflow:
+1. Get products needing enrichment from database
+2. Translate Latvian names to English
+3. Search USDA for nutrition data
+4. Present matches for manual review
+5. Save approved data to database
+"""
+
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from typing import List, Dict, Optional, Any
+from dataclasses import dataclass, field
+from datetime import datetime
+from decimal import Decimal
+
+from food_translator import FoodTranslator, TranslationResult
+from usda_enrichment import USDAClient, USDAFoodMatch, NutritionData
+
+
+@dataclass
+class ProductForEnrichment:
+    """Product that needs nutrition data enrichment"""
+    product_id: int
+    sku: str
+    name: str
+    category_name: Optional[str] = None
+    current_nutrition: Optional[Dict] = None
+    
+    def to_dict(self) -> Dict:
+        return {
+            'product_id': self.product_id,
+            'sku': self.sku,
+            'name': self.name,
+            'category_name': self.category_name,
+            'current_nutrition': self.current_nutrition
+        }
+
+
+@dataclass 
+class EnrichmentMatch:
+    """A product with its USDA match for review"""
+    product: ProductForEnrichment
+    translation: TranslationResult
+    usda_match: Optional[USDAFoodMatch] = None
+    status: str = 'pending'
+    
+    def to_dict(self) -> Dict:
+        return {
+            'product': self.product.to_dict(),
+            'translation': self.translation.to_dict(),
+            'usda_match': self.usda_match.to_dict() if self.usda_match else None,
+            'status': self.status
+        }
+
+
+@dataclass
+class EnrichmentBatch:
+    """A batch of products for enrichment review"""
+    matches: List[EnrichmentMatch] = field(default_factory=list)
+    created_at: datetime = field(default_factory=datetime.now)
+    
+    @property
+    def total(self) -> int:
+        return len(self.matches)
+    
+    @property
+    def pending(self) -> int:
+        return sum(1 for m in self.matches if m.status == 'pending')
+    
+    @property
+    def approved(self) -> int:
+        return sum(1 for m in self.matches if m.status == 'approved')
+    
+    @property
+    def skipped(self) -> int:
+        return sum(1 for m in self.matches if m.status == 'skipped')
+    
+    @property
+    def no_match(self) -> int:
+        return sum(1 for m in self.matches if m.status == 'no_match')
+
+
+class NutritionEnrichmentService:
+    """
+    Service for enriching product nutrition data from USDA
+    
+    Usage:
+        service = NutritionEnrichmentService()
+        
+        # Get products needing enrichment
+        products = service.get_products_needing_enrichment(limit=20)
+        
+        # Process batch
+        batch = service.process_batch(products)
+        
+        # Review and approve
+        for match in batch.matches:
+            if match.usda_match:
+                service.approve_match(match)
+            else:
+                service.skip_match(match)
+    """
+    
+    def __init__(self, status_callback=None):
+        self.status_callback = status_callback or print
+        self.db_url = os.environ.get('DATABASE_URL')
+        
+        google_key = os.environ.get('GOOGLE_TRANSLATE_API_KEY')
+        self.translator = FoodTranslator(google_api_key=google_key, status_callback=self.status_callback)
+        self.usda_client = USDAClient(status_callback=self.status_callback)
+        
+    def _get_connection(self):
+        """Get database connection"""
+        return psycopg2.connect(self.db_url)
+    
+    def get_enrichment_stats(self) -> Dict[str, int]:
+        """Get statistics about products needing enrichment"""
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 
+                        COUNT(*) FILTER (WHERE needs_enrichment = TRUE) as needs_enrichment,
+                        COUNT(*) FILTER (WHERE enrichment_reviewed = TRUE) as reviewed,
+                        COUNT(*) FILTER (WHERE nutrition_source = 'usda_api') as from_usda,
+                        COUNT(*) FILTER (WHERE nutrition_source = 'rimi_scraped') as from_rimi,
+                        COUNT(*) as total
+                    FROM products
+                """)
+                row = cur.fetchone()
+                return {
+                    'needs_enrichment': row[0] or 0,
+                    'reviewed': row[1] or 0,
+                    'from_usda': row[2] or 0,
+                    'from_rimi': row[3] or 0,
+                    'total': row[4] or 0
+                }
+        finally:
+            conn.close()
+    
+    def get_products_needing_enrichment(self, limit: int = 20, offset: int = 0) -> List[ProductForEnrichment]:
+        """Get products that need nutrition data enrichment"""
+        conn = self._get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT 
+                        p.product_id,
+                        p.sku,
+                        p.name,
+                        nc.name_lv as category_name,
+                        nf.energy_kcal,
+                        nf.fat_total,
+                        nf.fat_saturated,
+                        nf.carbs_total,
+                        nf.carbs_sugars,
+                        nf.protein,
+                        nf.salt,
+                        nf.fiber
+                    FROM products p
+                    LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
+                    LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
+                    WHERE p.needs_enrichment = TRUE
+                      AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                    ORDER BY p.product_id
+                    LIMIT %s OFFSET %s
+                """, (limit, offset))
+                
+                rows = cur.fetchall()
+                products = []
+                
+                for row in rows:
+                    current_nutrition = {
+                        'energy_kcal': float(row['energy_kcal']) if row['energy_kcal'] else None,
+                        'fat_total': float(row['fat_total']) if row['fat_total'] else None,
+                        'fat_saturated': float(row['fat_saturated']) if row['fat_saturated'] else None,
+                        'carbs_total': float(row['carbs_total']) if row['carbs_total'] else None,
+                        'carbs_sugars': float(row['carbs_sugars']) if row['carbs_sugars'] else None,
+                        'protein': float(row['protein']) if row['protein'] else None,
+                        'salt': float(row['salt']) if row['salt'] else None,
+                        'fiber': float(row['fiber']) if row['fiber'] else None,
+                    }
+                    
+                    products.append(ProductForEnrichment(
+                        product_id=row['product_id'],
+                        sku=row['sku'],
+                        name=row['name'],
+                        category_name=row['category_name'],
+                        current_nutrition=current_nutrition
+                    ))
+                
+                self.status_callback(f"📦 Loaded {len(products)} products needing enrichment")
+                return products
+                
+        finally:
+            conn.close()
+    
+    def process_single_product(self, product: ProductForEnrichment) -> EnrichmentMatch:
+        """Process a single product: translate and search USDA"""
+        self.status_callback(f"\n🔄 Processing: {product.name} (SKU: {product.sku})")
+        
+        translation = self.translator.translate(product.name)
+        
+        usda_match = self.usda_client.search_and_get_best_match(translation.english)
+        
+        match = EnrichmentMatch(
+            product=product,
+            translation=translation,
+            usda_match=usda_match,
+            status='pending' if usda_match else 'no_match'
+        )
+        
+        if usda_match:
+            self.status_callback(f"✅ Match found: {usda_match.description} (Score: {usda_match.score:.1f})")
+        else:
+            self.status_callback(f"⚠️ No USDA match found for '{translation.english}'")
+        
+        return match
+    
+    def process_batch(self, products: List[ProductForEnrichment]) -> EnrichmentBatch:
+        """Process a batch of products for enrichment"""
+        batch = EnrichmentBatch()
+        
+        self.status_callback(f"\n{'='*50}")
+        self.status_callback(f"🚀 Processing batch of {len(products)} products")
+        self.status_callback(f"{'='*50}")
+        
+        for i, product in enumerate(products, 1):
+            self.status_callback(f"\n[{i}/{len(products)}] Processing...")
+            match = self.process_single_product(product)
+            batch.matches.append(match)
+        
+        self.status_callback(f"\n{'='*50}")
+        self.status_callback(f"📊 Batch complete: {batch.total} total, {batch.pending} pending, {batch.no_match} no match")
+        self.status_callback(f"{'='*50}")
+        
+        return batch
+    
+    def search_custom_term(self, product: ProductForEnrichment, search_term: str) -> EnrichmentMatch:
+        """Search USDA with a custom term provided by user"""
+        self.status_callback(f"🔍 Custom search for '{search_term}'")
+        
+        usda_match = self.usda_client.search_and_get_best_match(search_term)
+        
+        translation = TranslationResult(
+            original=product.name,
+            english=search_term,
+            method='manual',
+            confidence=1.0
+        )
+        
+        return EnrichmentMatch(
+            product=product,
+            translation=translation,
+            usda_match=usda_match,
+            status='pending' if usda_match else 'no_match'
+        )
+    
+    def save_enrichment(self, match: EnrichmentMatch) -> bool:
+        """Save approved enrichment data to database"""
+        if not match.usda_match or not match.usda_match.nutrition:
+            self.status_callback(f"❌ Cannot save: no nutrition data for {match.product.sku}")
+            return False
+        
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                nutrition = match.usda_match.nutrition
+                
+                cur.execute("""
+                    UPDATE nutritionfacts
+                    SET 
+                        energy_kcal = %s,
+                        energy_kj = %s,
+                        fat_total = %s,
+                        fat_saturated = %s,
+                        carbs_total = %s,
+                        carbs_sugars = %s,
+                        protein = %s,
+                        salt = %s,
+                        fiber = %s,
+                        data_source_date = NOW()
+                    WHERE product_id = %s
+                """, (
+                    nutrition.energy_kcal,
+                    nutrition.energy_kj,
+                    nutrition.fat_total,
+                    nutrition.fat_saturated,
+                    nutrition.carbs_total,
+                    nutrition.carbs_sugars,
+                    nutrition.protein,
+                    nutrition.salt,
+                    nutrition.fiber,
+                    match.product.product_id
+                ))
+                
+                if cur.rowcount == 0:
+                    cur.execute("""
+                        INSERT INTO nutritionfacts 
+                        (product_id, energy_kcal, energy_kj, fat_total, fat_saturated, 
+                         carbs_total, carbs_sugars, protein, salt, fiber, data_source_date)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    """, (
+                        match.product.product_id,
+                        nutrition.energy_kcal,
+                        nutrition.energy_kj,
+                        nutrition.fat_total,
+                        nutrition.fat_saturated,
+                        nutrition.carbs_total,
+                        nutrition.carbs_sugars,
+                        nutrition.protein,
+                        nutrition.salt,
+                        nutrition.fiber
+                    ))
+                
+                cur.execute("""
+                    UPDATE products
+                    SET 
+                        nutrition_source = 'usda_api',
+                        needs_enrichment = FALSE,
+                        enrichment_reviewed = TRUE,
+                        updated_at = NOW()
+                    WHERE product_id = %s
+                """, (match.product.product_id,))
+                
+                conn.commit()
+                
+                match.status = 'approved'
+                self.status_callback(f"✅ Saved enrichment for {match.product.sku}: {match.product.name}")
+                return True
+                
+        except Exception as e:
+            conn.rollback()
+            self.status_callback(f"❌ Error saving enrichment: {str(e)}")
+            return False
+        finally:
+            conn.close()
+    
+    def skip_product(self, match: EnrichmentMatch, mark_reviewed: bool = True) -> bool:
+        """Skip a product and optionally mark as reviewed"""
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                if mark_reviewed:
+                    cur.execute("""
+                        UPDATE products
+                        SET 
+                            enrichment_reviewed = TRUE,
+                            updated_at = NOW()
+                        WHERE product_id = %s
+                    """, (match.product.product_id,))
+                    conn.commit()
+                
+                match.status = 'skipped'
+                self.status_callback(f"⏭️ Skipped: {match.product.sku} - {match.product.name}")
+                return True
+                
+        except Exception as e:
+            conn.rollback()
+            self.status_callback(f"❌ Error skipping product: {str(e)}")
+            return False
+        finally:
+            conn.close()
+    
+    def calculate_nutri_score(self, nutrition: NutritionData) -> Optional[str]:
+        """Calculate nutri-score grade from nutrition data"""
+        if not nutrition.is_complete():
+            return None
+        
+        negative_points = 0
+        
+        if nutrition.energy_kcal:
+            if nutrition.energy_kcal > 800:
+                negative_points += 10
+            elif nutrition.energy_kcal > 600:
+                negative_points += 8
+            elif nutrition.energy_kcal > 400:
+                negative_points += 6
+            elif nutrition.energy_kcal > 200:
+                negative_points += 4
+            elif nutrition.energy_kcal > 80:
+                negative_points += 2
+        
+        if nutrition.fat_saturated:
+            if nutrition.fat_saturated > 10:
+                negative_points += 10
+            elif nutrition.fat_saturated > 6:
+                negative_points += 7
+            elif nutrition.fat_saturated > 3:
+                negative_points += 4
+            elif nutrition.fat_saturated > 1:
+                negative_points += 2
+        
+        if nutrition.carbs_sugars:
+            if nutrition.carbs_sugars > 45:
+                negative_points += 10
+            elif nutrition.carbs_sugars > 27:
+                negative_points += 7
+            elif nutrition.carbs_sugars > 13.5:
+                negative_points += 4
+            elif nutrition.carbs_sugars > 4.5:
+                negative_points += 2
+        
+        if nutrition.salt:
+            salt_mg = nutrition.salt * 1000
+            if salt_mg > 900:
+                negative_points += 10
+            elif salt_mg > 630:
+                negative_points += 7
+            elif salt_mg > 360:
+                negative_points += 4
+            elif salt_mg > 90:
+                negative_points += 2
+        
+        positive_points = 0
+        
+        if nutrition.protein:
+            if nutrition.protein > 8:
+                positive_points += 5
+            elif nutrition.protein > 6.4:
+                positive_points += 4
+            elif nutrition.protein > 4.8:
+                positive_points += 3
+            elif nutrition.protein > 3.2:
+                positive_points += 2
+            elif nutrition.protein > 1.6:
+                positive_points += 1
+        
+        if nutrition.fiber:
+            if nutrition.fiber > 4.7:
+                positive_points += 5
+            elif nutrition.fiber > 3.7:
+                positive_points += 4
+            elif nutrition.fiber > 2.8:
+                positive_points += 3
+            elif nutrition.fiber > 1.9:
+                positive_points += 2
+            elif nutrition.fiber > 0.9:
+                positive_points += 1
+        
+        score = negative_points - positive_points
+        
+        if score <= -1:
+            return 'A'
+        elif score <= 2:
+            return 'B'
+        elif score <= 10:
+            return 'C'
+        elif score <= 18:
+            return 'D'
+        else:
+            return 'E'
+
+
+def test_enrichment_service():
+    """Test the enrichment service"""
+    try:
+        service = NutritionEnrichmentService()
+        
+        print("Testing enrichment service...\n")
+        
+        stats = service.get_enrichment_stats()
+        print(f"Enrichment stats: {stats}\n")
+        
+        products = service.get_products_needing_enrichment(limit=3)
+        
+        if products:
+            print(f"\nProcessing {len(products)} products...")
+            batch = service.process_batch(products)
+            
+            print(f"\nBatch results:")
+            for match in batch.matches:
+                print(f"  - {match.product.name}")
+                print(f"    Translation: {match.translation.english}")
+                if match.usda_match:
+                    print(f"    USDA Match: {match.usda_match.description}")
+                    if match.usda_match.nutrition:
+                        n = match.usda_match.nutrition
+                        print(f"    Nutrition: {n.energy_kcal} kcal, {n.protein}g protein")
+                else:
+                    print(f"    No match found")
+        else:
+            print("No products need enrichment")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    test_enrichment_service()
