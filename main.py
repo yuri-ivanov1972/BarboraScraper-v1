@@ -500,6 +500,8 @@ def section_nutrition_enrichment():
         st.session_state.enrichment_processing = False
     if 'enrichment_log' not in st.session_state:
         st.session_state.enrichment_log = []
+    if 'skipped_product_ids' not in st.session_state:
+        st.session_state.skipped_product_ids = set()
     
     def log_callback(msg):
         st.session_state.enrichment_log.append(msg)
@@ -535,12 +537,23 @@ def section_nutrition_enrichment():
             if st.session_state.enrichment_batch:
                 batch = st.session_state.enrichment_batch
                 st.info(f"Batch: {batch.approved} approved, {batch.skipped} skipped, {batch.pending} pending, {batch.no_match} no match")
+            skip_count = len(st.session_state.skipped_product_ids)
+            if skip_count > 0:
+                st.caption(f"📋 {skip_count} products in skip list (sorted to end of batches)")
         
         if st.session_state.enrichment_processing and not st.session_state.enrichment_batch:
             with st.spinner("Loading and processing products..."):
                 products = service.get_products_needing_enrichment(limit=batch_size)
                 if products:
+                    skipped_ids = st.session_state.skipped_product_ids
+                    products.sort(key=lambda p: (p.product_id in skipped_ids, p.product_id))
+                    
                     batch = service.process_batch(products)
+                    
+                    for match in batch.matches:
+                        if match.product.product_id in skipped_ids:
+                            match.status = 'skipped'
+                    
                     st.session_state.enrichment_batch = batch
                 else:
                     st.success("No products need enrichment!")
@@ -566,13 +579,15 @@ def section_nutrition_enrichment():
                 if st.button("⏭️ Skip All Remaining"):
                     for match in batch.matches:
                         if match.status == 'pending':
-                            service.skip_product(match)
+                            st.session_state.skipped_product_ids.add(match.product.product_id)
+                            match.status = 'skipped'
                     st.rerun()
             with col3:
                 if st.button("🔄 Reprocess Skipped", disabled=batch.skipped == 0):
                     for match in batch.matches:
                         if match.status == 'skipped':
-                            match.status = 'pending'
+                            st.session_state.skipped_product_ids.discard(match.product.product_id)
+                            match.status = 'pending' if match.usda_options else 'no_match'
                     st.rerun()
             with col4:
                 if st.button("🆕 New Batch"):
@@ -656,7 +671,12 @@ def section_nutrition_enrichment():
                         
                         with bcol2:
                             if match.status == 'pending' and st.button("⏭️ Skip", key=f"skip_{i}"):
-                                service.skip_product(match)
+                                st.session_state.skipped_product_ids.add(match.product.product_id)
+                                match.status = 'skipped'
+                                st.rerun()
+                            if match.status == 'skipped' and st.button("🔄 Unskip", key=f"unskip_{i}"):
+                                st.session_state.skipped_product_ids.discard(match.product.product_id)
+                                match.status = 'pending' if match.usda_options else 'no_match'
                                 st.rerun()
                         
                         with bcol3:
