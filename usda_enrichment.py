@@ -314,9 +314,9 @@ class USDAClient:
             num_options: Number of options to return (default 5)
             
         Returns:
-            List of USDAFoodMatch objects with nutrition data, sorted by score (higher = better match)
+            List of USDAFoodMatch objects with nutrition data, prioritizing "raw" items
         """
-        matches = self.search_food(query, page_size=num_options)
+        matches = self.search_food(query, page_size=num_options + 3)
         
         if not matches:
             return []
@@ -332,7 +332,23 @@ class USDAClient:
                 else:
                     detailed_matches.append(match)
         
-        return detailed_matches
+        valid_matches = []
+        for match in detailed_matches:
+            if match.nutrition and match.nutrition.energy_kcal and match.nutrition.energy_kcal > 0:
+                valid_matches.append(match)
+            elif not match.nutrition or match.nutrition.energy_kcal is None:
+                pass
+            else:
+                self.status_callback(f"⚠️ Skipping '{match.description}' - zero energy (bad data)")
+        
+        def sort_key(m):
+            desc_lower = m.description.lower()
+            is_raw = 1 if 'raw' in desc_lower else 0
+            return (-is_raw, -m.score)
+        
+        valid_matches.sort(key=sort_key)
+        
+        return valid_matches[:num_options]
 
 
 def test_usda_client():
