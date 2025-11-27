@@ -140,10 +140,11 @@ class NutritionEnrichmentService:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT 
-                        COUNT(*) FILTER (WHERE needs_enrichment = TRUE) as needs_enrichment,
+                        COUNT(*) FILTER (WHERE needs_enrichment = TRUE AND (enrichment_reviewed IS NULL OR enrichment_reviewed = FALSE)) as needs_enrichment,
                         COUNT(*) FILTER (WHERE enrichment_reviewed = TRUE) as reviewed,
                         COUNT(*) FILTER (WHERE nutrition_source = 'usda_api') as from_usda,
                         COUNT(*) FILTER (WHERE nutrition_source = 'rimi_scraped') as from_rimi,
+                        COUNT(*) FILTER (WHERE enrichment_skipped = TRUE AND (enrichment_reviewed IS NULL OR enrichment_reviewed = FALSE)) as skipped,
                         COUNT(*) as total
                     FROM products
                 """)
@@ -153,7 +154,8 @@ class NutritionEnrichmentService:
                     'reviewed': row[1] or 0,
                     'from_usda': row[2] or 0,
                     'from_rimi': row[3] or 0,
-                    'total': row[4] or 0
+                    'skipped': row[4] or 0,
+                    'total': row[5] or 0
                 }
         finally:
             conn.close()
@@ -176,13 +178,14 @@ class NutritionEnrichmentService:
                         nf.carbs_sugars,
                         nf.protein,
                         nf.salt,
-                        nf.fiber
+                        nf.fiber,
+                        COALESCE(p.enrichment_skipped, FALSE) as enrichment_skipped
                     FROM products p
                     LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
                     LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
                     WHERE p.needs_enrichment = TRUE
                       AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
-                    ORDER BY p.product_id
+                    ORDER BY COALESCE(p.enrichment_skipped, FALSE) ASC, p.product_id
                     LIMIT %s OFFSET %s
                 """, (limit, offset))
                 
@@ -370,20 +373,19 @@ class NutritionEnrichmentService:
         finally:
             conn.close()
     
-    def skip_product(self, match: EnrichmentMatch, mark_reviewed: bool = True) -> bool:
-        """Skip a product and optionally mark as reviewed"""
+    def skip_product(self, match: EnrichmentMatch, mark_reviewed: bool = False) -> bool:
+        """Skip a product - marks as skipped for later review (sorted to end of batches)"""
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
-                if mark_reviewed:
-                    cur.execute("""
-                        UPDATE products
-                        SET 
-                            enrichment_reviewed = TRUE,
-                            updated_at = NOW()
-                        WHERE product_id = %s
-                    """, (match.product.product_id,))
-                    conn.commit()
+                cur.execute("""
+                    UPDATE products
+                    SET 
+                        enrichment_skipped = TRUE,
+                        updated_at = NOW()
+                    WHERE product_id = %s
+                """, (match.product.product_id,))
+                conn.commit()
                 
                 match.status = 'skipped'
                 self.status_callback(f"⏭️ Skipped: {match.product.sku} - {match.product.name}")
@@ -392,6 +394,31 @@ class NutritionEnrichmentService:
         except Exception as e:
             conn.rollback()
             self.status_callback(f"❌ Error skipping product: {str(e)}")
+            return False
+        finally:
+            conn.close()
+    
+    def unskip_product(self, match: EnrichmentMatch) -> bool:
+        """Unskip a product - brings it back to normal queue position"""
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    UPDATE products
+                    SET 
+                        enrichment_skipped = FALSE,
+                        updated_at = NOW()
+                    WHERE product_id = %s
+                """, (match.product.product_id,))
+                conn.commit()
+                
+                match.status = 'pending' if match.usda_options else 'no_match'
+                self.status_callback(f"🔄 Unskipped: {match.product.sku} - {match.product.name}")
+                return True
+                
+        except Exception as e:
+            conn.rollback()
+            self.status_callback(f"❌ Error unskipping product: {str(e)}")
             return False
         finally:
             conn.close()
