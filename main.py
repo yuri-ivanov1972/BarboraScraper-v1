@@ -670,7 +670,7 @@ def section_nutrition_enrichment():
                                 st.rerun()
                         
                         with bcol2:
-                            if match.status == 'pending' and st.button("⏭️ Skip", key=f"skip_{i}"):
+                            if match.status in ['pending', 'no_match'] and st.button("⏭️ Skip", key=f"skip_{i}"):
                                 st.session_state.skipped_product_ids.add(match.product.product_id)
                                 match.status = 'skipped'
                                 st.rerun()
