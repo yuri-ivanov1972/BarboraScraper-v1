@@ -292,6 +292,8 @@ class NutritionEnrichmentService:
             with conn.cursor() as cur:
                 nutrition = match.usda_match.nutrition
                 
+                usda_fdc_id = match.usda_match.fdc_id
+                
                 cur.execute("""
                     UPDATE nutritionfacts
                     SET 
@@ -304,6 +306,7 @@ class NutritionEnrichmentService:
                         protein = %s,
                         salt = %s,
                         fiber = %s,
+                        usda_fdc_id = %s,
                         data_source_date = NOW()
                     WHERE product_id = %s
                 """, (
@@ -316,6 +319,7 @@ class NutritionEnrichmentService:
                     nutrition.protein,
                     nutrition.salt,
                     nutrition.fiber,
+                    usda_fdc_id,
                     match.product.product_id
                 ))
                 
@@ -323,8 +327,8 @@ class NutritionEnrichmentService:
                     cur.execute("""
                         INSERT INTO nutritionfacts 
                         (product_id, energy_kcal, energy_kj, fat_total, fat_saturated, 
-                         carbs_total, carbs_sugars, protein, salt, fiber, data_source_date)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                         carbs_total, carbs_sugars, protein, salt, fiber, usda_fdc_id, data_source_date)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
                     """, (
                         match.product.product_id,
                         nutrition.energy_kcal,
@@ -335,7 +339,8 @@ class NutritionEnrichmentService:
                         nutrition.carbs_sugars,
                         nutrition.protein,
                         nutrition.salt,
-                        nutrition.fiber
+                        nutrition.fiber,
+                        usda_fdc_id
                     ))
                 
                 cur.execute("""

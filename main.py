@@ -624,6 +624,8 @@ def section_nutrition_enrichment():
                             
                             if match.usda_match:
                                 st.write(f"**Data Type:** {match.usda_match.data_type}")
+                                usda_url = f"https://fdc.nal.usda.gov/fdc-app.html#/food-details/{match.usda_match.fdc_id}/nutrients"
+                                st.markdown(f"**USDA Link:** [FDC #{match.usda_match.fdc_id}]({usda_url})")
                                 
                                 if match.usda_match.nutrition:
                                     n = match.usda_match.nutrition
