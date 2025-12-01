@@ -789,10 +789,132 @@ def section_nutrition_enrichment():
         st.code(traceback.format_exc())
 
 
+def section_change_report():
+    """Section 4: Change Report - Compare current vs previous product state"""
+    st.header("📊 Change Report")
+    
+    from change_report import ChangeReportGenerator
+    
+    try:
+        report = ChangeReportGenerator()
+        
+        timestamps = report.get_update_timestamps()
+        if timestamps['current_update']:
+            current_str = timestamps['current_update'].strftime("%Y-%m-%d %H:%M")
+            previous_str = timestamps['previous_update'].strftime("%Y-%m-%d %H:%M") if timestamps['previous_update'] else "N/A"
+            st.caption(f"Comparing: **{current_str}** vs **{previous_str}**")
+        
+        stats = report.get_summary_stats()
+        
+        st.subheader("📈 Summary")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Total Products", stats.total_products)
+        with col2:
+            st.metric("New Products", stats.new_products, delta=f"+{stats.new_products}" if stats.new_products > 0 else None)
+        with col3:
+            st.metric("Price Changes", stats.price_changed)
+        with col4:
+            st.metric("Availability Changes", stats.availability_changed)
+        
+        col5, col6, col7, col8 = st.columns(4)
+        with col5:
+            st.metric("Price Increased", stats.price_increased, delta=f"↑ {stats.price_increased}", delta_color="inverse")
+        with col6:
+            st.metric("Price Decreased", stats.price_decreased, delta=f"↓ {stats.price_decreased}", delta_color="normal")
+        with col7:
+            st.metric("Became Available", stats.became_available, delta=f"+{stats.became_available}" if stats.became_available > 0 else None)
+        with col8:
+            st.metric("Became Unavailable", stats.became_unavailable, delta=f"-{stats.became_unavailable}" if stats.became_unavailable > 0 else None, delta_color="inverse")
+        
+        st.divider()
+        
+        tab1, tab2, tab3, tab4 = st.tabs(["💰 Price Changes", "📦 Availability Changes", "🆕 New Products", "📂 By Category"])
+        
+        with tab1:
+            st.subheader("Price Changes")
+            price_changes = report.get_price_changes(limit=100)
+            
+            if price_changes:
+                import pandas as pd
+                df = pd.DataFrame(price_changes)
+                df['change'] = df.apply(lambda r: f"€{r['previous_price']:.2f} → €{r['current_price']:.2f} ({r['price_change_pct']:+.1f}%)", axis=1)
+                
+                increased = df[df['price_change_pct'] > 0]
+                decreased = df[df['price_change_pct'] < 0]
+                
+                st.write(f"**{len(increased)} price increases, {len(decreased)} price decreases**")
+                
+                display_df = df[['name', 'category_name', 'previous_price', 'current_price', 'price_change_pct']].copy()
+                display_df.columns = ['Product', 'Category', 'Previous (€)', 'Current (€)', 'Change (%)']
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No price changes detected")
+        
+        with tab2:
+            st.subheader("Availability Changes")
+            avail_changes = report.get_availability_changes(limit=100)
+            
+            if avail_changes:
+                import pandas as pd
+                df = pd.DataFrame(avail_changes)
+                df['status_change'] = df.apply(
+                    lambda r: "🟢 Now Available" if r['current_available'] else "🔴 Now Unavailable", 
+                    axis=1
+                )
+                
+                became_avail = df[df['current_available'] == True]
+                became_unavail = df[df['current_available'] == False]
+                
+                st.write(f"**{len(became_avail)} became available, {len(became_unavail)} became unavailable**")
+                
+                display_df = df[['name', 'category_name', 'status_change', 'current_price']].copy()
+                display_df.columns = ['Product', 'Category', 'Status', 'Price (€)']
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No availability changes detected")
+        
+        with tab3:
+            st.subheader("New Products")
+            new_products = report.get_new_products(limit=100)
+            
+            if new_products:
+                import pandas as pd
+                df = pd.DataFrame(new_products)
+                df['status'] = df['is_available'].apply(lambda x: "🟢 Available" if x else "🔴 Unavailable")
+                
+                display_df = df[['name', 'category_name', 'price', 'status']].copy()
+                display_df.columns = ['Product', 'Category', 'Price (€)', 'Status']
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No new products detected")
+        
+        with tab4:
+            st.subheader("Changes by Category")
+            category_breakdown = report.get_category_breakdown()
+            
+            if category_breakdown:
+                import pandas as pd
+                df = pd.DataFrame(category_breakdown)
+                df['total_changes'] = df['new_products'] + df['price_changed'] + df['availability_changed']
+                
+                display_df = df[['category_name', 'category_code', 'total_products', 'new_products', 'price_changed', 'availability_changed']].copy()
+                display_df.columns = ['Category', 'Code', 'Total', 'New', 'Price Δ', 'Avail Δ']
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            else:
+                st.info("No category changes detected")
+                
+    except Exception as e:
+        st.error(f"Error generating report: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
 def main():
     st.title("🛒 Rimi Product Scraper")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -812,12 +934,20 @@ def main():
             st.session_state.view_mode = 'nutrition_enrichment'
             st.rerun()
     
+    with col4:
+        if st.button("📊 Change Report", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'change_report' else "secondary"):
+            st.session_state.view_mode = 'change_report'
+            st.rerun()
+    
     st.divider()
     
     if st.session_state.view_mode == 'category_processing':
         section_category_processing()
     elif st.session_state.view_mode == 'product_view':
         section_product_view()
+    elif st.session_state.view_mode == 'change_report':
+        section_change_report()
     else:
         section_nutrition_enrichment()
 
