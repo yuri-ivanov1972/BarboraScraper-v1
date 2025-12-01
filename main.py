@@ -192,6 +192,14 @@ def section_category_processing():
                     cur = conn.cursor()
                     
                     try:
+                        # Lookup category_id from normalized_categories
+                        cur.execute("""
+                            SELECT category_id FROM normalized_categories 
+                            WHERE rimi_category_code = %s
+                        """, (category_code.upper(),))
+                        cat_result = cur.fetchone()
+                        cat_id = cat_result[0] if cat_result else None
+                        
                         # Determine update mode based on Force Update checkbox
                         update_mode = 'full' if force_update else 'incremental'
                         
@@ -199,9 +207,9 @@ def section_category_processing():
                         cur.execute("""
                             INSERT INTO category_processing_jobs 
                             (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
-                            VALUES (%s, NULL, %s, 0, 'queued', %s, 'streamlit_ui', %s)
+                            VALUES (%s, %s, %s, 0, 'queued', %s, 'streamlit_ui', %s)
                             RETURNING id
-                        """, (category_code, len(all_skus), priority, update_mode))
+                        """, (category_code, cat_id, len(all_skus), priority, update_mode))
                         
                         job_id = cur.fetchone()[0]
                         
@@ -265,7 +273,7 @@ def section_category_processing():
             
             try:
                 cur.execute("""
-                    SELECT rimi_category_code, name_lv 
+                    SELECT category_id, rimi_category_code, name_lv 
                     FROM normalized_categories 
                     WHERE level = 2 
                     ORDER BY rimi_category_code
@@ -285,7 +293,7 @@ def section_category_processing():
                     total_products = 0
                     skipped = 0
                     
-                    for i, (cat_code, cat_name) in enumerate(all_categories):
+                    for i, (cat_id, cat_code, cat_name) in enumerate(all_categories):
                         progress_bar.progress((i + 1) / len(all_categories))
                         status_text.text(f"Processing {cat_code}: {cat_name}...")
                         
@@ -296,9 +304,9 @@ def section_category_processing():
                                 cur.execute("""
                                     INSERT INTO category_processing_jobs 
                                     (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
-                                    VALUES (%s, NULL, %s, 0, 'queued', 5, 'streamlit_bulk', %s)
+                                    VALUES (%s, %s, %s, 0, 'queued', 5, 'streamlit_bulk', %s)
                                     RETURNING id
-                                """, (cat_code, len(all_skus), update_mode))
+                                """, (cat_code, cat_id, len(all_skus), update_mode))
                                 
                                 job_id = cur.fetchone()[0]
                                 
