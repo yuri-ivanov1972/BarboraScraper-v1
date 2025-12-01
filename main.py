@@ -839,7 +839,9 @@ def section_change_report():
             if price_changes:
                 import pandas as pd
                 df = pd.DataFrame(price_changes)
-                df['change'] = df.apply(lambda r: f"€{r['previous_price']:.2f} → €{r['current_price']:.2f} ({r['price_change_pct']:+.1f}%)", axis=1)
+                df['previous_price'] = df['previous_price'].fillna(0)
+                df['current_price'] = df['current_price'].fillna(0)
+                df['price_change_pct'] = df['price_change_pct'].fillna(0)
                 
                 increased = df[df['price_change_pct'] > 0]
                 decreased = df[df['price_change_pct'] < 0]
