@@ -247,15 +247,115 @@ def section_category_processing():
                 with st.expander("Error details"):
                     st.code(traceback.format_exc())
     
+    st.divider()
+    
+    st.subheader("🚀 Queue All Categories")
+    
+    all_force_update = st.checkbox("Force Update All", help="Overwrite existing data for all categories", key="all_force_update")
+    
+    col_all1, col_all2 = st.columns([1, 3])
+    
+    with col_all1:
+        if st.button("📦 Queue All Level 2 Categories", type="primary"):
+            from core_parser import RimiParser
+            import psycopg2
+            
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            cur = conn.cursor()
+            
+            try:
+                cur.execute("""
+                    SELECT rimi_category_code, name_lv 
+                    FROM normalized_categories 
+                    WHERE level = 2 
+                    ORDER BY rimi_category_code
+                """)
+                all_categories = cur.fetchall()
+                
+                if not all_categories:
+                    st.error("No level 2 categories found")
+                else:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    parser = RimiParser(lambda msg: None)
+                    update_mode = 'full' if all_force_update else 'incremental'
+                    
+                    total_jobs = 0
+                    total_products = 0
+                    skipped = 0
+                    
+                    for i, (cat_code, cat_name) in enumerate(all_categories):
+                        progress_bar.progress((i + 1) / len(all_categories))
+                        status_text.text(f"Processing {cat_code}: {cat_name}...")
+                        
+                        try:
+                            all_skus = parser.collect_category_skus(cat_code)
+                            
+                            if all_skus:
+                                cur.execute("""
+                                    INSERT INTO category_processing_jobs 
+                                    (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
+                                    VALUES (%s, NULL, %s, 0, 'queued', 5, 'streamlit_bulk', %s)
+                                    RETURNING id
+                                """, (cat_code, len(all_skus), update_mode))
+                                
+                                job_id = cur.fetchone()[0]
+                                
+                                for sku in all_skus:
+                                    cur.execute("""
+                                        INSERT INTO product_processing_log (job_id, sku, status)
+                                        VALUES (%s, %s, 'pending')
+                                    """, (job_id, sku))
+                                
+                                cur.execute("""
+                                    INSERT INTO job_events (job_id, event_type, message)
+                                    VALUES (%s, 'job_created', %s)
+                                """, (job_id, f"Bulk job for {cat_code} with {len(all_skus)} products"))
+                                
+                                conn.commit()
+                                total_jobs += 1
+                                total_products += len(all_skus)
+                                
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            skipped += 1
+                        except Exception as e:
+                            conn.rollback()
+                            st.warning(f"Error for {cat_code}: {str(e)}")
+                    
+                    status_text.empty()
+                    progress_bar.empty()
+                    
+                    st.success(f"✅ Created {total_jobs} jobs with {total_products} total products!")
+                    if skipped > 0:
+                        st.info(f"⏭️ Skipped {skipped} categories (already have active jobs)")
+                    st.info("🔧 Run on Reserved VM: `python worker.py --daemon --chunk-size 15 --max-workers 3`")
+                    
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+            finally:
+                conn.close()
+    
+    with col_all2:
+        st.caption("This will queue jobs for all 75 level 2 categories. Each category will be processed by the worker.")
+    
     # Help section
     with st.expander("ℹ️ Help"):
         st.markdown("""
         **Category Processing** allows you to scrape and update product data:
         
-        - Enter a full category code (e.g., SH-11-6-19)
+        - Enter a full category code (e.g., SH-11-6-19) for single category
+        - Use "Queue All Level 2 Categories" to process all 75 categories at once
         - Toggle Force Update to overwrite existing data
-        - Monitor progress with real-time statistics
         - Processing is automatic with category extraction from product pages
+        
+        **Worker Commands for Reserved VM:**
+        ```
+        python worker.py --daemon --chunk-size 15 --max-workers 3 --heartbeat-interval 30
+        ```
         """)
 
 
