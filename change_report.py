@@ -6,6 +6,7 @@ Compares current vs previous product state to identify changes
 import psycopg2
 import psycopg2.extras
 import os
+import time
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 
@@ -26,8 +27,21 @@ class ChangeReportGenerator:
     def __init__(self):
         self.db_url = os.environ.get('DATABASE_URL')
     
-    def _get_connection(self):
-        return psycopg2.connect(self.db_url)
+    def _get_connection(self, retries: int = 3, delay: float = 2.0):
+        """Get database connection with retry logic for Neon control plane errors"""
+        last_error = None
+        for attempt in range(retries):
+            try:
+                return psycopg2.connect(self.db_url)
+            except psycopg2.OperationalError as e:
+                last_error = e
+                error_msg = str(e)
+                if "Control plane request failed" in error_msg or "connection" in error_msg.lower():
+                    if attempt < retries - 1:
+                        time.sleep(delay)
+                        continue
+                raise
+        raise last_error
     
     def get_summary_stats(self) -> ChangeStats:
         """Get high-level summary of changes between current and previous state"""
