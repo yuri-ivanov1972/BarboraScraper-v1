@@ -110,7 +110,7 @@ class ChangeReportGenerator:
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         JOIN previous_state prev ON c.product_id = prev.product_id
         WHERE c.price != prev.price
-        ORDER BY ABS(price_change_pct) DESC NULLS LAST
+        ORDER BY ABS((c.price - prev.price) / NULLIF(prev.price, 0)) DESC NULLS LAST
         LIMIT %s
         """
         
