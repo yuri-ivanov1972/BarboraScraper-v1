@@ -473,6 +473,9 @@ class BatchProcessor:
                     stats_collector.save_to_database()
                 except Exception as e:
                     self.status_callback(f"⚠️ Could not save statistics: {e}")
+            
+            # Re-raise to allow worker.py to handle graceful shutdown
+            raise
         except Exception as e:
             self.status_callback(f"❌ Error during chunked processing: {str(e)}")
             total_results['errors'].append(str(e))
