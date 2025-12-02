@@ -308,6 +308,7 @@ class BatchProcessor:
                 
                 from sku_classifier import SkuClassifier
                 from lightweight_updater import LightweightUpdater
+                from core_parser import RimiParser
                 
                 # Classify SKUs using already-fetched job category
                 classifier = SkuClassifier()
@@ -315,10 +316,11 @@ class BatchProcessor:
                 
                 new_skus = classification['new']
                 existing_skus = classification['existing']
+                existing_skus_set = set(existing_skus)  # For efficient lookup
                 removed_skus = classification['removed']
                 
                 self.status_callback(f"  ✨ New products: {len(new_skus)} (will do full scrape)")
-                self.status_callback(f"  🔄 Existing products: {len(existing_skus)} (lightweight update)")
+                self.status_callback(f"  🔄 Existing products: {len(existing_skus)} (price update from listing)")
                 self.status_callback(f"  ❌ Removed products: {len(removed_skus)} (mark inactive)")
                 
                 # Mark removed products as inactive
@@ -327,13 +329,73 @@ class BatchProcessor:
                     self.status_callback(f"  ✓ Marked {removed_count} products as inactive")
                     total_results['removed_products'] = removed_count
                 
-                # For existing products: mark as completed (skip full scrape for MVP)
-                # In future: can add lightweight price/availability updates here
+                # For existing products: update prices from category listing pages
                 if existing_skus:
-                    self.status_callback(f"  ⏭️  Skipping {len(existing_skus)} existing products (already in database)")
-                    for sku in existing_skus:
-                        progress_mgr.update_product_status(job_id, sku, 'completed')
-                    total_results['successful'] += len(existing_skus)
+                    # Guard: job_category_code required for price scraping
+                    if not job_category_code:
+                        self.status_callback(f"  ⚠️  No category code - skipping price updates for {len(existing_skus)} existing products")
+                        for sku in existing_skus:
+                            progress_mgr.update_product_status(job_id, sku, 'completed')
+                        total_results['successful'] += len(existing_skus)
+                    else:
+                        self.status_callback(f"  💰 Updating prices for {len(existing_skus)} existing products from listing...")
+                        
+                        # Collect products with prices from category pages (with error handling)
+                        try:
+                            parser = RimiParser(self.status_callback)
+                            category_products = parser.collect_category_products(job_category_code)
+                        except Exception as e:
+                            self.status_callback(f"  ⚠️  Failed to scrape category: {e} - skipping price updates")
+                            category_products = []
+                        
+                        # Build price lookup from category page data
+                        listing_data = {}
+                        for product in category_products:
+                            if product.sku in existing_skus_set and product.price:
+                                listing_data[product.sku] = {
+                                    'price': product.price,
+                                    'name': product.name
+                                }
+                        
+                        self.status_callback(f"  📊 Found prices for {len(listing_data)}/{len(existing_skus)} existing products")
+                        
+                        # Batch update prices using lightweight updater
+                        successful_skus = set()
+                        failed_skus = set()
+                        
+                        if listing_data:
+                            updater = LightweightUpdater()
+                            update_results = updater.batch_update_from_listing(listing_data)
+                            
+                            self.status_callback(f"  ✓ Price updates: {update_results['successful']} successful, {update_results['failed']} failed")
+                            self.status_callback(f"  📈 Price changes detected: {update_results['price_changes']}")
+                            
+                            # Track successful and failed SKUs from update results
+                            for error_info in update_results.get('errors', []):
+                                failed_sku = error_info.get('sku')
+                                if failed_sku:
+                                    failed_skus.add(failed_sku)
+                                    total_results['errors'].append(f"SKU {failed_sku}: {error_info.get('error', 'Unknown error')}")
+                            
+                            successful_skus = set(listing_data.keys()) - failed_skus
+                            
+                            # Mark products based on actual update status
+                            for sku in successful_skus:
+                                progress_mgr.update_product_status(job_id, sku, 'completed')
+                            for sku in failed_skus:
+                                progress_mgr.update_product_status(job_id, sku, 'failed', 'Lightweight update failed')
+                            
+                            total_results['successful'] += len(successful_skus)
+                            total_results['failed'] += len(failed_skus)
+                            total_results['price_changes'] = update_results.get('price_changes', 0)
+                        
+                        # Handle products not found in listing (mark completed, no price update)
+                        skus_without_prices = existing_skus_set - set(listing_data.keys())
+                        if skus_without_prices:
+                            self.status_callback(f"  ⚠️  {len(skus_without_prices)} products not found in listing (no price update)")
+                            for sku in skus_without_prices:
+                                progress_mgr.update_product_status(job_id, sku, 'completed')
+                            total_results['successful'] += len(skus_without_prices)
                 
                 total_results['new_products'] = len(new_skus)
                 total_results['updated_products'] = len(existing_skus)

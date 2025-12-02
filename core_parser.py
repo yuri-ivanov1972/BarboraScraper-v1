@@ -440,6 +440,64 @@ class RimiParser:
                 
         self.status_callback(f"Binary search found actual last page: {actual_last_page}")
         return actual_last_page
+    
+    def collect_category_products(self, category_code: str) -> List[ProductInfo]:
+        """
+        Collect all products with prices from a Rimi category using pagination.
+        Returns full ProductInfo objects including price data for incremental updates.
+        
+        Args:
+            category_code: Rimi category code (e.g., 'SH-7-2-14')
+            
+        Returns:
+            List of ProductInfo objects with sku, name, price, and url
+        """
+        try:
+            category_url = self.build_category_url(category_code)
+            self.status_callback(f"Collecting products with prices from category {category_code}")
+            
+            total_products, total_pages = self.get_total_products_from_pagination(category_url)
+            
+            if total_products == 0:
+                self.status_callback(f"No products found in category {category_code}")
+                return []
+            
+            page_size = self._detect_page_size(category_url)
+            self.status_callback(f"Found {total_products} products across {total_pages} pages")
+            
+            all_products = []
+            seen_skus = set()
+            
+            for page_num in range(1, total_pages + 1):
+                try:
+                    if total_pages == 1:
+                        page_url = category_url
+                        max_products_to_extract = total_products + 10
+                    else:
+                        page_url = f"{category_url}?pageSize={page_size}&currentPage={page_num}"
+                        max_products_to_extract = page_size * 2
+                    
+                    self.status_callback(f"Processing page {page_num}/{total_pages}")
+                    
+                    products = self.extract_products_from_page(page_url, max_products=max_products_to_extract)
+                    
+                    for product in products:
+                        if product.sku and product.sku not in seen_skus:
+                            seen_skus.add(product.sku)
+                            all_products.append(product)
+                    
+                    self.status_callback(f"Page {page_num}: Found {len(products)} products")
+                    
+                except Exception as page_error:
+                    self.status_callback(f"Error processing page {page_num}: {str(page_error)} - Skipping")
+                    continue
+            
+            self.status_callback(f"Category {category_code} complete: {len(all_products)} unique products with prices")
+            return all_products
+            
+        except Exception as e:
+            self.status_callback(f"Error collecting products from category {category_code}: {str(e)}")
+            return []
 
 class DatabaseConnection:
     """Database connection manager using exact hierarchical matching"""
