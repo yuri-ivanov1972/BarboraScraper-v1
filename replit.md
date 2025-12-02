@@ -89,6 +89,14 @@ The application features a modular Python architecture comprising:
       - **Optimal Configuration for Reserved VM**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 15 --max-workers 3`
       - **Autoscale Workaround Configuration**: `python worker.py --resume-all --heartbeat-interval 30 --chunk-size 3 --max-workers 1`
       
+    - **Incremental Update Mode with Price Scraping from Listings**:
+      - **Full mode**: Visits individual product pages for complete data (ingredients, nutrition, photos, price)
+      - **Incremental mode**: Extracts prices directly from category listing pages (10-50x faster)
+      - Price data extracted using `.price-tag` HTML pattern with `<span>` (euros) and `<sup>` (cents)
+      - Uses `LightweightUpdater.batch_update_from_listing()` to insert new `product_price_history` records
+      - New products still get full individual page scraping for complete data
+      - Errors properly tracked and failed SKUs marked with error messages
+      
     - **Autoscale Deployment Limitations** (temporary until Reserved VM migration):
       - **90-second wall-clock timeout** for non-HTTP background processes
       - Worker must complete chunks within this limit or process is killed by watchdog
