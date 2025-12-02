@@ -90,6 +90,8 @@ class ProcessingWorker:
         """Handle shutdown signals gracefully"""
         self.logger.info(f"Received signal {signum}, initiating graceful shutdown...")
         self.running = False
+        # Raise KeyboardInterrupt to interrupt any long-running operations
+        raise KeyboardInterrupt("Shutdown signal received")
         
     def _get_db_connection(self):
         """Get database connection"""
