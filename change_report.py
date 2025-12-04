@@ -255,22 +255,53 @@ class ChangeReportGenerator:
                 return [dict(row) for row in cur.fetchall()]
     
     def get_update_timestamps(self) -> Dict:
-        """Get the timestamps of current and previous updates"""
+        """Get the timestamps of current and previous update sessions.
+        
+        An update session is a group of updates that happen close together in time.
+        Sessions are separated by gaps of more than 6 hours.
+        """
         query = """
-        WITH ranked_prices AS (
+        WITH distinct_hours AS (
+            SELECT DISTINCT DATE_TRUNC('hour', recorded_at) as hour_ts
+            FROM product_price_history
+            ORDER BY hour_ts DESC
+        ),
+        hours_with_gaps AS (
             SELECT 
-                recorded_at,
-                ROW_NUMBER() OVER (ORDER BY recorded_at DESC) as rn
-            FROM (
-                SELECT DISTINCT DATE_TRUNC('hour', recorded_at) as recorded_at
-                FROM product_price_history
-            ) distinct_times
+                hour_ts,
+                LAG(hour_ts) OVER (ORDER BY hour_ts DESC) as prev_hour,
+                EXTRACT(EPOCH FROM (LAG(hour_ts) OVER (ORDER BY hour_ts DESC) - hour_ts)) / 3600 as hours_since_prev
+            FROM distinct_hours
+        ),
+        session_boundaries AS (
+            SELECT 
+                hour_ts,
+                CASE 
+                    WHEN hours_since_prev IS NULL THEN 1
+                    WHEN hours_since_prev > 6 THEN 1
+                    ELSE 0 
+                END as is_new_session
+            FROM hours_with_gaps
+        ),
+        sessions AS (
+            SELECT 
+                hour_ts,
+                SUM(is_new_session) OVER (ORDER BY hour_ts DESC) as session_num
+            FROM session_boundaries
+        ),
+        session_ranges AS (
+            SELECT 
+                session_num,
+                MAX(hour_ts) as session_end,
+                MIN(hour_ts) as session_start
+            FROM sessions
+            GROUP BY session_num
         )
         SELECT 
-            MAX(CASE WHEN rn = 1 THEN recorded_at END) as current_update,
-            MAX(CASE WHEN rn = 2 THEN recorded_at END) as previous_update
-        FROM ranked_prices
-        WHERE rn <= 2
+            MAX(CASE WHEN session_num = 1 THEN session_end END) as current_update,
+            MAX(CASE WHEN session_num = 2 THEN session_end END) as previous_update
+        FROM session_ranges
+        WHERE session_num <= 2
         """
         
         with self._get_connection() as conn:
