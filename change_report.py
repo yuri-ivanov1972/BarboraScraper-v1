@@ -64,10 +64,10 @@ class ChangeReportGenerator:
         SELECT 
             COUNT(*) as total_products,
             COUNT(*) FILTER (WHERE p.product_id IS NULL) as new_products,
-            COUNT(*) FILTER (WHERE c.price != p.price) as price_changed,
+            COUNT(*) FILTER (WHERE c.price != p.price AND c.is_available = true AND p.is_available = true AND c.price > 0 AND p.price > 0) as price_changed,
             COUNT(*) FILTER (WHERE c.is_available != p.is_available) as availability_changed,
-            COUNT(*) FILTER (WHERE c.price > p.price) as price_increased,
-            COUNT(*) FILTER (WHERE c.price < p.price) as price_decreased,
+            COUNT(*) FILTER (WHERE c.price > p.price AND c.is_available = true AND p.is_available = true AND c.price > 0 AND p.price > 0) as price_increased,
+            COUNT(*) FILTER (WHERE c.price < p.price AND c.is_available = true AND p.is_available = true AND c.price > 0 AND p.price > 0) as price_decreased,
             COUNT(*) FILTER (WHERE c.is_available = true AND p.is_available = false) as became_available,
             COUNT(*) FILTER (WHERE c.is_available = false AND p.is_available = true) as became_unavailable
         FROM current_state c
@@ -123,7 +123,11 @@ class ChangeReportGenerator:
         JOIN products p ON c.product_id = p.product_id
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         JOIN previous_state prev ON c.product_id = prev.product_id
-        WHERE c.price != prev.price
+        WHERE c.price != prev.price 
+          AND c.is_available = true 
+          AND prev.is_available = true
+          AND c.price > 0
+          AND prev.price > 0
         ORDER BY ABS((c.price - prev.price) / NULLIF(prev.price, 0)) DESC NULLS LAST
         LIMIT %s
         """
