@@ -44,30 +44,34 @@ class ChangeReportGenerator:
         raise last_error
     
     def get_summary_stats(self) -> ChangeStats:
-        """Get high-level summary of changes between current and previous state"""
+        """Get high-level summary of changes between current and previous state.
+        Uses effective price (discount_price when available, otherwise regular price)
+        to reflect what MansRimi cardholders actually pay."""
         query = """
         WITH ranked_prices AS (
             SELECT 
                 pph.product_id,
                 pph.price,
+                pph.discount_price,
+                COALESCE(pph.discount_price, pph.price) as effective_price,
                 pph.is_available,
                 pph.recorded_at,
                 ROW_NUMBER() OVER (PARTITION BY pph.product_id ORDER BY pph.recorded_at DESC) as rn
             FROM product_price_history pph
         ),
         current_state AS (
-            SELECT product_id, price, is_available, recorded_at FROM ranked_prices WHERE rn = 1
+            SELECT product_id, effective_price, is_available, recorded_at FROM ranked_prices WHERE rn = 1
         ),
         previous_state AS (
-            SELECT product_id, price, is_available, recorded_at FROM ranked_prices WHERE rn = 2
+            SELECT product_id, effective_price, is_available, recorded_at FROM ranked_prices WHERE rn = 2
         )
         SELECT 
             COUNT(*) as total_products,
             COUNT(*) FILTER (WHERE p.product_id IS NULL) as new_products,
-            COUNT(*) FILTER (WHERE c.price != p.price AND c.is_available = true AND p.is_available = true AND c.price > 0 AND p.price > 0) as price_changed,
+            COUNT(*) FILTER (WHERE c.effective_price != p.effective_price AND c.is_available = true AND p.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_changed,
             COUNT(*) FILTER (WHERE c.is_available != p.is_available) as availability_changed,
-            COUNT(*) FILTER (WHERE c.price > p.price AND c.is_available = true AND p.is_available = true AND c.price > 0 AND p.price > 0) as price_increased,
-            COUNT(*) FILTER (WHERE c.price < p.price AND c.is_available = true AND p.is_available = true AND c.price > 0 AND p.price > 0) as price_decreased,
+            COUNT(*) FILTER (WHERE c.effective_price > p.effective_price AND c.is_available = true AND p.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_increased,
+            COUNT(*) FILTER (WHERE c.effective_price < p.effective_price AND c.is_available = true AND p.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_decreased,
             COUNT(*) FILTER (WHERE c.is_available = true AND p.is_available = false) as became_available,
             COUNT(*) FILTER (WHERE c.is_available = false AND p.is_available = true) as became_unavailable
         FROM current_state c
@@ -90,22 +94,28 @@ class ChangeReportGenerator:
                 )
     
     def get_price_changes(self, limit: int = 50) -> List[Dict]:
-        """Get products with price changes, sorted by absolute change percentage"""
+        """Get products with price changes, sorted by absolute change percentage.
+        Uses effective price (discount_price when available, otherwise regular price)
+        to reflect what MansRimi cardholders actually pay."""
         query = """
         WITH ranked_prices AS (
             SELECT 
                 pph.product_id,
                 pph.price,
+                pph.discount_price,
+                COALESCE(pph.discount_price, pph.price) as effective_price,
                 pph.is_available,
                 pph.recorded_at,
                 ROW_NUMBER() OVER (PARTITION BY pph.product_id ORDER BY pph.recorded_at DESC) as rn
             FROM product_price_history pph
         ),
         current_state AS (
-            SELECT product_id, price, is_available, recorded_at FROM ranked_prices WHERE rn = 1
+            SELECT product_id, price, discount_price, effective_price, is_available, recorded_at 
+            FROM ranked_prices WHERE rn = 1
         ),
         previous_state AS (
-            SELECT product_id, price, is_available, recorded_at FROM ranked_prices WHERE rn = 2
+            SELECT product_id, price, discount_price, effective_price, is_available, recorded_at 
+            FROM ranked_prices WHERE rn = 2
         )
         SELECT 
             p.product_id,
@@ -113,22 +123,28 @@ class ChangeReportGenerator:
             p.name,
             nc.name_lv as category_name,
             nc.rimi_category_code as category_code,
-            prev.price as previous_price,
-            c.price as current_price,
-            (c.price - prev.price) as price_diff,
-            ROUND(((c.price - prev.price) / NULLIF(prev.price, 0) * 100)::numeric, 1) as price_change_pct,
+            prev.effective_price as previous_price,
+            c.effective_price as current_price,
+            prev.price as previous_regular_price,
+            c.price as current_regular_price,
+            prev.discount_price as previous_discount_price,
+            c.discount_price as current_discount_price,
+            (c.effective_price - prev.effective_price) as price_diff,
+            ROUND(((c.effective_price - prev.effective_price) / NULLIF(prev.effective_price, 0) * 100)::numeric, 1) as price_change_pct,
             prev.recorded_at as previous_recorded_at,
-            c.recorded_at as current_recorded_at
+            c.recorded_at as current_recorded_at,
+            CASE WHEN c.discount_price IS NOT NULL THEN true ELSE false END as current_has_discount,
+            CASE WHEN prev.discount_price IS NOT NULL THEN true ELSE false END as previous_has_discount
         FROM current_state c
         JOIN products p ON c.product_id = p.product_id
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         JOIN previous_state prev ON c.product_id = prev.product_id
-        WHERE c.price != prev.price 
+        WHERE c.effective_price != prev.effective_price 
           AND c.is_available = true 
           AND prev.is_available = true
-          AND c.price > 0
-          AND prev.price > 0
-        ORDER BY ABS((c.price - prev.price) / NULLIF(prev.price, 0)) DESC NULLS LAST
+          AND c.effective_price > 0
+          AND prev.effective_price > 0
+        ORDER BY ABS((c.effective_price - prev.effective_price) / NULLIF(prev.effective_price, 0)) DESC NULLS LAST
         LIMIT %s
         """
         

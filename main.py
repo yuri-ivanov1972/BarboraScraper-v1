@@ -834,6 +834,7 @@ def section_change_report():
         
         with tab1:
             st.subheader("Price Changes")
+            st.caption("Prices shown are effective prices (MansRimi discount price when available, otherwise regular price)")
             price_changes = report.get_price_changes(limit=100)
             
             if price_changes:
@@ -848,7 +849,25 @@ def section_change_report():
                 
                 st.write(f"**{len(increased)} price increases, {len(decreased)} price decreases**")
                 
-                display_df = df[['name', 'category_name', 'previous_price', 'current_price', 'price_change_pct']].copy()
+                def format_price_with_discount(row, price_col, has_discount_col, regular_price_col, discount_price_col):
+                    """Format price with discount indicator if applicable"""
+                    price = row[price_col]
+                    has_discount = row.get(has_discount_col, False)
+                    if has_discount:
+                        regular = row.get(regular_price_col, 0) or 0
+                        return f"{price:.2f} (was {regular:.2f})"
+                    return f"{price:.2f}"
+                
+                df['previous_display'] = df.apply(
+                    lambda r: format_price_with_discount(r, 'previous_price', 'previous_has_discount', 'previous_regular_price', 'previous_discount_price'),
+                    axis=1
+                )
+                df['current_display'] = df.apply(
+                    lambda r: format_price_with_discount(r, 'current_price', 'current_has_discount', 'current_regular_price', 'current_discount_price'),
+                    axis=1
+                )
+                
+                display_df = df[['name', 'category_name', 'previous_display', 'current_display', 'price_change_pct']].copy()
                 display_df.columns = ['Product', 'Category', 'Previous (€)', 'Current (€)', 'Change (%)']
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
             else:
