@@ -279,7 +279,7 @@ class EnhancedUpdateCoordinator:
                 result.operation = 'force_update'
                 self.status_callback("Performing force update of corrupted existing product...")
                 
-                # Prepare complete product data for force update
+                # Prepare complete product data for force update (include all price fields)
                 update_data = {
                     'rimi_url': product_data['url'],
                     'category_id': category_id,
@@ -290,7 +290,11 @@ class EnhancedUpdateCoordinator:
                     'ingredients': nutrition_data.get('ingredients', ''),
                     'quantity_value': quantity_value,
                     'quantity_unit': quantity_unit,
-                    'country_of_origin': nutrition_data.get('country_of_origin', 'Unknown')
+                    'country_of_origin': nutrition_data.get('country_of_origin', 'Unknown'),
+                    'price_per_unit': product_data.get('price_per_unit'),
+                    'price_per_unit_type': product_data.get('price_per_unit_type'),
+                    'discount_price': product_data.get('discount_price'),
+                    'discount_price_per_unit': product_data.get('discount_price_per_unit')
                 }
                 
                 # Pass information about whether this is a new product to prevent dual price history
@@ -585,16 +589,24 @@ class EnhancedUpdateCoordinator:
                 'country_of_origin': nutrition_data.get('country_of_origin', 'Unknown'),
                 'nutrition_data': nutrition_data,
                 'ingredients': nutrition_data.get('ingredients', ''),
-                'photos': product_data.get('photos', [])
+                'photos': product_data.get('photos', []),
+                'price_per_unit': product_data.get('price_per_unit'),
+                'price_per_unit_type': product_data.get('price_per_unit_type'),
+                'discount_price': product_data.get('discount_price'),
+                'discount_price_per_unit': product_data.get('discount_price_per_unit')
             }
             
-            # First create basic product record
+            # First create basic product record (include all price fields)
             basic_data = {
                 'sku': sku,
                 'name': product_data['name'],
                 'url': product_data['url'],
                 'category_id': category_id,
-                'price': product_data['price']
+                'price': product_data['price'],
+                'price_per_unit': product_data.get('price_per_unit'),
+                'price_per_unit_type': product_data.get('price_per_unit_type'),
+                'discount_price': product_data.get('discount_price'),
+                'discount_price_per_unit': product_data.get('discount_price_per_unit')
             }
             
             from database_updater import DatabaseUpdater

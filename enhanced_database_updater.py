@@ -188,9 +188,38 @@ class EnhancedDatabaseUpdater:
                 if price_decimal is not None:
                     # Use explicit is_available from product_data if provided, otherwise derive from price
                     is_available = product_data.get('is_available', price_decimal > 0)
+                    
+                    # Parse new price fields from product_data
+                    price_per_unit = None
+                    price_per_unit_type = product_data.get('price_per_unit_type')
+                    discount_price = None
+                    discount_price_per_unit = None
+                    
+                    if product_data.get('price_per_unit'):
+                        try:
+                            price_per_unit = Decimal(str(product_data['price_per_unit']))
+                        except:
+                            pass
+                    
+                    if product_data.get('discount_price'):
+                        try:
+                            discount_price = self._parse_price(product_data['discount_price'])
+                        except:
+                            pass
+                    
+                    if product_data.get('discount_price_per_unit'):
+                        try:
+                            discount_price_per_unit = Decimal(str(product_data['discount_price_per_unit']))
+                        except:
+                            pass
+                    
                     # Add deduplication check - only record if significantly different from latest price
                     if self._should_record_price_update(product_id, price_decimal, is_available):
-                        self._add_price_history_record(product_id, price_decimal, is_available, 'force_update')
+                        self._add_price_history_record(
+                            product_id, price_decimal, is_available, 'force_update',
+                            price_per_unit=price_per_unit, price_per_unit_type=price_per_unit_type,
+                            discount_price=discount_price, discount_price_per_unit=discount_price_per_unit
+                        )
                         self.status_callback(f"Updated price: €{price_decimal} (available: {is_available})")
                     else:
                         self.status_callback(f"Skipped duplicate price record: €{price_decimal} (already recorded today)")
