@@ -275,6 +275,25 @@ CREATE INDEX idx_daily_update_logs_start_time ON daily_update_logs(start_time DE
 CREATE INDEX idx_daily_update_logs_update_type ON daily_update_logs(update_type);
 
 -- ============================================
+-- MIGRATIONS (Safe to run on existing databases)
+-- ============================================
+-- These ALTER TABLE statements add columns if they don't exist.
+-- Run these to ensure production database has all required columns.
+
+-- Migration: Add price tracking columns (2024-12)
+-- These columns track detailed pricing including MansRimi discounts
+ALTER TABLE product_price_history ADD COLUMN IF NOT EXISTS price_per_unit NUMERIC(10,4);
+ALTER TABLE product_price_history ADD COLUMN IF NOT EXISTS price_per_unit_type VARCHAR(20);
+ALTER TABLE product_price_history ADD COLUMN IF NOT EXISTS discount_price NUMERIC(10,2);
+ALTER TABLE product_price_history ADD COLUMN IF NOT EXISTS discount_price_per_unit NUMERIC(10,4);
+
+-- Migration: Add enrichment tracking columns (2024-12)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS nutrition_source VARCHAR(50);
+ALTER TABLE products ADD COLUMN IF NOT EXISTS needs_enrichment BOOLEAN DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS enrichment_reviewed BOOLEAN DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS enrichment_skipped BOOLEAN DEFAULT false;
+
+-- ============================================
 -- USEFUL QUERIES (COMMENTS)
 -- ============================================
 
