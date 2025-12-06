@@ -97,9 +97,14 @@ The application features a modular Python architecture comprising:
         - Price per unit: from `.card__price-per` element (e.g., "4,02 €/kg")
         - Discount price: from `.price-label__price` container (MansRimi card discounts)
         - Discount price per unit: from `.price-per-unit` inside `.price-label`
+      - **Price data extracted from individual product pages** (for new products):
+        - Regular price: from `.price` container (euros in `<span>`, cents in `<sup>`)
+        - Price per unit: from `.price-per` element (e.g., "7.51 €/kg")
+        - Discount price: from `.price-label__price` container (MansRimi card discounts)
+        - Discount price per unit: from `.price-per-unit` inside `.price-label`
       - Uses `LightweightUpdater.batch_update_from_listing()` to insert new `product_price_history` records
       - Records inserted when ANY price field changes (regular price, discount, or price-per-unit)
-      - New products still get full individual page scraping for complete data
+      - New products get full individual page scraping with all 4 price fields stored
       - Errors properly tracked and failed SKUs marked with error messages
       
     - **Autoscale Deployment Limitations** (temporary until Reserved VM migration):
