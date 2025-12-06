@@ -59,7 +59,8 @@ class LightweightUpdater:
         
         Args:
             sku: Product SKU
-            listing_data: Dictionary with 'price' and optionally 'name' from listing
+            listing_data: Dictionary with 'price', 'price_per_unit', 'price_per_unit_type',
+                         'discount_price', 'discount_price_per_unit' and optionally 'name' from listing
         
         Returns:
             Dictionary with update results
@@ -72,6 +73,17 @@ class LightweightUpdater:
             # Parse price
             price_str = listing_data.get('price', '')
             price = self._parse_price(price_str)
+            
+            # Parse new price fields
+            price_per_unit_str = listing_data.get('price_per_unit')
+            price_per_unit = float(price_per_unit_str) if price_per_unit_str else None
+            price_per_unit_type = listing_data.get('price_per_unit_type')
+            
+            discount_price_str = listing_data.get('discount_price')
+            discount_price = self._parse_price(discount_price_str) if discount_price_str else None
+            
+            discount_price_per_unit_str = listing_data.get('discount_price_per_unit')
+            discount_price_per_unit = float(discount_price_per_unit_str) if discount_price_per_unit_str else None
             
             if price is None:
                 return {
@@ -120,9 +132,12 @@ class LightweightUpdater:
             # or if availability changed
             if price_changed or availability_changed:
                 cur.execute("""
-                    INSERT INTO product_price_history (product_id, price, is_available, data_source, recorded_at)
-                    VALUES (%s, %s, TRUE, 'lightweight_update', CURRENT_TIMESTAMP)
-                """, (product_id, price))
+                    INSERT INTO product_price_history (
+                        product_id, price, is_available, data_source, recorded_at,
+                        price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
+                    )
+                    VALUES (%s, %s, TRUE, 'lightweight_update', CURRENT_TIMESTAMP, %s, %s, %s, %s)
+                """, (product_id, price, price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit))
             
             # Update product timestamp
             cur.execute("""

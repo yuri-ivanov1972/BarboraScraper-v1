@@ -53,7 +53,11 @@ CREATE TABLE product_price_history (
     is_available BOOLEAN NOT NULL,
     recorded_at TIMESTAMPTZ NOT NULL,
     data_source VARCHAR(100),
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    price_per_unit NUMERIC(10,4),
+    price_per_unit_type VARCHAR(20),
+    discount_price NUMERIC(10,2),
+    discount_price_per_unit NUMERIC(10,4)
 );
 
 -- Product photos

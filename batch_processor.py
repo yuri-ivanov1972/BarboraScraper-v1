@@ -354,7 +354,11 @@ class BatchProcessor:
                             if product.sku in existing_skus_set and product.price:
                                 listing_data[product.sku] = {
                                     'price': product.price,
-                                    'name': product.name
+                                    'name': product.name,
+                                    'price_per_unit': product.price_per_unit,
+                                    'price_per_unit_type': product.price_per_unit_type,
+                                    'discount_price': product.discount_price,
+                                    'discount_price_per_unit': product.discount_price_per_unit
                                 }
                         
                         self.status_callback(f"  📊 Found prices for {len(listing_data)}/{len(existing_skus)} existing products")

@@ -23,6 +23,10 @@ class ProductInfo:
     name: str
     price: Optional[str]
     url: str
+    price_per_unit: Optional[str] = None
+    price_per_unit_type: Optional[str] = None
+    discount_price: Optional[str] = None
+    discount_price_per_unit: Optional[str] = None
 
 class RimiParser:
     def __init__(self, status_callback=None):
@@ -271,23 +275,81 @@ class RimiParser:
                             break
                     
                     # Extract price - Method 1: HTML price structure (most reliable)
+                    # Regular price from card__price-wrapper container
                     price = ""
-                    price_tag = element.select_one('.price-tag')
-                    if price_tag:
-                        # Extract main price and decimal parts
-                        price_parts = []
-                        main_span = price_tag.find('span')
-                        if main_span:
-                            price_parts.append(main_span.get_text(strip=True))
+                    price_per_unit = None
+                    price_per_unit_type = None
+                    discount_price = None
+                    discount_price_per_unit = None
+                    
+                    price_wrapper = element.select_one('.card__price-wrapper')
+                    if price_wrapper:
+                        # Extract regular price from .price-tag.card__price
+                        price_tag = price_wrapper.select_one('.price-tag')
+                        if price_tag:
+                            price_parts = []
+                            main_span = price_tag.find('span')
+                            if main_span:
+                                price_parts.append(main_span.get_text(strip=True))
+                            
+                            sup_elem = price_tag.find('sup')
+                            if sup_elem:
+                                price_parts.append(sup_elem.get_text(strip=True))
+                            
+                            if len(price_parts) >= 2:
+                                price = f"€{price_parts[0]}.{price_parts[1]}"
+                            elif len(price_parts) == 1:
+                                price = f"€{price_parts[0]}"
                         
-                        sup_elem = price_tag.find('sup')
-                        if sup_elem:
-                            price_parts.append(sup_elem.get_text(strip=True))
+                        # Extract price per unit from .card__price-per (e.g., "4,02 €/kg")
+                        price_per_elem = price_wrapper.select_one('.card__price-per')
+                        if price_per_elem:
+                            price_per_text = price_per_elem.get_text(strip=True)
+                            # Parse "4,02 €/kg" into value and type
+                            per_match = re.match(r'([\d,\.]+)\s*€/(\w+)', price_per_text)
+                            if per_match:
+                                price_per_unit = per_match.group(1).replace(',', '.')
+                                price_per_unit_type = per_match.group(2)
+                    
+                    # Fallback: try .price-tag directly if no wrapper found
+                    if not price:
+                        price_tag = element.select_one('.price-tag')
+                        if price_tag:
+                            price_parts = []
+                            main_span = price_tag.find('span')
+                            if main_span:
+                                price_parts.append(main_span.get_text(strip=True))
+                            
+                            sup_elem = price_tag.find('sup')
+                            if sup_elem:
+                                price_parts.append(sup_elem.get_text(strip=True))
+                            
+                            if len(price_parts) >= 2:
+                                price = f"€{price_parts[0]}.{price_parts[1]}"
+                            elif len(price_parts) == 1:
+                                price = f"€{price_parts[0]}"
+                    
+                    # Extract discount price from price-label container
+                    price_label = element.select_one('.price-label')
+                    if price_label:
+                        discount_tag = price_label.select_one('.price-label__price')
+                        if discount_tag:
+                            # Extract discount price from .major and .cents
+                            major = discount_tag.select_one('.major')
+                            cents = discount_tag.select_one('.cents')
+                            if major:
+                                major_val = major.get_text(strip=True)
+                                cents_val = cents.get_text(strip=True) if cents else "00"
+                                discount_price = f"€{major_val}.{cents_val}"
                         
-                        if len(price_parts) >= 2:
-                            price = f"€{price_parts[0]}.{price_parts[1]}"
-                        elif len(price_parts) == 1:
-                            price = f"€{price_parts[0]}"
+                        # Extract discount price per unit from .price-per-unit
+                        discount_per_elem = price_label.select_one('.price-per-unit')
+                        if discount_per_elem:
+                            discount_per_text = discount_per_elem.get_text(strip=True)
+                            # Parse "0,75 €/kg" into value
+                            disc_match = re.match(r'([\d,\.]+)\s*€/\w+', discount_per_text)
+                            if disc_match:
+                                discount_price_per_unit = disc_match.group(1).replace(',', '.')
                     
                     # Method 2: Fallback to JSON data attribute
                     if not price:
@@ -311,7 +373,11 @@ class RimiParser:
                             sku=sku,
                             name=name,
                             price=price,
-                            url=product_url
+                            url=product_url,
+                            price_per_unit=price_per_unit,
+                            price_per_unit_type=price_per_unit_type,
+                            discount_price=discount_price,
+                            discount_price_per_unit=discount_price_per_unit
                         ))
                 
                 except Exception as e:
