@@ -11,7 +11,7 @@ Preferred approach: Simplified category-by-category analysis in read-only mode w
 
 **CRITICAL SCHEMA FACTS** (verified from production database):
 - **products table** does NOT have `price` or `is_available` columns
-- **product_price_history table** stores ALL price and availability data with columns: `price_history_id`, `product_id`, `price`, `currency`, `is_available`, `recorded_at`, `data_source`, `created_at`
+- **product_price_history table** stores ALL price and availability data with columns: `price_history_id`, `product_id`, `price`, `currency`, `is_available`, `recorded_at`, `data_source`, `created_at`, `price_per_unit`, `price_per_unit_type`, `discount_price`, `discount_price_per_unit`
 - To get current price/availability: Query latest record from `product_price_history` using LATERAL JOIN
 - To update price/availability: INSERT new record into `product_price_history` (do NOT UPDATE products table)
 - Products table only tracks: `product_id`, `sku`, `name`, `name_norm`, `rimi_url`, `category_id`, `quantity_value`, `quantity_unit`, `created_at`, `updated_at`, `country_of_origin`, `nutrition_source`, `needs_enrichment`, `enrichment_reviewed`
@@ -92,8 +92,13 @@ The application features a modular Python architecture comprising:
     - **Incremental Update Mode with Price Scraping from Listings**:
       - **Full mode**: Visits individual product pages for complete data (ingredients, nutrition, photos, price)
       - **Incremental mode**: Extracts prices directly from category listing pages (10-50x faster)
-      - Price data extracted using `.price-tag` HTML pattern with `<span>` (euros) and `<sup>` (cents)
+      - **Price data extracted from category listings**:
+        - Regular price: from `.card__price-wrapper` container (euros in `<span>`, cents in `<sup>`)
+        - Price per unit: from `.card__price-per` element (e.g., "4,02 €/kg")
+        - Discount price: from `.price-label__price` container (MansRimi card discounts)
+        - Discount price per unit: from `.price-per-unit` inside `.price-label`
       - Uses `LightweightUpdater.batch_update_from_listing()` to insert new `product_price_history` records
+      - Records inserted when ANY price field changes (regular price, discount, or price-per-unit)
       - New products still get full individual page scraping for complete data
       - Errors properly tracked and failed SKUs marked with error messages
       
