@@ -92,16 +92,21 @@ class LightweightUpdater:
                     'error': f'Could not parse price: {price_str}'
                 }
             
-            # Get current product data and latest price from price_history
+            # Get current product data and latest price from price_history (including discount fields)
             cur.execute("""
                 SELECT 
                     p.product_id,
                     p.name,
                     pph.price,
-                    pph.is_available
+                    pph.is_available,
+                    pph.price_per_unit,
+                    pph.price_per_unit_type,
+                    pph.discount_price,
+                    pph.discount_price_per_unit
                 FROM products p
                 LEFT JOIN LATERAL (
-                    SELECT price, is_available, recorded_at
+                    SELECT price, is_available, recorded_at,
+                           price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
                     FROM product_price_history
                     WHERE product_id = p.product_id
                     ORDER BY recorded_at DESC
@@ -118,19 +123,34 @@ class LightweightUpdater:
                     'error': 'Product not found in database'
                 }
             
-            product_id, product_name, old_price, old_availability = row
+            (product_id, product_name, old_price, old_availability,
+             old_price_per_unit, old_price_per_unit_type, old_discount_price, old_discount_price_per_unit) = row
             old_price = float(old_price) if old_price is not None else None
+            old_price_per_unit = float(old_price_per_unit) if old_price_per_unit is not None else None
+            old_discount_price = float(old_discount_price) if old_discount_price is not None else None
+            old_discount_price_per_unit = float(old_discount_price_per_unit) if old_discount_price_per_unit is not None else None
             
-            # Track changes
+            # Track changes - compare all price-related fields
             price_changed = (old_price != price) if old_price is not None else True
             availability_changed = False  # Assume available if in listing
             
             if old_availability is False:
                 availability_changed = True  # Product back in stock
             
-            # Only insert new price history record if price actually changed
-            # or if availability changed
-            if price_changed or availability_changed:
+            # Check if any of the new price fields changed (including NULL transitions)
+            price_per_unit_changed = (old_price_per_unit != price_per_unit)
+            price_per_unit_type_changed = (old_price_per_unit_type != price_per_unit_type)
+            discount_price_changed = (old_discount_price != discount_price)
+            discount_price_per_unit_changed = (old_discount_price_per_unit != discount_price_per_unit)
+            
+            any_price_data_changed = (
+                price_changed or availability_changed or
+                price_per_unit_changed or price_per_unit_type_changed or
+                discount_price_changed or discount_price_per_unit_changed
+            )
+            
+            # Insert new price history record if any price-related data changed
+            if any_price_data_changed:
                 cur.execute("""
                     INSERT INTO product_price_history (
                         product_id, price, is_available, data_source, recorded_at,
@@ -155,6 +175,8 @@ class LightweightUpdater:
                 'old_price': old_price,
                 'new_price': price,
                 'availability_changed': availability_changed,
+                'discount_changed': discount_price_changed,
+                'price_per_unit_changed': price_per_unit_changed,
                 'update_type': 'lightweight'
             }
             
