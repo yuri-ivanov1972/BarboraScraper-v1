@@ -123,8 +123,8 @@ class RobustWebClient:
                 
                 self.status_callback(f"Found valid product: {product_name}")
                 
-                # Extract price with robust parsing
-                price = self._extract_price(soup)
+                # Extract all price data including price per unit and discount prices
+                price_data = self._extract_all_price_data(soup)
                 
                 # Extract product photos
                 photos = self._extract_photos(soup)
@@ -135,7 +135,11 @@ class RobustWebClient:
                 return {
                     'name': product_name,
                     'photos': photos,
-                    'price': price,
+                    'price': price_data['price'],
+                    'price_per_unit': price_data['price_per_unit'],
+                    'price_per_unit_type': price_data['price_per_unit_type'],
+                    'discount_price': price_data['discount_price'],
+                    'discount_price_per_unit': price_data['discount_price_per_unit'],
                     'is_available': is_available,
                     'url': pattern,
                     'soup': soup  # Include soup for further processing
@@ -150,51 +154,104 @@ class RobustWebClient:
     
     def _extract_price(self, soup: BeautifulSoup) -> str:
         """Extract price from product page with robust parsing"""
+        price_data = self._extract_all_price_data(soup)
+        return price_data.get('price', '0.00')
+    
+    def _extract_all_price_data(self, soup: BeautifulSoup) -> Dict:
+        """
+        Extract all price data from product page including:
+        - Regular price
+        - Price per unit (e.g., €/kg)
+        - Discount price (MansRimi card)
+        - Discount price per unit
+        
+        Returns dict with: price, price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
+        """
         import re
         import json
         
-        price = "0.00"
+        result = {
+            'price': '0.00',
+            'price_per_unit': None,
+            'price_per_unit_type': None,
+            'discount_price': None,
+            'discount_price_per_unit': None
+        }
         
-        # Try multiple price selector patterns
-        price_selectors = [
-            '.price-wrapper .price',
-            '.price-tag',
-            '.price',
-            '[data-price]',
-            '.product-price'
-        ]
+        # Extract regular price from .price container on product page
+        # Structure: <div class="price"><span>1</span><div><sup>99</sup><sub>€/gab.</sub></div></div>
+        price_container = soup.select_one('div.price')
+        if price_container:
+            # Get euros from direct span child
+            main_span = price_container.find('span', recursive=False)
+            if not main_span:
+                # Try any span
+                main_span = price_container.find('span')
+            
+            sup_elem = price_container.find('sup')
+            
+            if main_span and sup_elem:
+                euros = main_span.get_text(strip=True)
+                cents = sup_elem.get_text(strip=True)
+                if euros.isdigit() and cents.isdigit():
+                    result['price'] = f"{euros}.{cents}"
+                    self.status_callback(f"Price extracted: €{result['price']}")
         
-        for selector in price_selectors:
-            price_elem = soup.select_one(selector)
-            if price_elem:
-                price_text = price_elem.get_text(strip=True)
-                
-                # Extract price number - handle newlines and spaces in price format
-                # Remove all whitespace including newlines, then look for price pattern
+        # Fallback: try .price-tag if .price didn't work
+        if result['price'] == '0.00':
+            price_tag = soup.select_one('.price-tag')
+            if price_tag:
+                price_text = price_tag.get_text(strip=True)
                 clean_text = re.sub(r'\s+', '', price_text)
                 price_match = re.search(r'(\d+[.,]?\d*)', clean_text)
-                
                 if price_match:
                     price_str = price_match.group(1)
-                    # Handle cases like "359" -> "3.59" for multi-digit prices
                     if '.' not in price_str and ',' not in price_str and len(price_str) >= 3:
-                        # Insert decimal point before last 2 digits
-                        price = f"{price_str[:-2]}.{price_str[-2:]}"
+                        result['price'] = f"{price_str[:-2]}.{price_str[-2:]}"
                     else:
-                        price = price_str.replace(',', '.')
-                    
-                    self.status_callback(f"Price extraction: '{price_text}' -> '€{price}'")
-                    break
+                        result['price'] = price_str.replace(',', '.')
         
-        # If HTML price extraction failed or returned 0, try Schema.org JSON-LD fallback
-        # This handles geo-blocked products where HTML shows "unavailable" but JSON has real price
-        if price == "0.00" or price == "0":
+        # Extract price per unit from .price-per (e.g., "7,51 €/kg")
+        price_per_elem = soup.select_one('.price-per, p.price-per')
+        if price_per_elem:
+            price_per_text = price_per_elem.get_text(strip=True)
+            per_match = re.match(r'([\d,\.]+)\s*€/(\w+)', price_per_text)
+            if per_match:
+                result['price_per_unit'] = per_match.group(1).replace(',', '.')
+                result['price_per_unit_type'] = per_match.group(2)
+                self.status_callback(f"Price per unit: {result['price_per_unit']} €/{result['price_per_unit_type']}")
+        
+        # Extract discount price from .price-label container
+        price_label = soup.select_one('.price-label, .price-label__body')
+        if price_label:
+            discount_tag = price_label.select_one('.price-label__price')
+            if discount_tag:
+                major = discount_tag.select_one('.major')
+                cents = discount_tag.select_one('.cents')
+                if major:
+                    major_val = major.get_text(strip=True)
+                    cents_val = cents.get_text(strip=True) if cents else "00"
+                    if major_val.isdigit():
+                        result['discount_price'] = f"{major_val}.{cents_val}"
+                        self.status_callback(f"Discount price: €{result['discount_price']}")
+            
+            # Extract discount price per unit from .price-per-unit
+            discount_per_elem = price_label.select_one('.price-per-unit')
+            if discount_per_elem:
+                discount_per_text = discount_per_elem.get_text(strip=True)
+                disc_match = re.match(r'([\d,\.]+)\s*€/\w+', discount_per_text)
+                if disc_match:
+                    result['discount_price_per_unit'] = disc_match.group(1).replace(',', '.')
+                    self.status_callback(f"Discount price per unit: {result['discount_price_per_unit']}")
+        
+        # Schema.org fallback for main price if still 0
+        if result['price'] == '0.00' or result['price'] == '0':
             schema_price = self._extract_price_from_schema(soup)
-            if schema_price and schema_price != "0.00":
+            if schema_price and schema_price != '0.00':
                 self.status_callback(f"Price fallback from Schema.org: €{schema_price}")
-                price = schema_price
+                result['price'] = schema_price
         
-        return price
+        return result
     
     def _extract_price_from_schema(self, soup: BeautifulSoup) -> Optional[str]:
         """

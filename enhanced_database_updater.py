@@ -649,14 +649,22 @@ class EnhancedDatabaseUpdater:
             self.status_callback(f"Error checking price history: {str(e)}")
             return True  # Default to recording if check fails
     
-    def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str):
-        """Add price history record"""
+    def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str,
+                                    price_per_unit: Optional[Decimal] = None, price_per_unit_type: Optional[str] = None,
+                                    discount_price: Optional[Decimal] = None, discount_price_per_unit: Optional[Decimal] = None):
+        """Add price history record with optional discount and price-per-unit data"""
         try:
             history_query = """
-                INSERT INTO product_price_history (product_id, price, is_available, data_source, recorded_at)
-                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                INSERT INTO product_price_history (
+                    product_id, price, is_available, data_source, recorded_at,
+                    price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
+                )
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, %s, %s, %s, %s)
             """
-            self._execute_query(history_query, (product_id, price, is_available, data_source))
+            self._execute_query(history_query, (
+                product_id, price, is_available, data_source,
+                price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
+            ))
         except Exception as e:
             self.status_callback(f"Error adding price history: {str(e)}")
     

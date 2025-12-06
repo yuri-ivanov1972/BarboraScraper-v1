@@ -145,11 +145,39 @@ class DatabaseUpdater:
             
             product_id = result[0]['product_id']
             
-            # Add initial price history record
+            # Add initial price history record with new price fields
             if price and price != 'N/A':
                 price_decimal = self._parse_price(price)
                 if price_decimal is not None:
-                    self._add_price_history_record(product_id, price_decimal, True, 'rimi_scraper')
+                    # Parse new price fields from product_data
+                    price_per_unit = None
+                    price_per_unit_type = product_data.get('price_per_unit_type')
+                    discount_price = None
+                    discount_price_per_unit = None
+                    
+                    if product_data.get('price_per_unit'):
+                        try:
+                            price_per_unit = Decimal(str(product_data['price_per_unit']))
+                        except:
+                            pass
+                    
+                    if product_data.get('discount_price'):
+                        try:
+                            discount_price = self._parse_price(product_data['discount_price'])
+                        except:
+                            pass
+                    
+                    if product_data.get('discount_price_per_unit'):
+                        try:
+                            discount_price_per_unit = Decimal(str(product_data['discount_price_per_unit']))
+                        except:
+                            pass
+                    
+                    self._add_price_history_record(
+                        product_id, price_decimal, True, 'rimi_scraper',
+                        price_per_unit=price_per_unit, price_per_unit_type=price_per_unit_type,
+                        discount_price=discount_price, discount_price_per_unit=discount_price_per_unit
+                    )
             
             self.conn.commit()
             self.status_callback(f"Successfully created/updated product {sku} with ID {product_id}")
@@ -376,8 +404,10 @@ class DatabaseUpdater:
                 pass
             return False
     
-    def update_product_price(self, sku: str, price: str, is_available: bool = True) -> bool:
-        """Update product price and availability"""
+    def update_product_price(self, sku: str, price: str, is_available: bool = True,
+                              price_per_unit: Optional[str] = None, price_per_unit_type: Optional[str] = None,
+                              discount_price: Optional[str] = None, discount_price_per_unit: Optional[str] = None) -> bool:
+        """Update product price and availability with optional price-per-unit and discount data"""
         try:
             # Get product ID
             product = self.get_product_by_sku(sku)
@@ -393,8 +423,32 @@ class DatabaseUpdater:
                 self.status_callback(f"Invalid price format: {price}")
                 return False
             
-            # Add price history record
-            self._add_price_history_record(product_id, price_decimal, is_available, 'rimi_scraper')
+            # Parse new price fields
+            price_per_unit_decimal = None
+            discount_price_decimal = None
+            discount_price_per_unit_decimal = None
+            
+            if price_per_unit:
+                try:
+                    price_per_unit_decimal = Decimal(str(price_per_unit))
+                except:
+                    pass
+            
+            if discount_price:
+                discount_price_decimal = self._parse_price(discount_price)
+            
+            if discount_price_per_unit:
+                try:
+                    discount_price_per_unit_decimal = Decimal(str(discount_price_per_unit))
+                except:
+                    pass
+            
+            # Add price history record with new fields
+            self._add_price_history_record(
+                product_id, price_decimal, is_available, 'rimi_scraper',
+                price_per_unit=price_per_unit_decimal, price_per_unit_type=price_per_unit_type,
+                discount_price=discount_price_decimal, discount_price_per_unit=discount_price_per_unit_decimal
+            )
             
             self.conn.commit()
             self.status_callback(f"Updated price for {sku}: {price} (available: {is_available})")
@@ -435,15 +489,20 @@ class DatabaseUpdater:
             self.conn.rollback()
             raise Exception(f"Failed to mark {sku} unavailable: {str(e)}")
     
-    def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str):
-        """Add price history record"""
+    def _add_price_history_record(self, product_id: int, price: Decimal, is_available: bool, data_source: str,
+                                    price_per_unit: Optional[Decimal] = None, price_per_unit_type: Optional[str] = None,
+                                    discount_price: Optional[Decimal] = None, discount_price_per_unit: Optional[Decimal] = None):
+        """Add price history record with optional discount and price-per-unit data"""
         # Use past timestamp to avoid constraint issues - subtract 1 minute to ensure it's in the past
         from datetime import timedelta
         current_time = datetime.now(timezone.utc) - timedelta(minutes=1)
         
         price_query = """
-            INSERT INTO product_price_history (product_id, price, currency, is_available, recorded_at, data_source)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO product_price_history (
+                product_id, price, currency, is_available, recorded_at, data_source,
+                price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         
         self._execute_query(price_query, (
@@ -452,7 +511,11 @@ class DatabaseUpdater:
             'EUR',
             is_available,
             current_time,
-            data_source
+            data_source,
+            price_per_unit,
+            price_per_unit_type,
+            discount_price,
+            discount_price_per_unit
         ))
     
     def _parse_price(self, price_str: str) -> Optional[Decimal]:

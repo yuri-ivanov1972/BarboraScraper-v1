@@ -500,11 +500,37 @@ class EnhancedUpdateCoordinator:
             # Update price and availability
             price_decimal = self._parse_price(product_data['price'])
             if price_decimal is not None:
-                # Add price history record
+                # Add price history record with new price fields
                 existing_product = self.db_updater.get_product_by_sku(sku)
                 if existing_product:
+                    # Parse new price fields from product_data
+                    price_per_unit = None
+                    price_per_unit_type = product_data.get('price_per_unit_type')
+                    discount_price = None
+                    discount_price_per_unit = None
+                    
+                    if product_data.get('price_per_unit'):
+                        try:
+                            price_per_unit = Decimal(str(product_data['price_per_unit']))
+                        except:
+                            pass
+                    
+                    if product_data.get('discount_price'):
+                        try:
+                            discount_price = self._parse_price(product_data['discount_price'])
+                        except:
+                            pass
+                    
+                    if product_data.get('discount_price_per_unit'):
+                        try:
+                            discount_price_per_unit = Decimal(str(product_data['discount_price_per_unit']))
+                        except:
+                            pass
+                    
                     self.db_updater._add_price_history_record(
-                        existing_product['product_id'], price_decimal, is_available, 'enhanced_update'
+                        existing_product['product_id'], price_decimal, is_available, 'enhanced_update',
+                        price_per_unit=price_per_unit, price_per_unit_type=price_per_unit_type,
+                        discount_price=discount_price, discount_price_per_unit=discount_price_per_unit
                     )
             
             # Update country of origin if available
