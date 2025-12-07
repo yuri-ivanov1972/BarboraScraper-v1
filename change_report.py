@@ -121,6 +121,7 @@ class ChangeReportGenerator:
             p.product_id,
             p.sku,
             p.name,
+            p.rimi_url,
             nc.name_lv as category_name,
             nc.rimi_category_code as category_code,
             prev.effective_price as previous_price,

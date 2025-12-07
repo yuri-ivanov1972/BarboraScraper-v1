@@ -867,9 +867,20 @@ def section_change_report():
                     axis=1
                 )
                 
-                display_df = df[['name', 'category_name', 'previous_display', 'current_display', 'price_change_pct']].copy()
-                display_df.columns = ['Product', 'Category', 'Previous (€)', 'Current (€)', 'Change (%)']
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                display_df = df[['name', 'category_name', 'previous_display', 'current_display', 'price_change_pct', 'rimi_url']].copy()
+                display_df.columns = ['Product', 'Category', 'Previous (€)', 'Current (€)', 'Change (%)', 'Link']
+                st.dataframe(
+                    display_df, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    column_config={
+                        "Link": st.column_config.LinkColumn(
+                            "Rimi",
+                            display_text="Open",
+                            help="Click to view product on Rimi website"
+                        )
+                    }
+                )
             else:
                 st.info("No price changes detected")
         
