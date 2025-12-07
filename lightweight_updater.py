@@ -88,9 +88,10 @@ class LightweightUpdater:
             # Get availability from listing data (defaults to True if not provided for backward compatibility)
             is_available = listing_data.get('is_available', True)
             
-            # If price is None but product is unavailable, that's expected - use 0 as price placeholder
+            # If price is None but product is unavailable, that's expected - keep price as NULL
+            # Don't use 0.0 as it would show up as a price change
             if price is None and not is_available:
-                price = 0.0
+                pass  # Keep price as None - will be stored as NULL in database
             elif price is None:
                 return {
                     'success': False,
