@@ -596,13 +596,14 @@ class EnhancedUpdateCoordinator:
                 'discount_price_per_unit': product_data.get('discount_price_per_unit')
             }
             
-            # First create basic product record (include all price fields)
+            # First create basic product record (include all price fields and availability)
             basic_data = {
                 'sku': sku,
                 'name': product_data['name'],
                 'url': product_data['url'],
                 'category_id': category_id,
                 'price': product_data['price'],
+                'is_available': product_data.get('is_available', True),
                 'price_per_unit': product_data.get('price_per_unit'),
                 'price_per_unit_type': product_data.get('price_per_unit_type'),
                 'discount_price': product_data.get('discount_price'),
