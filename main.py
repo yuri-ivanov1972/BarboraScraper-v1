@@ -844,10 +844,7 @@ def section_change_report():
                 df['current_price'] = df['current_price'].fillna(0)
                 df['price_change_pct'] = df['price_change_pct'].fillna(0)
                 
-                increased = df[df['price_change_pct'] > 0]
-                decreased = df[df['price_change_pct'] < 0]
-                
-                st.write(f"**{len(increased)} price increases, {len(decreased)} price decreases**")
+                st.write(f"**{stats.price_increased} price increases, {stats.price_decreased} price decreases** (showing top 100 by change magnitude)")
                 
                 def format_price_with_discount(row, price_col, has_discount_col, regular_price_col, discount_price_col):
                     """Format price with discount indicator if applicable"""
@@ -896,10 +893,7 @@ def section_change_report():
                     axis=1
                 )
                 
-                became_avail = df[df['current_available'] == True]
-                became_unavail = df[df['current_available'] == False]
-                
-                st.write(f"**{len(became_avail)} became available, {len(became_unavail)} became unavailable**")
+                st.write(f"**{stats.became_available} became available, {stats.became_unavailable} became unavailable** (showing top 100)")
                 
                 display_df = df[['name', 'category_name', 'status_change', 'current_price']].copy()
                 display_df.columns = ['Product', 'Category', 'Status', 'Price (€)']
