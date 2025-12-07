@@ -60,7 +60,7 @@ class LightweightUpdater:
         Args:
             sku: Product SKU
             listing_data: Dictionary with 'price', 'price_per_unit', 'price_per_unit_type',
-                         'discount_price', 'discount_price_per_unit' and optionally 'name' from listing
+                         'discount_price', 'discount_price_per_unit', 'is_available' and optionally 'name' from listing
         
         Returns:
             Dictionary with update results
@@ -85,7 +85,13 @@ class LightweightUpdater:
             discount_price_per_unit_str = listing_data.get('discount_price_per_unit')
             discount_price_per_unit = float(discount_price_per_unit_str) if discount_price_per_unit_str else None
             
-            if price is None:
+            # Get availability from listing data (defaults to True if not provided for backward compatibility)
+            is_available = listing_data.get('is_available', True)
+            
+            # If price is None but product is unavailable, that's expected - use 0 as price placeholder
+            if price is None and not is_available:
+                price = 0.0
+            elif price is None:
                 return {
                     'success': False,
                     'sku': sku,
@@ -132,10 +138,9 @@ class LightweightUpdater:
             
             # Track changes - compare all price-related fields
             price_changed = (old_price != price) if old_price is not None else True
-            availability_changed = False  # Assume available if in listing
             
-            if old_availability is False:
-                availability_changed = True  # Product back in stock
+            # Detect availability changes - compare old vs new availability
+            availability_changed = (old_availability != is_available) if old_availability is not None else False
             
             # Check if any of the new price fields changed (including NULL transitions)
             price_per_unit_changed = (old_price_per_unit != price_per_unit)
@@ -156,8 +161,8 @@ class LightweightUpdater:
                         product_id, price, is_available, data_source, recorded_at,
                         price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
                     )
-                    VALUES (%s, %s, TRUE, 'lightweight_update', CURRENT_TIMESTAMP, %s, %s, %s, %s)
-                """, (product_id, price, price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit))
+                    VALUES (%s, %s, %s, 'lightweight_update', CURRENT_TIMESTAMP, %s, %s, %s, %s)
+                """, (product_id, price, is_available, price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit))
             
             # Update product timestamp
             cur.execute("""

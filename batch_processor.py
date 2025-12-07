@@ -349,17 +349,21 @@ class BatchProcessor:
                             category_products = []
                         
                         # Build price lookup from category page data
+                        # Include unavailable products too (they have is_available=False)
                         listing_data = {}
                         for product in category_products:
-                            if product.sku in existing_skus_set and product.price:
-                                listing_data[product.sku] = {
-                                    'price': product.price,
-                                    'name': product.name,
-                                    'price_per_unit': product.price_per_unit,
-                                    'price_per_unit_type': product.price_per_unit_type,
-                                    'discount_price': product.discount_price,
-                                    'discount_price_per_unit': product.discount_price_per_unit
-                                }
+                            if product.sku in existing_skus_set:
+                                # Include product if it has a price OR is marked as unavailable
+                                if product.price or not product.is_available:
+                                    listing_data[product.sku] = {
+                                        'price': product.price,
+                                        'name': product.name,
+                                        'price_per_unit': product.price_per_unit,
+                                        'price_per_unit_type': product.price_per_unit_type,
+                                        'discount_price': product.discount_price,
+                                        'discount_price_per_unit': product.discount_price_per_unit,
+                                        'is_available': product.is_available
+                                    }
                         
                         self.status_callback(f"  📊 Found prices for {len(listing_data)}/{len(existing_skus)} existing products")
                         
