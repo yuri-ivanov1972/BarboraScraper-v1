@@ -27,6 +27,7 @@ class ProductInfo:
     price_per_unit_type: Optional[str] = None
     discount_price: Optional[str] = None
     discount_price_per_unit: Optional[str] = None
+    is_available: bool = True
 
 class RimiParser:
     def __init__(self, status_callback=None):
@@ -368,6 +369,13 @@ class RimiParser:
                         if price_elem:
                             price = price_elem.get_text(strip=True)
                     
+                    # Check availability - product is unavailable if it has "show similar products" button
+                    # This button appears when product is out of stock instead of "add to cart"
+                    is_available = True
+                    similar_btn = element.select_one('.js-open-similar-products')
+                    if similar_btn:
+                        is_available = False
+                    
                     if sku and name:
                         products.append(ProductInfo(
                             sku=sku,
@@ -377,7 +385,8 @@ class RimiParser:
                             price_per_unit=price_per_unit,
                             price_per_unit_type=price_per_unit_type,
                             discount_price=discount_price,
-                            discount_price_per_unit=discount_price_per_unit
+                            discount_price_per_unit=discount_price_per_unit,
+                            is_available=is_available
                         ))
                 
                 except Exception as e:
