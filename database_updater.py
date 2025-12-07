@@ -173,8 +173,11 @@ class DatabaseUpdater:
                         except:
                             pass
                     
+                    # Use is_available from product_data (defaults to True if not provided)
+                    is_available = product_data.get('is_available', True)
+                    
                     self._add_price_history_record(
-                        product_id, price_decimal, True, 'rimi_scraper',
+                        product_id, price_decimal, is_available, 'rimi_scraper',
                         price_per_unit=price_per_unit, price_per_unit_type=price_per_unit_type,
                         discount_price=discount_price, discount_price_per_unit=discount_price_per_unit
                     )
