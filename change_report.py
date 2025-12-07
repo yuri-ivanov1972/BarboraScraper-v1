@@ -68,10 +68,10 @@ class ChangeReportGenerator:
         SELECT 
             COUNT(*) as total_products,
             COUNT(*) FILTER (WHERE p.product_id IS NULL) as new_products,
-            COUNT(*) FILTER (WHERE c.effective_price != p.effective_price AND c.is_available = true AND p.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_changed,
+            COUNT(*) FILTER (WHERE c.effective_price != p.effective_price AND c.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_changed,
             COUNT(*) FILTER (WHERE c.is_available != p.is_available) as availability_changed,
-            COUNT(*) FILTER (WHERE c.effective_price > p.effective_price AND c.is_available = true AND p.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_increased,
-            COUNT(*) FILTER (WHERE c.effective_price < p.effective_price AND c.is_available = true AND p.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_decreased,
+            COUNT(*) FILTER (WHERE c.effective_price > p.effective_price AND c.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_increased,
+            COUNT(*) FILTER (WHERE c.effective_price < p.effective_price AND c.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_decreased,
             COUNT(*) FILTER (WHERE c.is_available = true AND p.is_available = false) as became_available,
             COUNT(*) FILTER (WHERE c.is_available = false AND p.is_available = true) as became_unavailable
         FROM current_state c
@@ -142,7 +142,6 @@ class ChangeReportGenerator:
         JOIN previous_state prev ON c.product_id = prev.product_id
         WHERE c.effective_price != prev.effective_price 
           AND c.is_available = true 
-          AND prev.is_available = true
           AND c.effective_price > 0
           AND prev.effective_price > 0
         ORDER BY ABS((c.effective_price - prev.effective_price) / NULLIF(prev.effective_price, 0)) DESC NULLS LAST
