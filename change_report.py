@@ -26,6 +26,7 @@ class ChangeStats:
 class ChangeReportGenerator:
     def __init__(self):
         self.db_url = os.environ.get('DATABASE_URL')
+        self._cached_timestamps = None
     
     def _get_connection(self, retries: int = 3, delay: float = 2.0):
         """Get database connection with retry logic for Neon control plane errors"""
@@ -43,27 +44,54 @@ class ChangeReportGenerator:
                 raise
         raise last_error
     
+    def _get_cached_timestamps(self) -> Dict:
+        """Get timestamps with caching to avoid repeated queries"""
+        if self._cached_timestamps is None:
+            self._cached_timestamps = self.get_update_timestamps()
+        return self._cached_timestamps
+    
     def get_summary_stats(self) -> ChangeStats:
-        """Get high-level summary of changes between current and previous state.
+        """Get high-level summary of changes between current and previous update session.
         Uses effective price (discount_price when available, otherwise regular price)
-        to reflect what MansRimi cardholders actually pay."""
+        to reflect what MansRimi cardholders actually pay.
+        
+        Compares the state at the current update timestamp vs the previous update timestamp,
+        so only products that changed BETWEEN those two sessions are counted."""
+        timestamps = self._get_cached_timestamps()
+        current_ts = timestamps.get('current_update')
+        previous_ts = timestamps.get('previous_update')
+        
+        if not current_ts or not previous_ts:
+            return ChangeStats(
+                total_products=0, new_products=0, price_changed=0,
+                availability_changed=0, price_increased=0, price_decreased=0,
+                became_available=0, became_unavailable=0
+            )
+        
         query = """
-        WITH ranked_prices AS (
-            SELECT 
+        WITH current_state AS (
+            SELECT DISTINCT ON (pph.product_id)
                 pph.product_id,
                 pph.price,
                 pph.discount_price,
                 COALESCE(pph.discount_price, pph.price) as effective_price,
                 pph.is_available,
-                pph.recorded_at,
-                ROW_NUMBER() OVER (PARTITION BY pph.product_id ORDER BY pph.recorded_at DESC) as rn
+                pph.recorded_at
             FROM product_price_history pph
-        ),
-        current_state AS (
-            SELECT product_id, effective_price, is_available, recorded_at FROM ranked_prices WHERE rn = 1
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         ),
         previous_state AS (
-            SELECT product_id, effective_price, is_available, recorded_at FROM ranked_prices WHERE rn = 2
+            SELECT DISTINCT ON (pph.product_id)
+                pph.product_id,
+                pph.price,
+                pph.discount_price,
+                COALESCE(pph.discount_price, pph.price) as effective_price,
+                pph.is_available,
+                pph.recorded_at
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         )
         SELECT 
             COUNT(*) as total_products,
@@ -80,7 +108,7 @@ class ChangeReportGenerator:
         
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query)
+                cur.execute(query, (current_ts, previous_ts))
                 row = cur.fetchone()
                 return ChangeStats(
                     total_products=row['total_products'],
@@ -94,28 +122,42 @@ class ChangeReportGenerator:
                 )
     
     def get_price_changes(self, limit: int = 50) -> List[Dict]:
-        """Get products with price changes, sorted by absolute change percentage.
+        """Get products with price changes between the two update sessions.
         Uses effective price (discount_price when available, otherwise regular price)
-        to reflect what MansRimi cardholders actually pay."""
+        to reflect what MansRimi cardholders actually pay.
+        
+        Compares the state at current update timestamp vs previous update timestamp."""
+        timestamps = self._get_cached_timestamps()
+        current_ts = timestamps.get('current_update')
+        previous_ts = timestamps.get('previous_update')
+        
+        if not current_ts or not previous_ts:
+            return []
+        
         query = """
-        WITH ranked_prices AS (
-            SELECT 
+        WITH current_state AS (
+            SELECT DISTINCT ON (pph.product_id)
                 pph.product_id,
                 pph.price,
                 pph.discount_price,
                 COALESCE(pph.discount_price, pph.price) as effective_price,
                 pph.is_available,
-                pph.recorded_at,
-                ROW_NUMBER() OVER (PARTITION BY pph.product_id ORDER BY pph.recorded_at DESC) as rn
+                pph.recorded_at
             FROM product_price_history pph
-        ),
-        current_state AS (
-            SELECT product_id, price, discount_price, effective_price, is_available, recorded_at 
-            FROM ranked_prices WHERE rn = 1
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         ),
         previous_state AS (
-            SELECT product_id, price, discount_price, effective_price, is_available, recorded_at 
-            FROM ranked_prices WHERE rn = 2
+            SELECT DISTINCT ON (pph.product_id)
+                pph.product_id,
+                pph.price,
+                pph.discount_price,
+                COALESCE(pph.discount_price, pph.price) as effective_price,
+                pph.is_available,
+                pph.recorded_at
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         )
         SELECT 
             p.product_id,
@@ -150,26 +192,40 @@ class ChangeReportGenerator:
         
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query, (limit,))
+                cur.execute(query, (current_ts, previous_ts, limit))
                 return [dict(row) for row in cur.fetchall()]
     
     def get_availability_changes(self, limit: int = 50) -> List[Dict]:
-        """Get products with availability changes"""
+        """Get products with availability changes between the two update sessions.
+        
+        Compares the state at current update timestamp vs previous update timestamp."""
+        timestamps = self._get_cached_timestamps()
+        current_ts = timestamps.get('current_update')
+        previous_ts = timestamps.get('previous_update')
+        
+        if not current_ts or not previous_ts:
+            return []
+        
         query = """
-        WITH ranked_prices AS (
-            SELECT 
+        WITH current_state AS (
+            SELECT DISTINCT ON (pph.product_id)
                 pph.product_id,
                 pph.price,
                 pph.is_available,
-                pph.recorded_at,
-                ROW_NUMBER() OVER (PARTITION BY pph.product_id ORDER BY pph.recorded_at DESC) as rn
+                pph.recorded_at
             FROM product_price_history pph
-        ),
-        current_state AS (
-            SELECT product_id, price, is_available, recorded_at FROM ranked_prices WHERE rn = 1
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         ),
         previous_state AS (
-            SELECT product_id, price, is_available, recorded_at FROM ranked_prices WHERE rn = 2
+            SELECT DISTINCT ON (pph.product_id)
+                pph.product_id,
+                pph.price,
+                pph.is_available,
+                pph.recorded_at
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         )
         SELECT 
             p.product_id,
@@ -193,17 +249,36 @@ class ChangeReportGenerator:
         
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query, (limit,))
+                cur.execute(query, (current_ts, previous_ts, limit))
                 return [dict(row) for row in cur.fetchall()]
     
     def get_new_products(self, limit: int = 50) -> List[Dict]:
-        """Get newly added products (only 1 price history record)"""
+        """Get products that are new between the two update sessions.
+        
+        A product is considered "new" if it exists in the current session
+        but did not exist in the previous session (first record is after previous timestamp)."""
+        timestamps = self._get_cached_timestamps()
+        current_ts = timestamps.get('current_update')
+        previous_ts = timestamps.get('previous_update')
+        
+        if not current_ts or not previous_ts:
+            return []
+        
         query = """
-        WITH product_history_count AS (
-            SELECT product_id, COUNT(*) as record_count
-            FROM product_price_history
-            GROUP BY product_id
-            HAVING COUNT(*) = 1
+        WITH current_products AS (
+            SELECT DISTINCT ON (pph.product_id)
+                pph.product_id,
+                pph.price,
+                pph.is_available,
+                pph.recorded_at
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
+        ),
+        previous_products AS (
+            SELECT DISTINCT pph.product_id
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
         )
         SELECT 
             p.product_id,
@@ -211,44 +286,58 @@ class ChangeReportGenerator:
             p.name,
             nc.name_lv as category_name,
             nc.rimi_category_code as category_code,
-            pph.price,
-            pph.is_available,
-            pph.recorded_at
-        FROM product_history_count phc
-        JOIN products p ON phc.product_id = p.product_id
+            cp.price,
+            cp.is_available,
+            cp.recorded_at
+        FROM current_products cp
+        JOIN products p ON cp.product_id = p.product_id
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
-        JOIN product_price_history pph ON p.product_id = pph.product_id
-        ORDER BY pph.recorded_at DESC
+        LEFT JOIN previous_products pp ON cp.product_id = pp.product_id
+        WHERE pp.product_id IS NULL
+        ORDER BY cp.recorded_at DESC
         LIMIT %s
         """
         
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query, (limit,))
+                cur.execute(query, (current_ts, previous_ts, limit))
                 return [dict(row) for row in cur.fetchall()]
     
     def get_category_breakdown(self) -> List[Dict]:
-        """Get change summary per category"""
+        """Get change summary per category between the two update sessions."""
+        timestamps = self._get_cached_timestamps()
+        current_ts = timestamps.get('current_update')
+        previous_ts = timestamps.get('previous_update')
+        
+        if not current_ts or not previous_ts:
+            return []
+        
         query = """
-        WITH ranked_prices AS (
-            SELECT 
+        WITH current_state AS (
+            SELECT DISTINCT ON (pph.product_id)
                 pph.product_id,
                 pph.price,
-                pph.is_available,
-                ROW_NUMBER() OVER (PARTITION BY pph.product_id ORDER BY pph.recorded_at DESC) as rn
+                COALESCE(pph.discount_price, pph.price) as effective_price,
+                pph.is_available
             FROM product_price_history pph
-        ),
-        current_state AS (
-            SELECT product_id, price, is_available FROM ranked_prices WHERE rn = 1
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         ),
         previous_state AS (
-            SELECT product_id, price, is_available FROM ranked_prices WHERE rn = 2
+            SELECT DISTINCT ON (pph.product_id)
+                pph.product_id,
+                pph.price,
+                COALESCE(pph.discount_price, pph.price) as effective_price,
+                pph.is_available
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
+            ORDER BY pph.product_id, pph.recorded_at DESC
         ),
         product_changes AS (
             SELECT 
                 p.category_id,
                 CASE WHEN prev.product_id IS NULL THEN 1 ELSE 0 END as is_new,
-                CASE WHEN c.price != prev.price THEN 1 ELSE 0 END as price_changed,
+                CASE WHEN c.effective_price != prev.effective_price AND c.is_available = true AND c.effective_price > 0 AND prev.effective_price > 0 THEN 1 ELSE 0 END as price_changed,
                 CASE WHEN c.is_available != prev.is_available THEN 1 ELSE 0 END as availability_changed
             FROM current_state c
             JOIN products p ON c.product_id = p.product_id
@@ -271,7 +360,7 @@ class ChangeReportGenerator:
         
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query)
+                cur.execute(query, (current_ts, previous_ts))
                 return [dict(row) for row in cur.fetchall()]
     
     def get_update_timestamps(self) -> Dict:
