@@ -81,34 +81,42 @@ class ChangeReportGenerator:
             WHERE pph.recorded_at <= %s
             ORDER BY pph.product_id, pph.recorded_at DESC
         ),
-        previous_state AS (
+        previous_available_state AS (
             SELECT DISTINCT ON (pph.product_id)
                 pph.product_id,
                 pph.price,
                 pph.discount_price,
-                COALESCE(pph.discount_price, pph.price) as effective_price,
-                pph.is_available,
-                pph.recorded_at
+                COALESCE(pph.discount_price, pph.price) as effective_price
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
+              AND pph.is_available = true
+            ORDER BY pph.product_id, pph.recorded_at DESC
+        ),
+        previous_any_state AS (
+            SELECT DISTINCT ON (pph.product_id)
+                pph.product_id,
+                pph.is_available
             FROM product_price_history pph
             WHERE pph.recorded_at <= %s
             ORDER BY pph.product_id, pph.recorded_at DESC
         )
         SELECT 
             COUNT(*) as total_products,
-            COUNT(*) FILTER (WHERE p.product_id IS NULL) as new_products,
-            COUNT(*) FILTER (WHERE c.effective_price != p.effective_price AND c.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_changed,
-            COUNT(*) FILTER (WHERE c.is_available != p.is_available) as availability_changed,
-            COUNT(*) FILTER (WHERE c.effective_price > p.effective_price AND c.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_increased,
-            COUNT(*) FILTER (WHERE c.effective_price < p.effective_price AND c.is_available = true AND c.effective_price > 0 AND p.effective_price > 0) as price_decreased,
-            COUNT(*) FILTER (WHERE c.is_available = true AND p.is_available = false) as became_available,
-            COUNT(*) FILTER (WHERE c.is_available = false AND p.is_available = true) as became_unavailable
+            COUNT(*) FILTER (WHERE prev_any.product_id IS NULL) as new_products,
+            COUNT(*) FILTER (WHERE c.effective_price != prev_avail.effective_price AND c.is_available = true AND c.effective_price > 0 AND prev_avail.effective_price > 0) as price_changed,
+            COUNT(*) FILTER (WHERE c.is_available != prev_any.is_available) as availability_changed,
+            COUNT(*) FILTER (WHERE c.effective_price > prev_avail.effective_price AND c.is_available = true AND c.effective_price > 0 AND prev_avail.effective_price > 0) as price_increased,
+            COUNT(*) FILTER (WHERE c.effective_price < prev_avail.effective_price AND c.is_available = true AND c.effective_price > 0 AND prev_avail.effective_price > 0) as price_decreased,
+            COUNT(*) FILTER (WHERE c.is_available = true AND prev_any.is_available = false) as became_available,
+            COUNT(*) FILTER (WHERE c.is_available = false AND prev_any.is_available = true) as became_unavailable
         FROM current_state c
-        LEFT JOIN previous_state p ON c.product_id = p.product_id
+        LEFT JOIN previous_available_state prev_avail ON c.product_id = prev_avail.product_id
+        LEFT JOIN previous_any_state prev_any ON c.product_id = prev_any.product_id
         """
         
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query, (current_ts, previous_ts))
+                cur.execute(query, (current_ts, previous_ts, previous_ts))
                 row = cur.fetchone()
                 return ChangeStats(
                     total_products=row['total_products'],
@@ -147,16 +155,16 @@ class ChangeReportGenerator:
             WHERE pph.recorded_at <= %s
             ORDER BY pph.product_id, pph.recorded_at DESC
         ),
-        previous_state AS (
+        previous_available_state AS (
             SELECT DISTINCT ON (pph.product_id)
                 pph.product_id,
                 pph.price,
                 pph.discount_price,
                 COALESCE(pph.discount_price, pph.price) as effective_price,
-                pph.is_available,
                 pph.recorded_at
             FROM product_price_history pph
             WHERE pph.recorded_at <= %s
+              AND pph.is_available = true
             ORDER BY pph.product_id, pph.recorded_at DESC
         )
         SELECT 
@@ -181,7 +189,7 @@ class ChangeReportGenerator:
         FROM current_state c
         JOIN products p ON c.product_id = p.product_id
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
-        JOIN previous_state prev ON c.product_id = prev.product_id
+        JOIN previous_available_state prev ON c.product_id = prev.product_id
         WHERE c.effective_price != prev.effective_price 
           AND c.is_available = true 
           AND c.effective_price > 0
@@ -323,11 +331,19 @@ class ChangeReportGenerator:
             WHERE pph.recorded_at <= %s
             ORDER BY pph.product_id, pph.recorded_at DESC
         ),
-        previous_state AS (
+        previous_available_state AS (
             SELECT DISTINCT ON (pph.product_id)
                 pph.product_id,
                 pph.price,
-                COALESCE(pph.discount_price, pph.price) as effective_price,
+                COALESCE(pph.discount_price, pph.price) as effective_price
+            FROM product_price_history pph
+            WHERE pph.recorded_at <= %s
+              AND pph.is_available = true
+            ORDER BY pph.product_id, pph.recorded_at DESC
+        ),
+        previous_any_state AS (
+            SELECT DISTINCT ON (pph.product_id)
+                pph.product_id,
                 pph.is_available
             FROM product_price_history pph
             WHERE pph.recorded_at <= %s
@@ -336,12 +352,13 @@ class ChangeReportGenerator:
         product_changes AS (
             SELECT 
                 p.category_id,
-                CASE WHEN prev.product_id IS NULL THEN 1 ELSE 0 END as is_new,
-                CASE WHEN c.effective_price != prev.effective_price AND c.is_available = true AND c.effective_price > 0 AND prev.effective_price > 0 THEN 1 ELSE 0 END as price_changed,
-                CASE WHEN c.is_available != prev.is_available THEN 1 ELSE 0 END as availability_changed
+                CASE WHEN prev_any.product_id IS NULL THEN 1 ELSE 0 END as is_new,
+                CASE WHEN c.effective_price != prev_avail.effective_price AND c.is_available = true AND c.effective_price > 0 AND prev_avail.effective_price > 0 THEN 1 ELSE 0 END as price_changed,
+                CASE WHEN c.is_available != prev_any.is_available THEN 1 ELSE 0 END as availability_changed
             FROM current_state c
             JOIN products p ON c.product_id = p.product_id
-            LEFT JOIN previous_state prev ON c.product_id = prev.product_id
+            LEFT JOIN previous_available_state prev_avail ON c.product_id = prev_avail.product_id
+            LEFT JOIN previous_any_state prev_any ON c.product_id = prev_any.product_id
         )
         SELECT 
             nc.category_id,
@@ -360,7 +377,7 @@ class ChangeReportGenerator:
         
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                cur.execute(query, (current_ts, previous_ts))
+                cur.execute(query, (current_ts, previous_ts, previous_ts))
                 return [dict(row) for row in cur.fetchall()]
     
     def get_update_timestamps(self) -> Dict:
