@@ -1075,22 +1075,22 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
             p.sku,
             p.name,
             nc.rimi_category_code as category_code,
-            ni.energy_kj,
-            ni.carbs_sugars as sugars,
-            ni.fat_saturated as saturated_fat,
-            ni.salt,
-            ni.protein,
-            ni.fiber,
-            ni.nutri_score_grade as current_grade,
-            ni.nutri_score_points as current_score
+            nf.energy_kj,
+            nf.carbs_sugars as sugars,
+            nf.fat_saturated as saturated_fat,
+            nf.salt,
+            nf.protein,
+            nf.fiber,
+            nf.nutri_score_grade as current_grade,
+            nf.nutri_score_points as current_score
         FROM products p
-        JOIN nutritional_information ni ON p.product_id = ni.product_id
+        JOIN nutritionfacts nf ON p.product_id = nf.product_id
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
-        WHERE ni.energy_kj IS NOT NULL
-          AND ni.carbs_sugars IS NOT NULL
-          AND ni.fat_saturated IS NOT NULL
-          AND ni.salt IS NOT NULL
-          AND ni.protein IS NOT NULL
+        WHERE nf.energy_kj IS NOT NULL
+          AND nf.carbs_sugars IS NOT NULL
+          AND nf.fat_saturated IS NOT NULL
+          AND nf.salt IS NOT NULL
+          AND nf.protein IS NOT NULL
     """
     
     params = []
@@ -1114,16 +1114,16 @@ def recalculate_nutriscore_for_product(db: ProductViewDatabase, sku: str):
             p.sku,
             p.name,
             nc.rimi_category_code as category_code,
-            ni.energy_kj,
-            ni.carbs_sugars as sugars,
-            ni.fat_saturated as saturated_fat,
-            ni.salt,
-            ni.protein,
-            ni.fiber,
-            ni.nutri_score_grade as current_grade,
-            ni.nutri_score_points as current_score
+            nf.energy_kj,
+            nf.carbs_sugars as sugars,
+            nf.fat_saturated as saturated_fat,
+            nf.salt,
+            nf.protein,
+            nf.fiber,
+            nf.nutri_score_grade as current_grade,
+            nf.nutri_score_points as current_score
         FROM products p
-        LEFT JOIN nutritional_information ni ON p.product_id = ni.product_id
+        LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         WHERE p.sku = %s
     """
@@ -1170,7 +1170,7 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
             new_score = result['score']
             
             update_query = """
-                UPDATE nutritional_information 
+                UPDATE nutritionfacts 
                 SET nutri_score_grade = %s, nutri_score_points = %s
                 WHERE product_id = %s
             """
