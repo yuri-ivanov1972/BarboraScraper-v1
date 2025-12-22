@@ -992,7 +992,7 @@ def section_nutriscore_recalculation():
             cur.execute("""
                 SELECT rimi_category_code, name_lv 
                 FROM normalized_categories 
-                WHERE category_level = 2 
+                WHERE level = 2 
                 ORDER BY name_lv
             """)
             categories = [dict(row) for row in cur.fetchall()]
