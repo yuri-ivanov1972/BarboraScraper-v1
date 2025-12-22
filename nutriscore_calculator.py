@@ -18,27 +18,74 @@ Usage:
     print(f"Nutriscore: {result['grade']} (Score: {result['score']})")
 """
 
-from typing import Dict, List, Tuple, Any, Optional
-import json
+from typing import Dict, Tuple, Any, Optional
 
 # Category mappings for product classification
 FAT_CATEGORIES = {
-    'SH-2-4-1', 'SH-2-4-2', 'SH-2-4-3', 'SH-2-4-4', 'SH-2-4-5',
-    'SH-2-4-6', 'SH-2-4-7', 'SH-2-4-8', 'SH-2-4-9', 'SH-2-4-10'
+    'SH-11-7-16',  # Margarines
+    'SH-11-7-17',  # Butter
+    'SH-11-7-18',  # Butter with additives
+    'SH-11-7-19',  # Fat mixtures
+    'SH-4-3-14',   # Coconut oil
+    'SH-4-3-15',   # Olive oil
+    'SH-4-3-16',   # Rapeseed oil
+    'SH-4-3-17',   # Sunflower oil
+    'SH-4-3-18'    # Special and other oils
 }
 
 CHEESE_CATEGORIES = {
-    'SH-2-3-1', 'SH-2-3-2', 'SH-2-3-3', 'SH-2-3-4', 'SH-2-3-5',
-    'SH-2-3-6', 'SH-2-3-7', 'SH-2-3-8', 'SH-2-3-9', 'SH-2-3-10'
+    'SH-11-9-25',  # Hard cheese
+    'SH-11-9-26',  # Fermented cheese
+    'SH-11-9-27',  # Feta, Mozzarella cheese
+    'SH-11-9-28',  # Processed cheese
+    'SH-11-9-29',  # Goat, sheep cheese
+    'SH-11-9-30',  # Cream cheese
+    'SH-11-9-31',  # Other cheese
+    'SH-11-9-32'   # Blue cheese
 }
 
 FULL_FVN_CATEGORIES = {
-    'SH-1-1', 'SH-1-2', 'SH-1-3', 'SH-1-4', 'SH-1-5',
-    'SH-1-6', 'SH-1-7', 'SH-1-8', 'SH-1-9', 'SH-1-10'
+    'SH-12-4-10',  # Frozen fruits and berries
+    'SH-12-4-11',  # Frozen vegetables and mixtures
+    'SH-12-4-12',  # Frozen potatoes
+    'SH-13-9-17',  # Nuts and dried fruits - Others
+    'SH-13-9-18',  # Nuts and dried fruits - Nuts
+    'SH-13-9-20',  # Nuts and dried fruits - Seeds
+    'SH-13-9-21',  # Nuts and dried fruits - Dried fruits and berries
+    'SH-13-9-23',  # Nuts and dried fruits - Dried fruit and nut mixes
+    'SH-2-1-2',    # Fruits - Apples and pears
+    'SH-2-1-3',    # Fruits - Bananas
+    'SH-2-1-4',    # Fruits - Citrus fruits
+    'SH-2-1-5',    # Fruits - Exotic fruits
+    'SH-2-1-6',    # Fruits - Melons and watermelons
+    'SH-2-1-7',    # Fruits - Stone fruits
+    'SH-2-1-9',    # Fruits - Berries
+    'SH-2-2',      # Vegetables
+    'SH-2-2-10',   # Vegetables - Beets and other root vegetables
+    'SH-2-2-12',   # Vegetables - Cucumbers and tomatoes
+    'SH-2-2-13',   # Vegetables - Potatoes and carrots
+    'SH-2-2-14',   # Vegetables - Legumes, corn and asparagus
+    'SH-2-2-16',   # Vegetables - Peppers
+    'SH-2-2-17',   # Vegetables - Processed vegetables
+    'SH-2-2-18',   # Vegetables - Cabbage and lettuce
+    'SH-2-2-19',   # Vegetables - Onions, leeks and garlic
+    'SH-2-2-20',   # Vegetables - Herbs
+    'SH-2-2-9'     # Vegetables - Pumpkins and squash
 }
 
 HALF_FVN_CATEGORIES = {
-    'SH-1-11', 'SH-1-12', 'SH-1-13', 'SH-1-14', 'SH-1-15'
+    'SH-4-10-55',  # Canned products - Other canned vegetables
+    'SH-4-10-57',  # Canned products - Canned corn
+    'SH-4-10-58',  # Canned products - Canned peppers
+    'SH-4-10-59',  # Canned products - Canned beets
+    'SH-4-10-60',  # Canned products - Canned olives
+    'SH-4-10-62',  # Canned products - Canned fruits and berries
+    'SH-4-10-63',  # Canned products - Canned purees
+    'SH-4-10-65',  # Canned products - Canned cucumbers
+    'SH-4-10-66',  # Canned products - Canned legumes
+    'SH-4-10-67',  # Canned products - Canned tomatoes
+    'SH-4-10-68',  # Canned products - Canned peas
+    'SH-4-12-85'   # Sauces - Tomato sauces and pastes
 }
 
 
