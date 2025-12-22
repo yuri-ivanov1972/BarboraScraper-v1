@@ -1100,7 +1100,7 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
     
     query += " ORDER BY p.sku"
     
-    db._ensure_connected()
+    db._ensure_connection()
     with db.connection.cursor() as cur:
         cur.execute(query, params if params else None)
         return [dict(row) for row in cur.fetchall()]
@@ -1128,7 +1128,7 @@ def recalculate_nutriscore_for_product(db: ProductViewDatabase, sku: str):
         WHERE p.sku = %s
     """
     
-    db._ensure_connected()
+    db._ensure_connection()
     with db.connection.cursor() as cur:
         cur.execute(query, (sku,))
         row = cur.fetchone()
@@ -1175,7 +1175,7 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
                 WHERE product_id = %s
             """
             
-            db._ensure_connected()
+            db._ensure_connection()
             with db.connection.cursor() as cur:
                 cur.execute(update_query, (new_grade, new_score, product['product_id']))
                 db.connection.commit()
