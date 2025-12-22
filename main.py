@@ -937,10 +937,277 @@ def section_change_report():
         st.code(traceback.format_exc())
 
 
+def section_nutriscore_recalculation():
+    """Section: Nutri-Score Recalculation"""
+    st.header("🔄 Nutri-Score Recalculation")
+    
+    st.info("""
+    Recalculate Nutri-Score for products using the updated category mappings.
+    This will update the `nutri_score_grade` and `nutri_score_points` in the database.
+    """)
+    
+    from nutriscore_calculator import NutriscoreCalculator, FAT_CATEGORIES, CHEESE_CATEGORIES, FULL_FVN_CATEGORIES, HALF_FVN_CATEGORIES
+    
+    with st.expander("📋 Current Category Mappings", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write("**Fat Categories:**")
+            for cat in sorted(FAT_CATEGORIES):
+                st.caption(cat)
+            st.write("**Cheese Categories:**")
+            for cat in sorted(CHEESE_CATEGORIES):
+                st.caption(cat)
+        with col2:
+            st.write("**100% Fruits/Veg/Nuts:**")
+            for cat in sorted(FULL_FVN_CATEGORIES):
+                st.caption(cat)
+            st.write("**50% Fruits/Veg/Nuts:**")
+            for cat in sorted(HALF_FVN_CATEGORIES):
+                st.caption(cat)
+    
+    mode = st.radio(
+        "Recalculation Mode:",
+        ["Single Product (by SKU)", "By Category", "All Products"],
+        horizontal=True
+    )
+    
+    db = ProductViewDatabase()
+    
+    if mode == "Single Product (by SKU)":
+        sku = st.text_input("Enter Product SKU:")
+        
+        if st.button("Recalculate Nutri-Score", type="primary") and sku:
+            with st.spinner("Recalculating..."):
+                result = recalculate_nutriscore_for_product(db, sku.strip())
+                if result['success']:
+                    st.success(f"✅ {result['message']}")
+                    if result.get('details'):
+                        st.json(result['details'])
+                else:
+                    st.error(f"❌ {result['message']}")
+    
+    elif mode == "By Category":
+        categories = db.get_level2_categories()
+        category_options = {f"{c['name_lv']} ({c['rimi_category_code']})": c['rimi_category_code'] for c in categories}
+        
+        selected_category_name = st.selectbox("Select Category:", list(category_options.keys()))
+        selected_category_code = category_options.get(selected_category_name)
+        
+        if st.button("Recalculate Nutri-Score for Category", type="primary") and selected_category_code:
+            products = get_products_for_nutriscore_recalc(db, category_code=selected_category_code)
+            
+            if not products:
+                st.warning("No products with nutrition data found in this category.")
+            else:
+                st.write(f"Found **{len(products)}** products with nutrition data in this category.")
+                
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                results_placeholder = st.empty()
+                
+                success_count = 0
+                failed_count = 0
+                skipped_count = 0
+                
+                for i, product in enumerate(products):
+                    status_text.text(f"Processing {i+1}/{len(products)}: {product['name'][:50]}...")
+                    result = recalculate_nutriscore_for_product_data(db, product)
+                    
+                    if result['success']:
+                        success_count += 1
+                    elif result.get('skipped'):
+                        skipped_count += 1
+                    else:
+                        failed_count += 1
+                    
+                    progress_bar.progress((i + 1) / len(products))
+                
+                status_text.text("Recalculation complete!")
+                results_placeholder.success(f"""
+                **Results:**
+                - ✅ Successfully updated: {success_count}
+                - ⏭️ Skipped (no nutrition data): {skipped_count}
+                - ❌ Failed: {failed_count}
+                """)
+    
+    else:  # All Products
+        products = get_products_for_nutriscore_recalc(db)
+        st.write(f"Found **{len(products)}** products with nutrition data.")
+        
+        st.warning("⚠️ This will recalculate Nutri-Score for all products. This may take several minutes.")
+        
+        if st.button("Recalculate All Nutri-Scores", type="primary"):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            results_placeholder = st.empty()
+            
+            success_count = 0
+            failed_count = 0
+            skipped_count = 0
+            
+            for i, product in enumerate(products):
+                status_text.text(f"Processing {i+1}/{len(products)}: {product['sku']} - {product['name'][:40]}...")
+                result = recalculate_nutriscore_for_product_data(db, product)
+                
+                if result['success']:
+                    success_count += 1
+                elif result.get('skipped'):
+                    skipped_count += 1
+                else:
+                    failed_count += 1
+                
+                progress_bar.progress((i + 1) / len(products))
+            
+            status_text.text("Recalculation complete!")
+            results_placeholder.success(f"""
+            **Results:**
+            - ✅ Successfully updated: {success_count}
+            - ⏭️ Skipped (no nutrition data): {skipped_count}
+            - ❌ Failed: {failed_count}
+            """)
+
+
+def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: str = None):
+    """Get products with nutrition data for recalculation."""
+    query = """
+        SELECT 
+            p.product_id,
+            p.sku,
+            p.name,
+            nc.rimi_category_code as category_code,
+            ni.energy_kj,
+            ni.carbs_sugars as sugars,
+            ni.fat_saturated as saturated_fat,
+            ni.salt,
+            ni.protein,
+            ni.fiber,
+            ni.nutri_score_grade as current_grade,
+            ni.nutri_score_points as current_score
+        FROM products p
+        JOIN nutritional_information ni ON p.product_id = ni.product_id
+        LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
+        WHERE ni.energy_kj IS NOT NULL
+          AND ni.carbs_sugars IS NOT NULL
+          AND ni.fat_saturated IS NOT NULL
+          AND ni.salt IS NOT NULL
+          AND ni.protein IS NOT NULL
+    """
+    
+    params = []
+    if category_code:
+        query += " AND nc.rimi_category_code = %s"
+        params.append(category_code)
+    
+    query += " ORDER BY p.sku"
+    
+    db._ensure_connected()
+    with db.connection.cursor() as cur:
+        cur.execute(query, params if params else None)
+        return [dict(row) for row in cur.fetchall()]
+
+
+def recalculate_nutriscore_for_product(db: ProductViewDatabase, sku: str):
+    """Recalculate Nutri-Score for a single product by SKU."""
+    query = """
+        SELECT 
+            p.product_id,
+            p.sku,
+            p.name,
+            nc.rimi_category_code as category_code,
+            ni.energy_kj,
+            ni.carbs_sugars as sugars,
+            ni.fat_saturated as saturated_fat,
+            ni.salt,
+            ni.protein,
+            ni.fiber,
+            ni.nutri_score_grade as current_grade,
+            ni.nutri_score_points as current_score
+        FROM products p
+        LEFT JOIN nutritional_information ni ON p.product_id = ni.product_id
+        LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
+        WHERE p.sku = %s
+    """
+    
+    db._ensure_connected()
+    with db.connection.cursor() as cur:
+        cur.execute(query, (sku,))
+        row = cur.fetchone()
+        
+        if not row:
+            return {'success': False, 'message': f'Product with SKU {sku} not found'}
+        
+        product = dict(row)
+        return recalculate_nutriscore_for_product_data(db, product)
+
+
+def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: dict):
+    """Recalculate Nutri-Score for a product using its data."""
+    from nutriscore_calculator import NutriscoreCalculator
+    
+    required_fields = ['energy_kj', 'sugars', 'saturated_fat', 'salt', 'protein']
+    for field in required_fields:
+        if product.get(field) is None:
+            return {'success': False, 'skipped': True, 'message': f'Missing required field: {field}'}
+    
+    calculator = NutriscoreCalculator()
+    
+    try:
+        fiber_value = product.get('fiber')
+        fiber_float = float(fiber_value) if fiber_value is not None else 0.0
+        
+        result = calculator.calculate_single_product(
+            energy_kj=float(product['energy_kj']),
+            sugars=float(product['sugars']),
+            saturated_fat=float(product['saturated_fat']),
+            salt=float(product['salt']),
+            protein=float(product['protein']),
+            fiber=fiber_float,
+            category_code=product.get('category_code')
+        )
+        
+        if result['success']:
+            new_grade = result['grade']
+            new_score = result['score']
+            
+            update_query = """
+                UPDATE nutritional_information 
+                SET nutri_score_grade = %s, nutri_score_points = %s
+                WHERE product_id = %s
+            """
+            
+            db._ensure_connected()
+            with db.connection.cursor() as cur:
+                cur.execute(update_query, (new_grade, new_score, product['product_id']))
+                db.connection.commit()
+            
+            old_grade = product.get('current_grade', 'N/A')
+            old_score = product.get('current_score', 'N/A')
+            
+            return {
+                'success': True,
+                'message': f"Updated {product['sku']}: {old_grade} ({old_score}) → {new_grade} ({new_score})",
+                'details': {
+                    'sku': product['sku'],
+                    'name': product['name'],
+                    'category_code': product.get('category_code'),
+                    'old_grade': old_grade,
+                    'old_score': old_score,
+                    'new_grade': new_grade,
+                    'new_score': new_score,
+                    'classification': result.get('classification', {})
+                }
+            }
+        else:
+            return {'success': False, 'message': result.get('error', 'Calculation failed')}
+            
+    except Exception as e:
+        return {'success': False, 'message': str(e)}
+
+
 def main():
     st.title("🛒 Rimi Product Scraper")
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -966,6 +1233,12 @@ def main():
             st.session_state.view_mode = 'change_report'
             st.rerun()
     
+    with col5:
+        if st.button("🔄 Nutri-Score", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'nutriscore_recalc' else "secondary"):
+            st.session_state.view_mode = 'nutriscore_recalc'
+            st.rerun()
+    
     st.divider()
     
     if st.session_state.view_mode == 'category_processing':
@@ -974,6 +1247,8 @@ def main():
         section_product_view()
     elif st.session_state.view_mode == 'change_report':
         section_change_report()
+    elif st.session_state.view_mode == 'nutriscore_recalc':
+        section_nutriscore_recalculation()
     else:
         section_nutrition_enrichment()
 
