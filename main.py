@@ -987,7 +987,16 @@ def section_nutriscore_recalculation():
                     st.error(f"❌ {result['message']}")
     
     elif mode == "By Category":
-        categories = db.get_level2_categories()
+        db._ensure_connection()
+        with db.connection.cursor() as cur:
+            cur.execute("""
+                SELECT rimi_category_code, name_lv 
+                FROM normalized_categories 
+                WHERE category_level = 2 
+                ORDER BY name_lv
+            """)
+            categories = [dict(row) for row in cur.fetchall()]
+        
         category_options = {f"{c['name_lv']} ({c['rimi_category_code']})": c['rimi_category_code'] for c in categories}
         
         selected_category_name = st.selectbox("Select Category:", list(category_options.keys()))
