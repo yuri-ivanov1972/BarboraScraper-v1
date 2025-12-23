@@ -1104,8 +1104,8 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
     
     params = []
     if category_code:
-        query += " AND nc.rimi_category_code = %s"
-        params.append(category_code)
+        query += " AND nc.rimi_category_code LIKE %s"
+        params.append(f"{category_code}%")
     
     query += " ORDER BY p.sku"
     
