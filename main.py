@@ -980,9 +980,21 @@ def section_nutriscore_recalculation():
             with st.spinner("Recalculating..."):
                 result = recalculate_nutriscore_for_product(db, sku.strip())
                 if result['success']:
-                    st.success(f"✅ {result['message']}")
-                    if result.get('details'):
-                        st.json(result['details'])
+                    details = result.get('details', {})
+                    old_grade = details.get('old_grade')
+                    new_grade = details.get('new_grade')
+                    old_score = details.get('old_score')
+                    new_score = details.get('new_score')
+                    
+                    changed = (old_grade != new_grade) or (str(old_score) != str(new_score))
+                    
+                    if changed:
+                        st.success(f"✅ Score changed: {old_grade} ({old_score}) → {new_grade} ({new_score})")
+                    else:
+                        st.info(f"ℹ️ No change: {new_grade} ({new_score})")
+                    
+                    if details:
+                        st.json(details)
                 else:
                     st.error(f"❌ {result['message']}")
     
@@ -1015,6 +1027,7 @@ def section_nutriscore_recalculation():
                 results_placeholder = st.empty()
                 
                 success_count = 0
+                changed_count = 0
                 failed_count = 0
                 skipped_count = 0
                 
@@ -1024,6 +1037,13 @@ def section_nutriscore_recalculation():
                     
                     if result['success']:
                         success_count += 1
+                        details = result.get('details', {})
+                        old_grade = details.get('old_grade')
+                        new_grade = details.get('new_grade')
+                        old_score = details.get('old_score')
+                        new_score = details.get('new_score')
+                        if (old_grade != new_grade) or (str(old_score) != str(new_score)):
+                            changed_count += 1
                     elif result.get('skipped'):
                         skipped_count += 1
                     else:
@@ -1034,7 +1054,8 @@ def section_nutriscore_recalculation():
                 status_text.text("Recalculation complete!")
                 results_placeholder.success(f"""
                 **Results:**
-                - ✅ Successfully updated: {success_count}
+                - ✅ Successfully processed: {success_count}
+                - 🔄 Score changed: {changed_count}
                 - ⏭️ Skipped (no nutrition data): {skipped_count}
                 - ❌ Failed: {failed_count}
                 """)
@@ -1051,6 +1072,7 @@ def section_nutriscore_recalculation():
             results_placeholder = st.empty()
             
             success_count = 0
+            changed_count = 0
             failed_count = 0
             skipped_count = 0
             
@@ -1060,6 +1082,13 @@ def section_nutriscore_recalculation():
                 
                 if result['success']:
                     success_count += 1
+                    details = result.get('details', {})
+                    old_grade = details.get('old_grade')
+                    new_grade = details.get('new_grade')
+                    old_score = details.get('old_score')
+                    new_score = details.get('new_score')
+                    if (old_grade != new_grade) or (str(old_score) != str(new_score)):
+                        changed_count += 1
                 elif result.get('skipped'):
                     skipped_count += 1
                 else:
@@ -1070,7 +1099,8 @@ def section_nutriscore_recalculation():
             status_text.text("Recalculation complete!")
             results_placeholder.success(f"""
             **Results:**
-            - ✅ Successfully updated: {success_count}
+            - ✅ Successfully processed: {success_count}
+            - 🔄 Score changed: {changed_count}
             - ⏭️ Skipped (no nutrition data): {skipped_count}
             - ❌ Failed: {failed_count}
             """)
