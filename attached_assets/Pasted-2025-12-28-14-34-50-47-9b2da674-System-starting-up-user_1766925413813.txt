@@ -1,0 +1,96 @@
+2025-12-28 14:34:50.47
+9b2da674
+System
+starting up user application
+2025-12-28 14:34:50.48
+9b2da674
+System
+metasidecar: loaded enterprise status from environment is_enterprise=false
+2025-12-28 14:34:50.48
+9b2da674
+System
+forwarding local port 5000 to external port 80 (mapped as 1104)
+2025-12-28 14:34:52.47
+9b2da674
+User
+==========================================
+2025-12-28 14:34:52.47
+9b2da674
+User
+==========================================
+2025-12-28 14:34:52.47
+9b2da674
+User
+Rimi Product Scraper - Combined Startup
+2025-12-28 14:34:53.03
+9b2da674
+User
+Started at: Sun Dec 28 12:34:53 PM UTC 2025
+2025-12-28 14:34:53.04
+9b2da674
+User
+Starting Streamlit UI on port 5000...
+2025-12-28 14:34:53.04
+9b2da674
+User
+Streamlit started (PID: 20)
+2025-12-28 14:34:58.23
+9b2da674
+User
+- Process any queued jobs immediately
+2025-12-28 14:34:58.23
+9b2da674
+User
+- Queue all categories daily at 2:00 AM Latvia time
+2025-12-28 14:34:58.23
+9b2da674
+User
+Starting worker with built-in scheduler...
+2025-12-28 14:34:58.23
+9b2da674
+User
+Worker will:
+2025-12-28 14:34:58.23
+9b2da674
+User
+✓ Streamlit is running
+2025-12-28 14:34:58.23
+9b2da674
+User
+- Generate reports at 6:00 AM Latvia time
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,940 - __main__ - INFO - ============================================================
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,940 - __main__ - INFO - Rimi Product Scraper - Worker with Scheduler
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,943 - __main__ - INFO - MODE: PRODUCTION
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,943 - __main__ - INFO - Current Latvia time: 2025-12-28 14:35:02
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,943 - __main__ - INFO -
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,942 - __main__ - INFO - ============================================================
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,944 - __main__ - INFO - Scheduler thread started in background
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,944 - __main__ - INFO - Starting worker: sched_nixos_25_1766925302
+2025-12-28 14:35:02.94
+9b2da674
+User
+2025-12-28 12:35:02,944 - __main__ - INFO - Scheduler thread started
