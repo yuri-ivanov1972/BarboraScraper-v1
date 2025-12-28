@@ -6,7 +6,8 @@ packages = ["glibcLocales"]
 
 [deployment]
 deploymentTarget = "gce"
-run = ["sh", "-c", "streamlit run main.py --server.port 5000"]
+build = ["sh", "-c", "chmod +x combined_startup.sh"]
+run = ["sh", "-c", "./combined_startup.sh"]
 
 [workflows]
 runButton = "Project"
