@@ -55,6 +55,8 @@ class SchedulerThread(threading.Thread):
         self.running = True
         self.last_queue_date = None
         self.last_report_date = None
+        self.last_heartbeat_hour = None
+        self.start_time = datetime.now(LATVIA_TZ)
         
     def stop(self):
         self.running = False
@@ -64,6 +66,7 @@ class SchedulerThread(threading.Thread):
         logger.info("Scheduler thread started")
         logger.info("  - Daily queue at 02:00 Latvia time")
         logger.info("  - Daily report at 06:00 Latvia time")
+        logger.info("  - Hourly heartbeat logging enabled")
         
         while self.running:
             try:
@@ -71,6 +74,14 @@ class SchedulerThread(threading.Thread):
                 current_date = now_latvia.date()
                 current_hour = now_latvia.hour
                 current_minute = now_latvia.minute
+                
+                # Hourly heartbeat logging
+                if self.last_heartbeat_hour != current_hour:
+                    uptime = now_latvia - self.start_time
+                    uptime_hours = int(uptime.total_seconds() // 3600)
+                    uptime_minutes = int((uptime.total_seconds() % 3600) // 60)
+                    logger.info(f"💓 Scheduler heartbeat - {now_latvia.strftime('%Y-%m-%d %H:%M')} Latvia time (uptime: {uptime_hours}h {uptime_minutes}m)")
+                    self.last_heartbeat_hour = current_hour
                 
                 # 2:00 AM - Queue all categories
                 if current_hour == 2 and current_minute < 5:
@@ -89,6 +100,8 @@ class SchedulerThread(threading.Thread):
                 
             except Exception as e:
                 logger.error(f"Scheduler error: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
                 time.sleep(60)
     
     def _queue_all_categories(self):
