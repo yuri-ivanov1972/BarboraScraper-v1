@@ -127,10 +127,20 @@ class SchedulerThread(threading.Thread):
         logger.info("=" * 60)
         
         try:
-            generate_update_report(hours=12, use_production=self.use_production)
-            logger.info("Successfully generated daily report")
+            result = generate_update_report(
+                hours=12, 
+                use_production=self.use_production,
+                exit_on_complete=False
+            )
+            success, report, message = result
+            if success:
+                logger.info(f"Successfully generated daily report: {message}")
+            else:
+                logger.warning(f"Report generation issue: {message}")
         except Exception as e:
             logger.error(f"Failed to generate report: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 def main():

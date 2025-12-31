@@ -242,7 +242,7 @@ def show_queue_status(use_production: bool = False):
             conn.close()
 
 
-def generate_update_report(hours: int = 24, use_production: bool = False, save: bool = True):
+def generate_update_report(hours: int = 24, use_production: bool = False, save: bool = True, exit_on_complete: bool = True):
     """
     Generate and display update report for recent period
     
@@ -250,13 +250,22 @@ def generate_update_report(hours: int = 24, use_production: bool = False, save: 
         hours: Report time window in hours
         use_production: Use production database
         save: Save report to database
+        exit_on_complete: If True, call sys.exit() on completion (for CLI use).
+                         If False, return status code instead (for scheduler use).
+    
+    Returns:
+        If exit_on_complete=False: returns (success: bool, report: dict or None, message: str)
+        If exit_on_complete=True: calls sys.exit() and never returns
     """
     # Select database
     db_url = None
     if use_production:
         db_url = os.environ.get('PROD_DATABASE_URL')
         if not db_url:
-            raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
+            if exit_on_complete:
+                raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
+            else:
+                return (False, None, "PROD_DATABASE_URL not set")
     else:
         db_url = os.environ['DATABASE_URL']
     
@@ -275,21 +284,36 @@ def generate_update_report(hours: int = 24, use_production: bool = False, save: 
             log_id = reporter.save_report_to_database(report, update_type='daily' if hours >= 20 else 'manual')
             if not log_id:
                 print("⚠️  Warning: Failed to save report to database")
-                sys.exit(1)
+                if exit_on_complete:
+                    sys.exit(1)
+                else:
+                    return (False, report, "Failed to save report to database")
         
-        # Exit non-zero if there are stuck jobs or failures
+        # Check for stuck jobs or failures
         if report.get('jobs_stuck', 0) > 0:
             print(f"\n⚠️  WARNING: {report['jobs_stuck']} stuck jobs detected!")
-            sys.exit(1)
+            if exit_on_complete:
+                sys.exit(1)
+            else:
+                return (True, report, f"{report['jobs_stuck']} stuck jobs detected")
         
         if report.get('jobs_failed', 0) > 0:
             print(f"\n⚠️  WARNING: {report['jobs_failed']} failed jobs detected!")
-            sys.exit(1)
+            if exit_on_complete:
+                sys.exit(1)
+            else:
+                return (True, report, f"{report['jobs_failed']} failed jobs detected")
         
-        sys.exit(0)
+        if exit_on_complete:
+            sys.exit(0)
+        else:
+            return (True, report, "Report generated successfully")
     else:
         print("❌ Failed to generate report")
-        sys.exit(1)
+        if exit_on_complete:
+            sys.exit(1)
+        else:
+            return (False, None, "Failed to generate report")
 
 
 def main():
