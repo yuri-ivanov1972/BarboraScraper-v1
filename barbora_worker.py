@@ -261,16 +261,17 @@ class BarboraWorker:
             name_norm = normalize_latvian_text(product.name) if product.name else None
             
             cur.execute("""
-                INSERT INTO products (sku, name, name_norm, barbora_url, category_id, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO products (sku, name, name_norm, barbora_url, category_id, country_of_origin, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (sku) DO UPDATE SET
                     name = EXCLUDED.name,
                     name_norm = EXCLUDED.name_norm,
                     barbora_url = EXCLUDED.barbora_url,
                     category_id = EXCLUDED.category_id,
+                    country_of_origin = EXCLUDED.country_of_origin,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING product_id
-            """, (product.sku, product.name, name_norm, product_url, category_id))
+            """, (product.sku, product.name, name_norm, product_url, category_id, product.country_of_origin))
             
             product_id = cur.fetchone()[0]
             

@@ -429,6 +429,26 @@ class BarboraParser:
                     elif 'alergēni' in title_text:
                         allergens = value
             
+            country_of_origin = None
+            brand = None
+            net_quantity = None
+            
+            other_info_dl = soup.find('dl', class_='b-dl-align-left')
+            if other_info_dl:
+                dts = other_info_dl.find_all('dt')
+                for dt in dts:
+                    dt_text = dt.get_text(strip=True).lower()
+                    dd = dt.find_next_sibling('dd')
+                    if dd:
+                        dd_text = dd.get_text(strip=True)
+                        
+                        if 'izcelsmes valsts' in dt_text:
+                            country_of_origin = dd_text
+                        elif 'zīmols' in dt_text:
+                            brand = dd_text
+                        elif 'neto daudzums' in dt_text:
+                            net_quantity = dd_text
+            
             nutrition = BarboraNutritionInfo()
             nutrition_title = soup.find('h3', class_='b-product-info--info-3-title', 
                                         string=re.compile(r'Uzturvērtība', re.IGNORECASE))
@@ -471,6 +491,8 @@ class BarboraParser:
                 ingredients=ingredients,
                 allergens=allergens,
                 nutrition=nutrition,
+                country_of_origin=country_of_origin,
+                weight=net_quantity,
             )
             
         except Exception as e:
