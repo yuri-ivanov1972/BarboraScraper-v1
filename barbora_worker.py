@@ -12,8 +12,40 @@ import socket
 from datetime import datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor
+import unicodedata
+import re
 
 from barbora_parser import BarboraParser
+
+
+def normalize_latvian_text(text: str) -> str:
+    """Convert Latvian letters to ASCII equivalents for easier searching"""
+    if not text:
+        return ""
+    
+    latvian_map = {
+        'ā': 'a', 'Ā': 'A',
+        'č': 'c', 'Č': 'C',
+        'ē': 'e', 'Ē': 'E',
+        'ģ': 'g', 'Ģ': 'G',
+        'ī': 'i', 'Ī': 'I',
+        'ķ': 'k', 'Ķ': 'K',
+        'ļ': 'l', 'Ļ': 'L',
+        'ņ': 'n', 'Ņ': 'N',
+        'š': 's', 'Š': 'S',
+        'ū': 'u', 'Ū': 'U',
+        'ž': 'z', 'Ž': 'Z',
+    }
+    
+    result = text
+    for latvian_char, ascii_char in latvian_map.items():
+        result = result.replace(latvian_char, ascii_char)
+    
+    result = unicodedata.normalize('NFKD', result).encode('ascii', 'ignore').decode('ascii')
+    result = result.lower().strip()
+    result = re.sub(r'\s+', ' ', result)
+    
+    return result
 
 logging.basicConfig(
     level=logging.INFO,
@@ -226,16 +258,19 @@ class BarboraWorker:
         try:
             cur = conn.cursor()
             
+            name_norm = normalize_latvian_text(product.name) if product.name else None
+            
             cur.execute("""
-                INSERT INTO products (sku, name, barbora_url, category_id, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO products (sku, name, name_norm, barbora_url, category_id, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (sku) DO UPDATE SET
                     name = EXCLUDED.name,
+                    name_norm = EXCLUDED.name_norm,
                     barbora_url = EXCLUDED.barbora_url,
                     category_id = EXCLUDED.category_id,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING product_id
-            """, (product.sku, product.name, product_url, category_id))
+            """, (product.sku, product.name, name_norm, product_url, category_id))
             
             product_id = cur.fetchone()[0]
             
