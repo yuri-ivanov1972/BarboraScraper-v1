@@ -1,0 +1,43 @@
+~/workspace$ python barbora_worker.py --single-run
+2026-01-01 15:45:46,816 - INFO - Worker worker_65f451ece4f2_7516 initialized
+2026-01-01 15:45:46,816 - INFO - Worker worker_65f451ece4f2_7516 starting...
+2026-01-01 15:45:47,704 - INFO - Processing job #3 for category 307 (mode: full)
+2026-01-01 15:45:48,080 - INFO - Found 7 pending products to process
+2026-01-01 15:45:48,081 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-2-proc-uht-1-l
+2026-01-01 15:45:49,590 - ERROR - Error processing 000000000000891999: relation "product_nutrition" does not exist
+LINE 2:                             INSERT INTO product_nutrition (p...
+                                                ^
+
+2026-01-01 15:45:50,503 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-3-2-proc-uht-1-l
+2026-01-01 15:45:51,573 - ERROR - Error processing 000000000000892000: relation "product_nutrition" does not exist
+LINE 2:                             INSERT INTO product_nutrition (p...
+                                                ^
+
+2026-01-01 15:45:52,465 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-bez-laktozes-well-done-1-5-proc-1-l
+2026-01-01 15:45:53,535 - ERROR - Error processing 000000000001318567: relation "product_nutrition" does not exist
+LINE 2:                             INSERT INTO product_nutrition (p...
+                                                ^
+
+2026-01-01 15:45:54,439 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-0-5-proc-uht-1-l
+2026-01-01 15:45:55,498 - ERROR - Error processing 000000000000961803: relation "product_nutrition" does not exist
+LINE 2:                             INSERT INTO product_nutrition (p...
+                                                ^
+
+2026-01-01 15:45:56,369 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-well-done-3-5-proc-1-l
+2026-01-01 15:45:57,530 - ERROR - Error processing 000000000001319022: relation "product_nutrition" does not exist
+LINE 2:                             INSERT INTO product_nutrition (p...
+                                                ^
+
+2026-01-01 15:45:58,425 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-well-done-2-5-proc-1-l
+2026-01-01 15:45:59,493 - ERROR - Error processing 000000000001319015: relation "product_nutrition" does not exist
+LINE 2:                             INSERT INTO product_nutrition (p...
+                                                ^
+
+2026-01-01 15:46:00,351 - INFO - Fetching product details: https://barbora.lv/produkti/kazas-piens-amalattea-uht-500-ml
+2026-01-01 15:46:01,929 - ERROR - Error processing 000000000001131972: relation "product_nutrition" does not exist
+LINE 2:                             INSERT INTO product_nutrition (p...
+                                                ^
+
+2026-01-01 15:46:03,276 - INFO - Job #3 completed: 7 processed, 7 errors
+2026-01-01 15:46:03,669 - INFO - No jobs found, exiting (single-run mode)
+2026-01-01 15:46:03,670 - INFO - Worker stopped

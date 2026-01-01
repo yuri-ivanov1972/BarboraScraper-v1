@@ -245,24 +245,27 @@ class BarboraWorker:
                 """, (product.ingredients, product_id))
             
             if product.nutrition:
-                nutrition_data = {
-                    'energy_kj': product.nutrition.energy_kj,
-                    'energy_kcal': product.nutrition.energy_kcal,
-                    'fat': product.nutrition.fat,
-                    'saturated_fat': product.nutrition.saturated_fat,
-                    'carbohydrates': product.nutrition.carbohydrates,
-                    'sugars': product.nutrition.sugars,
-                    'protein': product.nutrition.protein,
-                    'salt': product.nutrition.salt,
-                    'fiber': product.nutrition.fiber,
-                }
-                for nutrient, value in nutrition_data.items():
-                    if value is not None:
-                        cur.execute("""
-                            INSERT INTO product_nutrition (product_id, nutrient_name, nutrient_value)
-                            VALUES (%s, %s, %s)
-                            ON CONFLICT (product_id, nutrient_name) DO UPDATE SET nutrient_value = EXCLUDED.nutrient_value
-                        """, (product_id, nutrient, str(value)))
+                cur.execute("""
+                    INSERT INTO nutritionfacts (product_id, energy_kj, energy_kcal, fat_total, fat_saturated, 
+                                                carbs_total, carbs_sugars, protein, salt, fiber, ingredients_text)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (product_id) DO UPDATE SET
+                        energy_kj = EXCLUDED.energy_kj,
+                        energy_kcal = EXCLUDED.energy_kcal,
+                        fat_total = EXCLUDED.fat_total,
+                        fat_saturated = EXCLUDED.fat_saturated,
+                        carbs_total = EXCLUDED.carbs_total,
+                        carbs_sugars = EXCLUDED.carbs_sugars,
+                        protein = EXCLUDED.protein,
+                        salt = EXCLUDED.salt,
+                        fiber = EXCLUDED.fiber,
+                        ingredients_text = EXCLUDED.ingredients_text
+                """, (product_id, 
+                      product.nutrition.energy_kj, product.nutrition.energy_kcal,
+                      product.nutrition.fat, product.nutrition.saturated_fat,
+                      product.nutrition.carbohydrates, product.nutrition.sugars,
+                      product.nutrition.protein, product.nutrition.salt, product.nutrition.fiber,
+                      product.ingredients))
             
             conn.commit()
         finally:
