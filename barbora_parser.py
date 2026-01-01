@@ -477,6 +477,21 @@ class BarboraParser:
             self.status_callback(f"Error extracting product details: {str(e)}")
             return None
     
+    def collect_category_skus(self, category_path: str) -> List[str]:
+        """
+        Collect all SKUs from a category (all pages)
+        
+        Args:
+            category_path: Normalized category path like "piena-produkti-un-olas/piens/uht-piens"
+            
+        Returns:
+            List of SKU strings
+        """
+        products = self.extract_products_from_category(category_path)
+        skus = [p.sku for p in products if p.sku]
+        self.status_callback(f"Collected {len(skus)} SKUs from category")
+        return skus
+    
     def get_total_products_count(self, category_path: str) -> Tuple[int, int]:
         """
         Get total product count for a category

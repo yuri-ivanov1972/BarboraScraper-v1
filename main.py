@@ -121,184 +121,273 @@ def render_category_tree_node(category: dict, db: ProductViewDatabase, level: in
             render_category_tree_node(child, db, level + 1)
 
 
+def get_category_path_for_url(category_id: int) -> str:
+    """Build the full URL path for a category from its hierarchy"""
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    
+    conn = None
+    try:
+        conn = psycopg2.connect(os.environ.get('DATABASE_URL'))
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                WITH RECURSIVE category_path AS (
+                    SELECT category_id, normalized_category, parent_category_id, 1 as depth
+                    FROM normalized_categories
+                    WHERE category_id = %s
+                    
+                    UNION ALL
+                    
+                    SELECT nc.category_id, nc.normalized_category, nc.parent_category_id, cp.depth + 1
+                    FROM normalized_categories nc
+                    JOIN category_path cp ON nc.category_id = cp.parent_category_id
+                )
+                SELECT normalized_category FROM category_path
+                ORDER BY depth DESC
+            """, (category_id,))
+            
+            rows = cur.fetchall()
+            if rows:
+                path_parts = [row['normalized_category'] for row in rows]
+                return '/'.join(path_parts)
+            return None
+    except Exception as e:
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+
 def section_category_processing():
-    """Section 1: Category Processing"""
+    """Section 1: Category Processing for Barbora"""
     st.header("📦 Category Processing")
     
-    col1, col2 = st.columns([3, 1])
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT category_id, name_lv, name_en, normalized_category, level, parent_category_id, barbora_category_code
+            FROM normalized_categories
+            ORDER BY level, name_lv
+        """)
+        all_categories = cur.fetchall()
+    
+    level1_cats = [c for c in all_categories if c['level'] == 1]
+    level2_cats = [c for c in all_categories if c['level'] == 2]
+    level3_cats = [c for c in all_categories if c['level'] == 3]
+    
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        category_code = st.text_input(
-            "Category Code",
-            placeholder="e.g., SH-11-6-19, SH-7",
-            help="Enter full category code (e.g., SH-11-6-19)"
-        )
+        level1_options = {f"{c['name_lv']} ({c['name_en']})": c for c in level1_cats}
+        selected_l1_name = st.selectbox("Level 1 Category", options=[""] + list(level1_options.keys()))
+        selected_l1 = level1_options.get(selected_l1_name)
     
     with col2:
-        st.write("")
-        st.write("")
+        if selected_l1:
+            l2_filtered = [c for c in level2_cats if c['parent_category_id'] == selected_l1['category_id']]
+            level2_options = {f"{c['name_lv']} ({c['name_en']})": c for c in l2_filtered}
+            selected_l2_name = st.selectbox("Level 2 Category", options=[""] + list(level2_options.keys()))
+            selected_l2 = level2_options.get(selected_l2_name)
+        else:
+            st.selectbox("Level 2 Category", options=["Select Level 1 first"], disabled=True)
+            selected_l2 = None
+    
+    with col3:
+        if selected_l2:
+            l3_filtered = [c for c in level3_cats if c['parent_category_id'] == selected_l2['category_id']]
+            level3_options = {f"{c['name_lv']} ({c['name_en']})": c for c in l3_filtered}
+            selected_l3_name = st.selectbox("Level 3 Category", options=[""] + list(level3_options.keys()))
+            selected_l3 = level3_options.get(selected_l3_name)
+        else:
+            st.selectbox("Level 3 Category", options=["Select Level 2 first"], disabled=True)
+            selected_l3 = None
+    
+    selected_category = selected_l3 or selected_l2 or selected_l1
+    
+    if selected_category:
+        category_path = get_category_path_for_url(selected_category['category_id'])
+        st.info(f"**Selected:** {selected_category['name_lv']} | **URL Path:** `{category_path}`")
+    
+    col_opt1, col_opt2 = st.columns([1, 1])
+    with col_opt1:
         force_update = st.checkbox("Force Update", help="Overwrite existing data")
-    
-    # Check for incomplete jobs
-    incomplete_job = None
-    if category_code:
-        from progress_manager import ProgressManager
-        progress_mgr = ProgressManager()
-        incomplete_job = progress_mgr.find_incomplete_job(category_code)
-        
-        if incomplete_job:
-            st.info(f"📌 Found incomplete processing job for this category")
-            col_resume1, col_resume2, col_resume3 = st.columns(3)
-            with col_resume1:
-                st.metric("Total Products", incomplete_job['total_products'])
-            with col_resume2:
-                st.metric("Completed", incomplete_job['processed_count'])
-            with col_resume3:
-                remaining = incomplete_job['total_products'] - incomplete_job['processed_count']
-                st.metric("Remaining", remaining)
-    
-    # Job queueing controls
-    col_btn1, col_btn2, col_btn3 = st.columns(3)
-    
-    with col_btn1:
+    with col_opt2:
         priority = st.number_input("Priority", min_value=1, max_value=10, value=5, help="Higher = more urgent")
     
+    col_btn1, col_btn2 = st.columns([1, 2])
+    
+    with col_btn1:
+        queue_job = st.button("📥 Queue Job", type="primary", disabled=not selected_category)
+    
     with col_btn2:
-        st.write("")
-        st.write("")
-        queue_job = st.button("📥 Queue Job", type="primary", disabled=not category_code)
+        if selected_category:
+            st.caption(f"Will scrape products from: barbora.lv/{category_path}")
     
-    with col_btn3:
-        st.write("")
-        st.write("")
-        if incomplete_job:
-            st.info(f"Job #{incomplete_job['job_id']} in queue")
-    
-    if queue_job:
-        from core_parser import RimiParser
-        import psycopg2
+    if queue_job and selected_category:
+        from barbora_parser import BarboraParser
         
-        with st.spinner("Collecting products and creating job..."):
-            try:
-                # Collect SKUs from category
-                parser = RimiParser(lambda msg: st.text(msg))
-                all_skus = parser.collect_category_skus(category_code)
-                
-                if not all_skus:
-                    st.error(f"No products found in category {category_code}")
-                else:
-                    # Create job in database
-                    conn = psycopg2.connect(os.environ['DATABASE_URL'])
-                    cur = conn.cursor()
+        category_path = get_category_path_for_url(selected_category['category_id'])
+        
+        if not category_path:
+            st.error("Could not build category path. Please select a valid category.")
+        elif not selected_category.get('barbora_category_code'):
+            st.error("This category doesn't have a Barbora category code. Please select a Level 3 category.")
+        else:
+            status_container = st.empty()
+            progress_bar = st.progress(0)
+            
+            def update_status(msg):
+                status_container.text(msg)
+            
+            with st.spinner("Collecting products from Barbora..."):
+                try:
+                    parser = BarboraParser(status_callback=update_status)
                     
-                    try:
-                        # Lookup category_id from normalized_categories
-                        cur.execute("""
-                            SELECT category_id FROM normalized_categories 
-                            WHERE rimi_category_code = %s
-                        """, (category_code.upper(),))
-                        cat_result = cur.fetchone()
-                        cat_id = cat_result[0] if cat_result else None
+                    total_count, total_pages = parser.get_total_products_count(category_path)
+                    st.info(f"Found {total_count} products across {total_pages} pages")
+                    
+                    products = parser.extract_products_from_category(category_path)
+                    all_skus = [p.sku for p in products if p.sku]
+                    
+                    progress_bar.progress(50)
+                    
+                    if not all_skus:
+                        st.error(f"No products found in category {selected_category['name_lv']}")
+                    else:
+                        cur = conn.cursor()
                         
-                        # Determine update mode based on Force Update checkbox
-                        update_mode = 'full' if force_update else 'incremental'
-                        
-                        # Create job
-                        cur.execute("""
-                            INSERT INTO category_processing_jobs 
-                            (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
-                            VALUES (%s, %s, %s, 0, 'queued', %s, 'streamlit_ui', %s)
-                            RETURNING id
-                        """, (category_code, cat_id, len(all_skus), priority, update_mode))
-                        
-                        job_id = cur.fetchone()[0]
-                        
-                        # Log all SKUs as pending
-                        for sku in all_skus:
+                        try:
+                            update_mode = 'full' if force_update else 'incremental'
+                            
                             cur.execute("""
-                                INSERT INTO product_processing_log (job_id, sku, status)
-                                VALUES (%s, %s, 'pending')
-                            """, (job_id, sku))
-                        
-                        # Log event
-                        cur.execute("""
-                            INSERT INTO job_events (job_id, event_type, message)
-                            VALUES (%s, 'job_created', %s)
-                        """, (job_id, f"Job created via Streamlit UI for {category_code} with {len(all_skus)} products (priority: {priority})"))
-                        
-                        conn.commit()
-                        
-                        st.success(f"✅ Job #{job_id} created successfully!")
-                        st.info(f"📦 Queued {len(all_skus)} products from category {category_code}")
-                        st.info(f"🔧 Run the worker to process: `python worker.py --resume-all`")
-                        
-                        with st.expander("View job details"):
-                            st.json({
-                                "job_id": job_id,
-                                "category_code": category_code,
-                                "total_products": len(all_skus),
-                                "priority": priority,
-                                "status": "queued"
-                            })
-                        
-                    except psycopg2.IntegrityError as e:
-                        if 'idx_unique_active_category' in str(e):
-                            st.warning(f"⚠️ Job already exists for category {category_code}")
-                        else:
-                            raise
-                    finally:
-                        conn.close()
-                        
-            except Exception as e:
-                st.error(f"❌ Error creating job: {str(e)}")
-                import traceback
-                with st.expander("Error details"):
-                    st.code(traceback.format_exc())
+                                INSERT INTO category_processing_jobs 
+                                (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
+                                VALUES (%s, %s, %s, 0, 'queued', %s, 'streamlit_ui', %s)
+                                RETURNING id
+                            """, (selected_category['barbora_category_code'], selected_category['category_id'], 
+                                  len(all_skus), priority, update_mode))
+                            
+                            job_id = cur.fetchone()[0]
+                            
+                            progress_bar.progress(70)
+                            
+                            for sku in all_skus:
+                                cur.execute("""
+                                    INSERT INTO product_processing_log (job_id, sku, status)
+                                    VALUES (%s, %s, 'pending')
+                                """, (job_id, sku))
+                            
+                            cur.execute("""
+                                INSERT INTO job_events (job_id, event_type, message)
+                                VALUES (%s, 'job_created', %s)
+                            """, (job_id, f"Job created for {selected_category['name_lv']} with {len(all_skus)} products"))
+                            
+                            conn.commit()
+                            
+                            progress_bar.progress(100)
+                            status_container.empty()
+                            
+                            st.success(f"Job #{job_id} created with {len(all_skus)} products!")
+                            
+                            with st.expander("View collected products"):
+                                for i, p in enumerate(products[:10], 1):
+                                    st.write(f"{i}. {p.name} - {p.price} EUR")
+                                if len(products) > 10:
+                                    st.caption(f"... and {len(products) - 10} more products")
+                            
+                        except psycopg2.IntegrityError as e:
+                            conn.rollback()
+                            if 'idx_unique_active_category' in str(e):
+                                st.warning(f"Job already exists for this category")
+                            else:
+                                raise
+                                
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+                    import traceback
+                    with st.expander("Error details"):
+                        st.code(traceback.format_exc())
+                finally:
+                    progress_bar.empty()
     
     st.divider()
     
-    st.subheader("🚀 Queue All Categories")
+    st.subheader("Queue All Level 3 Categories")
     
     all_force_update = st.checkbox("Force Update All", help="Overwrite existing data for all categories", key="all_force_update")
     
     col_all1, col_all2 = st.columns([1, 3])
     
     with col_all1:
-        if st.button("📦 Queue All Level 2 Categories", type="primary"):
-            from core_parser import RimiParser
-            import psycopg2
+        if st.button("Queue All Level 3 Categories", type="primary"):
+            from barbora_parser import BarboraParser
             
-            conn = psycopg2.connect(os.environ['DATABASE_URL'])
-            cur = conn.cursor()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
             
             try:
                 cur.execute("""
-                    SELECT category_id, rimi_category_code, name_lv 
-                    FROM normalized_categories 
-                    WHERE level = 2 
-                    ORDER BY rimi_category_code
+                    WITH RECURSIVE category_paths AS (
+                        SELECT 
+                            c.category_id,
+                            c.barbora_category_code,
+                            c.name_lv,
+                            c.normalized_category,
+                            c.level,
+                            c.parent_category_id,
+                            c.normalized_category as path
+                        FROM normalized_categories c
+                        WHERE c.level = 1
+                        
+                        UNION ALL
+                        
+                        SELECT 
+                            child.category_id,
+                            child.barbora_category_code,
+                            child.name_lv,
+                            child.normalized_category,
+                            child.level,
+                            child.parent_category_id,
+                            cp.path || '/' || child.normalized_category as path
+                        FROM normalized_categories child
+                        JOIN category_paths cp ON child.parent_category_id = cp.category_id
+                    )
+                    SELECT category_id, barbora_category_code, name_lv, path as category_path
+                    FROM category_paths 
+                    WHERE level = 3 AND barbora_category_code IS NOT NULL
+                    ORDER BY name_lv
                 """)
-                all_categories = cur.fetchall()
+                all_l3_categories = cur.fetchall()
                 
-                if not all_categories:
-                    st.error("No level 2 categories found")
+                if not all_l3_categories:
+                    st.error("No level 3 categories with valid Barbora codes found")
                 else:
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
-                    parser = RimiParser(lambda msg: None)
+                    parser = BarboraParser(lambda msg: None)
                     update_mode = 'full' if all_force_update else 'incremental'
                     
                     total_jobs = 0
                     total_products = 0
                     skipped = 0
+                    errors = 0
                     
-                    for i, (cat_id, cat_code, cat_name) in enumerate(all_categories):
-                        progress_bar.progress((i + 1) / len(all_categories))
-                        status_text.text(f"Processing {cat_code}: {cat_name}...")
+                    for i, cat in enumerate(all_l3_categories):
+                        progress_bar.progress((i + 1) / len(all_l3_categories))
+                        status_text.text(f"Processing {cat['name_lv']}...")
                         
                         try:
-                            all_skus = parser.collect_category_skus(cat_code)
+                            category_path = cat['category_path']
+                            if not category_path:
+                                errors += 1
+                                continue
+                                
+                            products = parser.extract_products_from_category(category_path)
+                            all_skus = [p.sku for p in products if p.sku]
                             
                             if all_skus:
                                 cur.execute("""
@@ -306,7 +395,7 @@ def section_category_processing():
                                     (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
                                     VALUES (%s, %s, %s, 0, 'queued', 5, 'streamlit_bulk', %s)
                                     RETURNING id
-                                """, (cat_code, cat_id, len(all_skus), update_mode))
+                                """, (cat['barbora_category_code'], cat['category_id'], len(all_skus), update_mode))
                                 
                                 job_id = cur.fetchone()[0]
                                 
@@ -319,7 +408,7 @@ def section_category_processing():
                                 cur.execute("""
                                     INSERT INTO job_events (job_id, event_type, message)
                                     VALUES (%s, 'job_created', %s)
-                                """, (job_id, f"Bulk job for {cat_code} with {len(all_skus)} products"))
+                                """, (job_id, f"Bulk job for {cat['name_lv']} with {len(all_skus)} products"))
                                 
                                 conn.commit()
                                 total_jobs += 1
@@ -330,40 +419,43 @@ def section_category_processing():
                             skipped += 1
                         except Exception as e:
                             conn.rollback()
-                            st.warning(f"Error for {cat_code}: {str(e)}")
+                            errors += 1
+                        
+                        time.sleep(0.5)
                     
                     status_text.empty()
                     progress_bar.empty()
                     
-                    st.success(f"✅ Created {total_jobs} jobs with {total_products} total products!")
+                    st.success(f"Created {total_jobs} jobs with {total_products} total products!")
                     if skipped > 0:
-                        st.info(f"⏭️ Skipped {skipped} categories (already have active jobs)")
-                    st.info("🔧 Run on Reserved VM: `python worker.py --daemon --chunk-size 15 --max-workers 3`")
+                        st.info(f"Skipped {skipped} categories (already have active jobs)")
+                    if errors > 0:
+                        st.warning(f"{errors} categories had errors")
                     
             except Exception as e:
                 st.error(f"Error: {str(e)}")
                 import traceback
                 st.code(traceback.format_exc())
-            finally:
-                conn.close()
     
     with col_all2:
-        st.caption("This will queue jobs for all 75 level 2 categories. Each category will be processed by the worker.")
+        st.caption(f"This will queue jobs for all {len(level3_cats)} level 3 categories. Each category will be processed by the worker.")
     
-    # Help section
-    with st.expander("ℹ️ Help"):
+    conn.close()
+    
+    with st.expander("Help"):
         st.markdown("""
-        **Category Processing** allows you to scrape and update product data:
+        **Category Processing** allows you to scrape product data from Barbora.lv:
         
-        - Enter a full category code (e.g., SH-11-6-19) for single category
-        - Use "Queue All Level 2 Categories" to process all 75 categories at once
-        - Toggle Force Update to overwrite existing data
-        - Processing is automatic with category extraction from product pages
+        - Select a category using the dropdowns (Level 1 > Level 2 > Level 3)
+        - Click "Queue Job" to start collecting products
+        - Products are extracted from the `window.b_productList` JSON on each page
+        - Toggle "Force Update" to overwrite existing product data
         
-        **Worker Commands for Reserved VM:**
-        ```
-        python worker.py --daemon --chunk-size 15 --max-workers 3 --heartbeat-interval 30
-        ```
+        **Data extracted per product:**
+        - SKU, Name, Price, Brand
+        - Category path, Image URLs
+        - Unit pricing (per kg/l)
+        - Availability status
         """)
 
 
