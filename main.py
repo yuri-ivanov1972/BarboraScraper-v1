@@ -284,14 +284,14 @@ def section_category_processing():
                             cur.execute("""
                                 INSERT INTO job_events (job_id, event_type, message)
                                 VALUES (%s, 'job_created', %s)
-                            """, (job_id, f"Job created for {selected_category['name_lv']} with {len(all_skus)} products"))
+                            """, (job_id, f"Job created for {selected_category['name_lv']} with {len(valid_products)} products"))
                             
                             conn.commit()
                             
                             progress_bar.progress(100)
                             status_container.empty()
                             
-                            st.success(f"Job #{job_id} created with {len(all_skus)} products!")
+                            st.success(f"Job #{job_id} created with {len(valid_products)} products!")
                             
                             with st.expander("View collected products"):
                                 for i, p in enumerate(products[:10], 1):
