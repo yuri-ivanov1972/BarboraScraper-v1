@@ -72,17 +72,17 @@ class BarboraWorker:
         finally:
             conn.close()
     
-    def get_pending_skus(self, job_id: int) -> list:
-        """Get all pending SKUs for a job"""
+    def get_pending_products(self, job_id: int) -> list:
+        """Get all pending products (SKU + URL) for a job"""
         conn = self._get_connection()
         try:
-            cur = conn.cursor()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute("""
-                SELECT sku FROM product_processing_log
+                SELECT sku, product_url FROM product_processing_log
                 WHERE job_id = %s AND status = 'pending'
                 ORDER BY id
             """, (job_id,))
-            return [row[0] for row in cur.fetchall()]
+            return [dict(row) for row in cur.fetchall()]
         finally:
             conn.close()
     
@@ -169,31 +169,33 @@ class BarboraWorker:
             conn.close()
     
     def process_job(self, job: dict):
-        """Process a single job - scrape product details for all SKUs"""
+        """Process a single job - scrape product details for all products"""
         job_id = job['id']
         category_id = job['category_id']
         update_mode = job.get('update_mode', 'full')
         
         logger.info(f"Processing job #{job_id} for category {category_id} (mode: {update_mode})")
         
-        category_path = self.get_category_path(category_id)
-        if not category_path:
-            self.complete_job(job_id, 'failed', 'Could not build category path')
-            return
-        
-        skus = self.get_pending_skus(job_id)
-        logger.info(f"Found {len(skus)} pending SKUs to process")
+        pending_products = self.get_pending_products(job_id)
+        logger.info(f"Found {len(pending_products)} pending products to process")
         
         processed = 0
         errors = 0
         
-        for sku in skus:
+        for product_record in pending_products:
             if not self.running:
                 logger.info("Shutdown requested, stopping processing")
                 break
             
+            sku = product_record['sku']
+            product_url = product_record['product_url']
+            
+            if not product_url:
+                self.update_sku_status(job_id, sku, 'failed', 'No product URL stored')
+                errors += 1
+                continue
+            
             try:
-                product_url = f"https://www.barbora.lv/produkti/{sku}"
                 product_data = self.parser.extract_product_details(product_url)
                 
                 if product_data:

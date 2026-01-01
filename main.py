@@ -251,11 +251,11 @@ def section_category_processing():
                     st.info(f"Found {total_count} products across {total_pages} pages")
                     
                     products = parser.extract_products_from_category(category_path)
-                    all_skus = [p.sku for p in products if p.sku]
+                    valid_products = [p for p in products if p.sku and p.url]
                     
                     progress_bar.progress(50)
                     
-                    if not all_skus:
+                    if not valid_products:
                         st.error(f"No products found in category {selected_category['name_lv']}")
                     else:
                         cur = conn.cursor()
@@ -269,17 +269,17 @@ def section_category_processing():
                                 VALUES (%s, %s, %s, 0, 'queued', %s, 'streamlit_ui', %s)
                                 RETURNING id
                             """, (selected_category['barbora_category_code'], selected_category['category_id'], 
-                                  len(all_skus), priority, update_mode))
+                                  len(valid_products), priority, update_mode))
                             
                             job_id = cur.fetchone()[0]
                             
                             progress_bar.progress(70)
                             
-                            for sku in all_skus:
+                            for p in valid_products:
                                 cur.execute("""
-                                    INSERT INTO product_processing_log (job_id, sku, status)
-                                    VALUES (%s, %s, 'pending')
-                                """, (job_id, sku))
+                                    INSERT INTO product_processing_log (job_id, sku, product_url, status)
+                                    VALUES (%s, %s, %s, 'pending')
+                                """, (job_id, p.sku, p.url))
                             
                             cur.execute("""
                                 INSERT INTO job_events (job_id, event_type, message)
@@ -387,32 +387,32 @@ def section_category_processing():
                                 continue
                                 
                             products = parser.extract_products_from_category(category_path)
-                            all_skus = [p.sku for p in products if p.sku]
+                            valid_products = [p for p in products if p.sku and p.url]
                             
-                            if all_skus:
+                            if valid_products:
                                 cur.execute("""
                                     INSERT INTO category_processing_jobs 
                                     (category_code, category_id, total_products, processed_count, status, priority, requested_by, update_mode)
                                     VALUES (%s, %s, %s, 0, 'queued', 5, 'streamlit_bulk', %s)
                                     RETURNING id
-                                """, (cat['barbora_category_code'], cat['category_id'], len(all_skus), update_mode))
+                                """, (cat['barbora_category_code'], cat['category_id'], len(valid_products), update_mode))
                                 
                                 job_id = cur.fetchone()[0]
                                 
-                                for sku in all_skus:
+                                for p in valid_products:
                                     cur.execute("""
-                                        INSERT INTO product_processing_log (job_id, sku, status)
-                                        VALUES (%s, %s, 'pending')
-                                    """, (job_id, sku))
+                                        INSERT INTO product_processing_log (job_id, sku, product_url, status)
+                                        VALUES (%s, %s, %s, 'pending')
+                                    """, (job_id, p.sku, p.url))
                                 
                                 cur.execute("""
                                     INSERT INTO job_events (job_id, event_type, message)
                                     VALUES (%s, 'job_created', %s)
-                                """, (job_id, f"Bulk job for {cat['name_lv']} with {len(all_skus)} products"))
+                                """, (job_id, f"Bulk job for {cat['name_lv']} with {len(valid_products)} products"))
                                 
                                 conn.commit()
                                 total_jobs += 1
-                                total_products += len(all_skus)
+                                total_products += len(valid_products)
                                 
                         except psycopg2.IntegrityError:
                             conn.rollback()

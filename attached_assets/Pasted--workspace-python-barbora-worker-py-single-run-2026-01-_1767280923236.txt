@@ -1,0 +1,23 @@
+~/workspace$ python barbora_worker.py --single-run
+2026-01-01 15:21:36,550 - INFO - Worker worker_65f451ece4f2_5408 initialized
+2026-01-01 15:21:36,550 - INFO - Worker worker_65f451ece4f2_5408 starting...
+2026-01-01 15:21:37,411 - INFO - Processing job #1 for category 307 (mode: full)
+2026-01-01 15:21:38,205 - INFO - Found 7 pending SKUs to process
+2026-01-01 15:21:38,205 - INFO - Fetching product details: https://www.barbora.lv/produkti/000000000000891999
+2026-01-01 15:21:39,148 - INFO - Error extracting product details: 404 Client Error: Not Found for url: https://barbora.lv/produkti/000000000000891999
+2026-01-01 15:21:40,395 - INFO - Fetching product details: https://www.barbora.lv/produkti/000000000000892000
+2026-01-01 15:21:40,782 - INFO - Error extracting product details: 404 Client Error: Not Found for url: https://barbora.lv/produkti/000000000000892000
+2026-01-01 15:21:42,061 - INFO - Fetching product details: https://www.barbora.lv/produkti/000000000001318567
+2026-01-01 15:21:42,491 - INFO - Error extracting product details: 404 Client Error: Not Found for url: https://barbora.lv/produkti/000000000001318567
+2026-01-01 15:21:43,818 - INFO - Fetching product details: https://www.barbora.lv/produkti/000000000000961803
+2026-01-01 15:21:44,209 - INFO - Error extracting product details: 404 Client Error: Not Found for url: https://barbora.lv/produkti/000000000000961803
+2026-01-01 15:21:45,445 - INFO - Fetching product details: https://www.barbora.lv/produkti/000000000001319022
+2026-01-01 15:21:45,883 - INFO - Error extracting product details: 404 Client Error: Not Found for url: https://barbora.lv/produkti/000000000001319022
+2026-01-01 15:21:47,203 - INFO - Fetching product details: https://www.barbora.lv/produkti/000000000001319015
+2026-01-01 15:21:47,640 - INFO - Error extracting product details: 404 Client Error: Not Found for url: https://barbora.lv/produkti/000000000001319015
+2026-01-01 15:21:48,900 - INFO - Fetching product details: https://www.barbora.lv/produkti/000000000001131972
+2026-01-01 15:21:49,396 - INFO - Error extracting product details: 404 Client Error: Not Found for url: https://barbora.lv/produkti/000000000001131972
+2026-01-01 15:21:51,025 - ERROR - Job processing error: value too long for type character varying(20)
+
+2026-01-01 15:21:51,907 - INFO - No jobs found, exiting (single-run mode)
+2026-01-01 15:21:51,907 - INFO - Worker stopped
