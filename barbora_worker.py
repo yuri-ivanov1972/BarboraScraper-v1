@@ -303,6 +303,15 @@ class BarboraWorker:
                       product.nutrition.protein, product.nutrition.salt, product.nutrition.fiber,
                       product.ingredients))
             
+            if product.photo_urls:
+                cur.execute("DELETE FROM productphotos WHERE product_id = %s", (product_id,))
+                for i, photo_url in enumerate(product.photo_urls):
+                    is_primary = (i == 0)
+                    cur.execute("""
+                        INSERT INTO productphotos (product_id, photo_url, is_primary)
+                        VALUES (%s, %s, %s)
+                    """, (product_id, photo_url, is_primary))
+            
             conn.commit()
         finally:
             conn.close()

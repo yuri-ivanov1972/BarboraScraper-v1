@@ -66,6 +66,7 @@ class BarboraProductDetails:
     manufacturer: Optional[str] = None
     storage_conditions: Optional[str] = None
     weight: Optional[str] = None
+    photo_urls: Optional[List[str]] = None
 
 
 class BarboraParser:
@@ -429,6 +430,15 @@ class BarboraParser:
                     elif 'alergēni' in title_text:
                         allergens = value
             
+            photo_urls = []
+            slider_slides = soup.find_all('div', class_='b-block-slider--slide')
+            for slide in slider_slides:
+                img = slide.find('img', src=True)
+                if img:
+                    src = img.get('src', '')
+                    if src and 'cdn.barbora.lv' in src and 'no-image-placeholder' not in src:
+                        photo_urls.append(src)
+            
             country_of_origin = None
             brand = None
             net_quantity = None
@@ -493,6 +503,7 @@ class BarboraParser:
                 nutrition=nutrition,
                 country_of_origin=country_of_origin,
                 weight=net_quantity,
+                photo_urls=photo_urls if photo_urls else None,
             )
             
         except Exception as e:
