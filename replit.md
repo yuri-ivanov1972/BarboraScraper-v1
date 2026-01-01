@@ -1,4 +1,4 @@
-# Rimi Product Scraper
+# Maxima Product Scraper
 
 ## Overview
 This Streamlit web application scrapes product data from Rimi, a Baltic grocery store chain, to analyze food additives (E-numbers) in ingredients. It extracts product information, nutritional data, and identifies potentially harmful food additives, storing the data in a PostgreSQL database for analysis and reporting. The project aims to provide comprehensive insights into product composition and additive content.

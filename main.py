@@ -1,5 +1,5 @@
 """
-Rimi Product Scraper - Redesigned UI
+Maxima Product Scraper - Redesigned UI
 Two-section interface: Category Processing + Product View
 """
 
@@ -9,7 +9,7 @@ import time
 import os
 
 st.set_page_config(
-    page_title="Rimi Product Scraper",
+    page_title="Maxima Product Scraper",
     page_icon="🛒",
     layout="wide"
 )
@@ -1244,7 +1244,7 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
 
 
 def main():
-    st.title("🛒 Rimi Product Scraper")
+    st.title("🛒 Maxima Product Scraper")
     
     col1, col2, col3, col4, col5 = st.columns(5)
     
