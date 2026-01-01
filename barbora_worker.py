@@ -53,12 +53,13 @@ class BarboraWorker:
             cur.execute("""
                 UPDATE category_processing_jobs
                 SET status = 'processing',
-                    worker_id = %s,
-                    started_at = CURRENT_TIMESTAMP
+                    current_worker_id = %s,
+                    started_at = CURRENT_TIMESTAMP,
+                    last_updated = CURRENT_TIMESTAMP
                 WHERE id = (
                     SELECT id FROM category_processing_jobs
                     WHERE status = 'queued'
-                    ORDER BY priority DESC, created_at ASC
+                    ORDER BY priority DESC, scheduled_for ASC NULLS LAST
                     LIMIT 1
                     FOR UPDATE SKIP LOCKED
                 )
@@ -108,7 +109,9 @@ class BarboraWorker:
             cur = conn.cursor()
             cur.execute("""
                 UPDATE category_processing_jobs
-                SET processed_count = %s
+                SET processed_count = %s,
+                    last_updated = CURRENT_TIMESTAMP,
+                    last_heartbeat = CURRENT_TIMESTAMP
                 WHERE id = %s
             """, (processed_count, job_id))
             conn.commit()
@@ -124,7 +127,8 @@ class BarboraWorker:
                 UPDATE category_processing_jobs
                 SET status = %s,
                     completed_at = CURRENT_TIMESTAMP,
-                    error_message = %s
+                    last_updated = CURRENT_TIMESTAMP,
+                    notes = %s
                 WHERE id = %s
             """, (status, error, job_id))
             
