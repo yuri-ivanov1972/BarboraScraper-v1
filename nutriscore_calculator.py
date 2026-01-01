@@ -334,7 +334,7 @@ class NutriscoreCalculator:
     
     def calculate_single_product(self, energy_kj: float, sugars: float, 
                                saturated_fat: float, salt: float, protein: float,
-                               fiber: int = 0, fruits_veg_nuts: int = 0,
+                               fiber: float = 0, fruits_veg_nuts: int = 0,
                                category_code: Optional[str] = None,
                                category_id: Optional[int] = None) -> Dict[str, Any]:
         """

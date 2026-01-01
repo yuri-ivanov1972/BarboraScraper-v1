@@ -294,7 +294,7 @@ class BarboraWorker:
                         saturated_fat=n.saturated_fat or 0,
                         salt=n.salt or 0,
                         protein=n.protein or 0,
-                        fiber=int(n.fiber or 0),
+                        fiber=n.fiber or 0,
                         category_id=category_id
                     )
                     if result.get('success'):
