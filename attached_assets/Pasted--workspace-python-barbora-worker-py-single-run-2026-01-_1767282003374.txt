@@ -1,0 +1,45 @@
+~/workspace$ python barbora_worker.py --single-run
+2026-01-01 15:39:26,451 - INFO - Worker worker_65f451ece4f2_6947 initialized
+2026-01-01 15:39:26,451 - INFO - Worker worker_65f451ece4f2_6947 starting...
+2026-01-01 15:39:26,879 - INFO - Processing job #3 for category 307 (mode: full)
+2026-01-01 15:39:29,251 - INFO - Found 7 pending products to process
+2026-01-01 15:39:29,251 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-2-proc-uht-1-l
+2026-01-01 15:39:32,687 - ERROR - Error processing 000000000000891999: column "ingredients" of relation "products" does not exist
+LINE 2:                     UPDATE products SET ingredients = 'PIENS...
+                                                ^
+
+2026-01-01 15:39:33,584 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-3-2-proc-uht-1-l
+2026-01-01 15:39:34,671 - ERROR - Error processing 000000000000892000: column "ingredients" of relation "products" does not exist
+LINE 2:                     UPDATE products SET ingredients = 'PIENS...
+                                                ^
+
+2026-01-01 15:39:35,581 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-bez-laktozes-well-done-1-5-proc-1-l
+2026-01-01 15:39:36,655 - ERROR - Error processing 000000000001318567: column "ingredients" of relation "products" does not exist
+LINE 2:                     UPDATE products SET ingredients = 'PIENS...
+                                                ^
+
+2026-01-01 15:39:37,518 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-0-5-proc-uht-1-l
+2026-01-01 15:39:38,549 - ERROR - Error processing 000000000000961803: column "ingredients" of relation "products" does not exist
+LINE 2:                     UPDATE products SET ingredients = 'PIENS...
+                                                ^
+
+2026-01-01 15:39:39,435 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-well-done-3-5-proc-1-l
+2026-01-01 15:39:40,496 - ERROR - Error processing 000000000001319022: column "ingredients" of relation "products" does not exist
+LINE 2:                     UPDATE products SET ingredients = 'PIENS...
+                                                ^
+
+2026-01-01 15:39:41,388 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-well-done-2-5-proc-1-l
+2026-01-01 15:39:42,458 - ERROR - Error processing 000000000001319015: column "ingredients" of relation "products" does not exist
+LINE 2:                     UPDATE products SET ingredients = 'PIENS...
+                                                ^
+
+2026-01-01 15:39:43,358 - INFO - Fetching product details: https://barbora.lv/produkti/kazas-piens-amalattea-uht-500-ml
+2026-01-01 15:39:44,567 - ERROR - Error processing 000000000001131972: column "ingredients" of relation "products" does not exist
+LINE 2:                     UPDATE products SET ingredients = 'Daļēj...
+                                                ^
+
+2026-01-01 15:39:45,822 - ERROR - Job processing error: value too long for type character varying(20)
+
+2026-01-01 15:39:46,642 - INFO - No jobs found, exiting (single-run mode)
+2026-01-01 15:39:46,643 - INFO - Worker stopped
+~/workspace$ 
