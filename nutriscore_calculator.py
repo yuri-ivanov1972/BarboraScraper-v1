@@ -88,6 +88,12 @@ HALF_FVN_CATEGORIES = {
     'SH-4-12-85'   # Sauces - Tomato sauces and pastes
 }
 
+BARBORA_FAT_CATEGORIES: set[int] = set()
+BARBORA_CHEESE_CATEGORIES: set[int] = set()
+BARBORA_FULL_FVN_CATEGORIES: set[int] = set()
+BARBORA_HALF_FVN_CATEGORIES: set[int] = set()
+BARBORA_BEVERAGE_CATEGORIES: set[int] = set()
+
 
 def convert_salt_to_sodium(salt: float) -> float:
     """Convert salt (g) to sodium (mg)"""
@@ -320,11 +326,17 @@ class NutriscoreCalculator:
         self.cheese_categories = CHEESE_CATEGORIES
         self.full_fvn_categories = FULL_FVN_CATEGORIES
         self.half_fvn_categories = HALF_FVN_CATEGORIES
+        self.barbora_fat_categories = BARBORA_FAT_CATEGORIES
+        self.barbora_cheese_categories = BARBORA_CHEESE_CATEGORIES
+        self.barbora_full_fvn_categories = BARBORA_FULL_FVN_CATEGORIES
+        self.barbora_half_fvn_categories = BARBORA_HALF_FVN_CATEGORIES
+        self.barbora_beverage_categories = BARBORA_BEVERAGE_CATEGORIES
     
     def calculate_single_product(self, energy_kj: float, sugars: float, 
                                saturated_fat: float, salt: float, protein: float,
                                fiber: int = 0, fruits_veg_nuts: int = 0,
-                               category_code: Optional[str] = None) -> Dict[str, Any]:
+                               category_code: Optional[str] = None,
+                               category_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Calculate nutriscore for a single product.
         
@@ -336,7 +348,8 @@ class NutriscoreCalculator:
             protein: Protein in g/100g
             fiber: Fiber in g/100g (optional, default: 0)
             fruits_veg_nuts: % fruits/vegetables/nuts (optional, default: 0)
-            category_code: Product category code (optional)
+            category_code: Product category code for Rimi (optional, string like 'SH-x-x-x')
+            category_id: Product category ID for Barbora (optional, integer)
         
         Returns:
             Dictionary with score, grade, and detailed breakdown
@@ -345,16 +358,27 @@ class NutriscoreCalculator:
             # Convert salt to sodium
             sodium = convert_salt_to_sodium(salt)
             
-            # Determine product classification
-            is_beverage = category_code and category_code.startswith('SH-5') if category_code else False
-            is_fat = category_code in self.fat_categories if category_code else False
-            is_cheese = category_code in self.cheese_categories if category_code else False
-            
-            # Adjust fruits/vegetables/nuts percentage based on category
-            if category_code in self.full_fvn_categories:
-                fruits_veg_nuts = 100
-            elif category_code in self.half_fvn_categories:
-                fruits_veg_nuts = 50
+            # Determine product classification - check Barbora category_id first, then Rimi category_code
+            if category_id is not None:
+                is_beverage = category_id in self.barbora_beverage_categories
+                is_fat = category_id in self.barbora_fat_categories
+                is_cheese = category_id in self.barbora_cheese_categories
+                if category_id in self.barbora_full_fvn_categories:
+                    fruits_veg_nuts = 100
+                elif category_id in self.barbora_half_fvn_categories:
+                    fruits_veg_nuts = 50
+            elif category_code:
+                is_beverage = category_code.startswith('SH-5')
+                is_fat = category_code in self.fat_categories
+                is_cheese = category_code in self.cheese_categories
+                if category_code in self.full_fvn_categories:
+                    fruits_veg_nuts = 100
+                elif category_code in self.half_fvn_categories:
+                    fruits_veg_nuts = 50
+            else:
+                is_beverage = False
+                is_fat = False
+                is_cheese = False
             
             # Calculate nutriscore
             score, grade, components = calculate_nutriscore(

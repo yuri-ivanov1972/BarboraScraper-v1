@@ -16,6 +16,7 @@ import unicodedata
 import re
 
 from barbora_parser import BarboraParser
+from nutriscore_calculator import NutriscoreCalculator
 
 
 def normalize_latvian_text(text: str) -> str:
@@ -63,6 +64,7 @@ class BarboraWorker:
         self.running = True
         self.db_url = os.environ['DATABASE_URL']
         self.parser = BarboraParser(status_callback=lambda msg: logger.info(msg))
+        self.nutriscore_calculator = NutriscoreCalculator()
         
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -281,10 +283,30 @@ class BarboraWorker:
                 """, (product.ingredients, product_id))
             
             if product.nutrition:
+                nutri_score_points = None
+                nutri_score_grade = None
+                
+                n = product.nutrition
+                if n.energy_kj is not None and n.sugars is not None and n.saturated_fat is not None and n.salt is not None and n.protein is not None:
+                    result = self.nutriscore_calculator.calculate_single_product(
+                        energy_kj=n.energy_kj or 0,
+                        sugars=n.sugars or 0,
+                        saturated_fat=n.saturated_fat or 0,
+                        salt=n.salt or 0,
+                        protein=n.protein or 0,
+                        fiber=int(n.fiber or 0),
+                        category_id=category_id
+                    )
+                    if result.get('success'):
+                        nutri_score_points = result['score']
+                        nutri_score_grade = result['grade']
+                        logger.debug(f"Nutri-Score: {nutri_score_grade} ({nutri_score_points} pts)")
+                
                 cur.execute("""
                     INSERT INTO nutritionfacts (product_id, energy_kj, energy_kcal, fat_total, fat_saturated, 
-                                                carbs_total, carbs_sugars, protein, salt, fiber, ingredients_text)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                                carbs_total, carbs_sugars, protein, salt, fiber, ingredients_text,
+                                                nutri_score_points, nutri_score_grade)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (product_id) DO UPDATE SET
                         energy_kj = EXCLUDED.energy_kj,
                         energy_kcal = EXCLUDED.energy_kcal,
@@ -295,13 +317,15 @@ class BarboraWorker:
                         protein = EXCLUDED.protein,
                         salt = EXCLUDED.salt,
                         fiber = EXCLUDED.fiber,
-                        ingredients_text = EXCLUDED.ingredients_text
+                        ingredients_text = EXCLUDED.ingredients_text,
+                        nutri_score_points = EXCLUDED.nutri_score_points,
+                        nutri_score_grade = EXCLUDED.nutri_score_grade
                 """, (product_id, 
                       product.nutrition.energy_kj, product.nutrition.energy_kcal,
                       product.nutrition.fat, product.nutrition.saturated_fat,
                       product.nutrition.carbohydrates, product.nutrition.sugars,
                       product.nutrition.protein, product.nutrition.salt, product.nutrition.fiber,
-                      product.ingredients))
+                      product.ingredients, nutri_score_points, nutri_score_grade))
             
             if product.photo_urls:
                 cur.execute("DELETE FROM productphotos WHERE product_id = %s", (product_id,))
