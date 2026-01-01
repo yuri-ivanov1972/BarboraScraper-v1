@@ -199,7 +199,7 @@ class BarboraWorker:
                 product_data = self.parser.extract_product_details(product_url)
                 
                 if product_data:
-                    self.save_product(product_data, category_id)
+                    self.save_product(product_data, category_id, product_url)
                     self.update_sku_status(job_id, sku, 'completed')
                     logger.info(f"Processed: {sku} - {product_data.name[:50] if product_data.name else 'Unknown'}")
                 else:
@@ -220,32 +220,24 @@ class BarboraWorker:
         self.complete_job(job_id, final_status, f"Processed {processed} products, {errors} errors" if errors else None)
         logger.info(f"Job #{job_id} completed: {processed} processed, {errors} errors")
     
-    def save_product(self, product, category_id: int):
+    def save_product(self, product, category_id: int, product_url: str):
         """Save or update product in the database"""
         conn = self._get_connection()
         try:
             cur = conn.cursor()
             
             cur.execute("""
-                INSERT INTO products (sku, name, barbora_url, category_id, brand, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO products (sku, name, barbora_url, category_id, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (sku) DO UPDATE SET
                     name = EXCLUDED.name,
                     barbora_url = EXCLUDED.barbora_url,
                     category_id = EXCLUDED.category_id,
-                    brand = EXCLUDED.brand,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING product_id
-            """, (product.sku, product.name, product.url, category_id, product.brand))
+            """, (product.sku, product.name, product_url, category_id))
             
             product_id = cur.fetchone()[0]
-            
-            if product.price:
-                cur.execute("""
-                    INSERT INTO product_price_history 
-                    (product_id, price, currency, is_available, recorded_at)
-                    VALUES (%s, %s, 'EUR', %s, CURRENT_TIMESTAMP)
-                """, (product_id, product.price, product.is_available))
             
             if product.ingredients:
                 cur.execute("""
@@ -253,12 +245,24 @@ class BarboraWorker:
                 """, (product.ingredients, product_id))
             
             if product.nutrition:
-                for nutrient, value in product.nutrition.items():
-                    cur.execute("""
-                        INSERT INTO product_nutrition (product_id, nutrient_name, nutrient_value)
-                        VALUES (%s, %s, %s)
-                        ON CONFLICT (product_id, nutrient_name) DO UPDATE SET nutrient_value = EXCLUDED.nutrient_value
-                    """, (product_id, nutrient, str(value)))
+                nutrition_data = {
+                    'energy_kj': product.nutrition.energy_kj,
+                    'energy_kcal': product.nutrition.energy_kcal,
+                    'fat': product.nutrition.fat,
+                    'saturated_fat': product.nutrition.saturated_fat,
+                    'carbohydrates': product.nutrition.carbohydrates,
+                    'sugars': product.nutrition.sugars,
+                    'protein': product.nutrition.protein,
+                    'salt': product.nutrition.salt,
+                    'fiber': product.nutrition.fiber,
+                }
+                for nutrient, value in nutrition_data.items():
+                    if value is not None:
+                        cur.execute("""
+                            INSERT INTO product_nutrition (product_id, nutrient_name, nutrient_value)
+                            VALUES (%s, %s, %s)
+                            ON CONFLICT (product_id, nutrient_name) DO UPDATE SET nutrient_value = EXCLUDED.nutrient_value
+                        """, (product_id, nutrient, str(value)))
             
             conn.commit()
         finally:

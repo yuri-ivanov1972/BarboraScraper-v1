@@ -1,0 +1,23 @@
+~/workspace$ python barbora_worker.py --single-run
+2026-01-01 15:37:13,847 - INFO - Worker worker_65f451ece4f2_6593 initialized
+2026-01-01 15:37:13,847 - INFO - Worker worker_65f451ece4f2_6593 starting...
+2026-01-01 15:37:14,689 - INFO - Processing job #3 for category 307 (mode: full)
+2026-01-01 15:37:15,059 - INFO - Found 7 pending products to process
+2026-01-01 15:37:15,060 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-2-proc-uht-1-l
+2026-01-01 15:37:16,059 - ERROR - Error processing 000000000000891999: 'BarboraProductDetails' object has no attribute 'url'
+2026-01-01 15:37:16,973 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-3-2-proc-uht-1-l
+2026-01-01 15:37:17,857 - ERROR - Error processing 000000000000892000: 'BarboraProductDetails' object has no attribute 'url'
+2026-01-01 15:37:18,762 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-bez-laktozes-well-done-1-5-proc-1-l
+2026-01-01 15:37:19,635 - ERROR - Error processing 000000000001318567: 'BarboraProductDetails' object has no attribute 'url'
+2026-01-01 15:37:20,500 - INFO - Fetching product details: https://barbora.lv/produkti/piens-farm-milk-0-5-proc-uht-1-l
+2026-01-01 15:37:21,434 - ERROR - Error processing 000000000000961803: 'BarboraProductDetails' object has no attribute 'url'
+2026-01-01 15:37:22,326 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-well-done-3-5-proc-1-l
+2026-01-01 15:37:23,246 - ERROR - Error processing 000000000001319022: 'BarboraProductDetails' object has no attribute 'url'
+2026-01-01 15:37:24,108 - INFO - Fetching product details: https://barbora.lv/produkti/piens-uht-well-done-2-5-proc-1-l
+2026-01-01 15:37:25,091 - ERROR - Error processing 000000000001319015: 'BarboraProductDetails' object has no attribute 'url'
+2026-01-01 15:37:25,956 - INFO - Fetching product details: https://barbora.lv/produkti/kazas-piens-amalattea-uht-500-ml
+2026-01-01 15:37:26,918 - ERROR - Error processing 000000000001131972: 'BarboraProductDetails' object has no attribute 'url'
+2026-01-01 15:37:28,148 - ERROR - Job processing error: value too long for type character varying(20)
+
+2026-01-01 15:37:28,997 - INFO - No jobs found, exiting (single-run mode)
+2026-01-01 15:37:28,997 - INFO - Worker stopped
