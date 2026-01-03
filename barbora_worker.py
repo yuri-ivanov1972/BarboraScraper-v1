@@ -113,12 +113,14 @@ class BarboraWorker:
             conn.close()
     
     def get_pending_products(self, job_id: int) -> list:
-        """Get all pending products (SKU + URL) for a job"""
+        """Get all pending products (SKU + URL + price data) for a job"""
         conn = self._get_connection()
         try:
             cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute("""
-                SELECT sku, product_url FROM product_processing_log
+                SELECT sku, product_url, price, retail_price, price_per_unit, 
+                       price_per_unit_type, is_available, promotion_data
+                FROM product_processing_log
                 WHERE job_id = %s AND status = 'pending'
                 ORDER BY id
             """, (job_id,))
@@ -239,7 +241,9 @@ class BarboraWorker:
                 product_data = self.parser.extract_product_details(product_url)
                 
                 if product_data:
-                    self.save_product(product_data, category_id, product_url)
+                    product_id = self.save_product(product_data, category_id, product_url)
+                    if product_id and product_record.get('price') is not None:
+                        self.save_price_history_from_listing(product_id, product_record)
                     self.update_sku_status(job_id, sku, 'completed')
                     logger.info(f"Processed: {sku} - {product_data.name[:50] if product_data.name else 'Unknown'}")
                 else:
@@ -260,9 +264,10 @@ class BarboraWorker:
         self.complete_job(job_id, final_status, f"Processed {processed} products, {errors} errors" if errors else None)
         logger.info(f"Job #{job_id} completed: {processed} processed, {errors} errors")
     
-    def save_product(self, product, category_id: int, product_url: str):
-        """Save or update product in the database"""
+    def save_product(self, product, category_id: int, product_url: str) -> int:
+        """Save or update product in the database. Returns product_id."""
         conn = self._get_connection()
+        product_id = None
         try:
             cur = conn.cursor()
             
@@ -351,8 +356,195 @@ class BarboraWorker:
                     """, (product_id, photo_url, is_primary))
             
             conn.commit()
+            return product_id
         finally:
             conn.close()
+    
+    def save_price_history_from_listing(self, product_id: int, product_record: dict):
+        """
+        Save price history from a product_processing_log record with deduplication.
+        Only creates a new record if any price field has changed.
+        
+        Args:
+            product_id: Database product ID
+            product_record: Dict from product_processing_log with price data
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            
+            new_price = float(product_record['price']) if product_record.get('price') else None
+            retail_price = float(product_record['retail_price']) if product_record.get('retail_price') else None
+            new_is_available = product_record.get('is_available', True)
+            new_price_per_unit = float(product_record['price_per_unit']) if product_record.get('price_per_unit') else None
+            new_price_per_unit_type = product_record.get('price_per_unit_type')
+            
+            promo = product_record.get('promotion_data')
+            if isinstance(promo, str):
+                import json
+                promo = json.loads(promo) if promo else None
+            
+            new_discount_price = None
+            new_discount_price_per_unit = None
+            
+            if promo and 'oldPrice' in promo:
+                new_discount_price = new_price
+                new_price = promo.get('oldPrice')
+                if 'oldComparativeRate' in promo:
+                    new_discount_price_per_unit = new_price_per_unit
+                    new_price_per_unit = promo.get('oldComparativeRate')
+            elif retail_price and new_price and retail_price > new_price:
+                new_discount_price = new_price
+                new_price = retail_price
+            
+            cur.execute("""
+                SELECT price, is_available, price_per_unit, price_per_unit_type, 
+                       discount_price, discount_price_per_unit
+                FROM product_price_history
+                WHERE product_id = %s
+                ORDER BY recorded_at DESC
+                LIMIT 1
+            """, (product_id,))
+            
+            last_record = cur.fetchone()
+            
+            should_insert = False
+            if last_record is None:
+                should_insert = True
+            else:
+                last_price = float(last_record[0]) if last_record[0] else None
+                last_available = last_record[1]
+                last_ppu = float(last_record[2]) if last_record[2] else None
+                last_ppu_type = last_record[3]
+                last_discount = float(last_record[4]) if last_record[4] else None
+                last_discount_ppu = float(last_record[5]) if last_record[5] else None
+                
+                def values_differ(a, b, tolerance=0.01):
+                    if a is None and b is None:
+                        return False
+                    if a is None or b is None:
+                        return True
+                    return abs(float(a) - float(b)) > tolerance
+                
+                price_changed = values_differ(new_price, last_price)
+                availability_changed = new_is_available != last_available
+                ppu_changed = values_differ(new_price_per_unit, last_ppu)
+                ppu_type_changed = new_price_per_unit_type != last_ppu_type
+                discount_changed = values_differ(new_discount_price, last_discount)
+                discount_ppu_changed = values_differ(new_discount_price_per_unit, last_discount_ppu)
+                
+                should_insert = (price_changed or availability_changed or ppu_changed or 
+                               ppu_type_changed or discount_changed or discount_ppu_changed)
+            
+            if should_insert:
+                cur.execute("""
+                    INSERT INTO product_price_history 
+                    (product_id, price, currency, is_available, price_per_unit, price_per_unit_type,
+                     discount_price, discount_price_per_unit, data_source, recorded_at, created_at)
+                    VALUES (%s, %s, 'EUR', %s, %s, %s, %s, %s, 'barbora_scrape', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, (product_id, new_price, new_is_available, new_price_per_unit, 
+                      new_price_per_unit_type, new_discount_price, new_discount_price_per_unit))
+                conn.commit()
+                logger.debug(f"Price history recorded for product {product_id}: €{new_price}")
+                return True
+            else:
+                logger.debug(f"Price unchanged for product {product_id}, skipping")
+                return False
+                
+        finally:
+            conn.close()
+    
+    def save_price_history(self, product_id: int, listing_product, conn=None):
+        """
+        Save price history with deduplication logic.
+        Only creates a new record if any price field has changed.
+        
+        Args:
+            product_id: Database product ID
+            listing_product: BarboraProductInfo from category listing
+            conn: Optional existing connection (if None, creates new one)
+        """
+        close_conn = False
+        if conn is None:
+            conn = self._get_connection()
+            close_conn = True
+        
+        try:
+            cur = conn.cursor()
+            
+            new_price = listing_product.price
+            new_is_available = listing_product.is_available
+            new_price_per_unit = listing_product.comparative_unit_price
+            new_price_per_unit_type = listing_product.comparative_unit
+            
+            promo = listing_product.promotion
+            new_discount_price = None
+            new_discount_price_per_unit = None
+            if promo:
+                if 'oldPrice' in promo:
+                    new_discount_price = new_price
+                    new_price = promo.get('oldPrice')
+                if 'oldComparativeRate' in promo:
+                    new_discount_price_per_unit = new_price_per_unit
+                    new_price_per_unit = promo.get('oldComparativeRate')
+            
+            cur.execute("""
+                SELECT price, is_available, price_per_unit, price_per_unit_type, 
+                       discount_price, discount_price_per_unit
+                FROM product_price_history
+                WHERE product_id = %s
+                ORDER BY recorded_at DESC
+                LIMIT 1
+            """, (product_id,))
+            
+            last_record = cur.fetchone()
+            
+            should_insert = False
+            if last_record is None:
+                should_insert = True
+            else:
+                last_price = float(last_record[0]) if last_record[0] else None
+                last_available = last_record[1]
+                last_ppu = float(last_record[2]) if last_record[2] else None
+                last_ppu_type = last_record[3]
+                last_discount = float(last_record[4]) if last_record[4] else None
+                last_discount_ppu = float(last_record[5]) if last_record[5] else None
+                
+                def values_differ(a, b, tolerance=0.01):
+                    if a is None and b is None:
+                        return False
+                    if a is None or b is None:
+                        return True
+                    return abs(float(a) - float(b)) > tolerance
+                
+                price_changed = values_differ(new_price, last_price)
+                availability_changed = new_is_available != last_available
+                ppu_changed = values_differ(new_price_per_unit, last_ppu)
+                ppu_type_changed = new_price_per_unit_type != last_ppu_type
+                discount_changed = values_differ(new_discount_price, last_discount)
+                discount_ppu_changed = values_differ(new_discount_price_per_unit, last_discount_ppu)
+                
+                should_insert = (price_changed or availability_changed or ppu_changed or 
+                               ppu_type_changed or discount_changed or discount_ppu_changed)
+            
+            if should_insert:
+                cur.execute("""
+                    INSERT INTO product_price_history 
+                    (product_id, price, currency, is_available, price_per_unit, price_per_unit_type,
+                     discount_price, discount_price_per_unit, data_source, recorded_at, created_at)
+                    VALUES (%s, %s, 'EUR', %s, %s, %s, %s, %s, 'barbora_scrape', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """, (product_id, new_price, new_is_available, new_price_per_unit, 
+                      new_price_per_unit_type, new_discount_price, new_discount_price_per_unit))
+                conn.commit()
+                logger.debug(f"Price history recorded for product {product_id}: €{new_price}")
+                return True
+            else:
+                logger.debug(f"Price unchanged for product {product_id}, skipping")
+                return False
+                
+        finally:
+            if close_conn:
+                conn.close()
     
     def run(self, single_run: bool = False):
         """Main worker loop"""

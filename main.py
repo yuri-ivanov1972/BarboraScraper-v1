@@ -275,11 +275,16 @@ def section_category_processing():
                             
                             progress_bar.progress(70)
                             
+                            import json
                             for p in valid_products:
+                                promo_json = json.dumps(p.promotion) if p.promotion else None
                                 cur.execute("""
-                                    INSERT INTO product_processing_log (job_id, sku, product_url, status)
-                                    VALUES (%s, %s, %s, 'pending')
-                                """, (job_id, p.sku, p.url))
+                                    INSERT INTO product_processing_log 
+                                    (job_id, sku, product_url, status, price, retail_price, 
+                                     price_per_unit, price_per_unit_type, is_available, promotion_data)
+                                    VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s)
+                                """, (job_id, p.sku, p.url, p.price, p.retail_price,
+                                      p.comparative_unit_price, p.comparative_unit, p.is_available, promo_json))
                             
                             cur.execute("""
                                 INSERT INTO job_events (job_id, event_type, message)
@@ -399,11 +404,16 @@ def section_category_processing():
                                 
                                 job_id = cur.fetchone()[0]
                                 
+                                import json
                                 for p in valid_products:
+                                    promo_json = json.dumps(p.promotion) if p.promotion else None
                                     cur.execute("""
-                                        INSERT INTO product_processing_log (job_id, sku, product_url, status)
-                                        VALUES (%s, %s, %s, 'pending')
-                                    """, (job_id, p.sku, p.url))
+                                        INSERT INTO product_processing_log 
+                                        (job_id, sku, product_url, status, price, retail_price,
+                                         price_per_unit, price_per_unit_type, is_available, promotion_data)
+                                        VALUES (%s, %s, %s, 'pending', %s, %s, %s, %s, %s, %s)
+                                    """, (job_id, p.sku, p.url, p.price, p.retail_price,
+                                          p.comparative_unit_price, p.comparative_unit, p.is_available, promo_json))
                                 
                                 cur.execute("""
                                     INSERT INTO job_events (job_id, event_type, message)

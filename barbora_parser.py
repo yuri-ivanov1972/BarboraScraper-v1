@@ -32,6 +32,7 @@ class BarboraProductInfo:
     big_image_url: Optional[str] = None
     comparative_unit: Optional[str] = None
     comparative_unit_price: Optional[float] = None
+    retail_price: Optional[float] = None
     status: str = "active"
     is_available: bool = True
     promotion: Optional[Dict] = None
@@ -220,6 +221,10 @@ class BarboraParser:
         if 'price' in product_json and product_json['price'] is not None:
             price = float(product_json['price'])
         
+        retail_price = None
+        if 'retail_price' in product_json and product_json['retail_price'] is not None:
+            retail_price = float(product_json['retail_price'])
+        
         comparative_unit_price = None
         if 'comparative_unit_price' in product_json and product_json['comparative_unit_price'] is not None:
             comparative_unit_price = float(product_json['comparative_unit_price'])
@@ -242,6 +247,7 @@ class BarboraParser:
             big_image_url=product_json.get('big_image'),
             comparative_unit=product_json.get('comparative_unit'),
             comparative_unit_price=comparative_unit_price,
+            retail_price=retail_price,
             status=product_json.get('status', 'active'),
             is_available=is_available,
             promotion=product_json.get('promotion'),
