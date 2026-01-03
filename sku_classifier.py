@@ -62,7 +62,7 @@ class SkuClassifier:
                 target_category AS (
                     SELECT category_id, parent_category_id
                     FROM normalized_categories 
-                    WHERE rimi_category_code = %s
+                    WHERE barbora_category_code = %s
                 ),
                 -- Find all descendants (children, grandchildren, etc.) - search DOWN
                 descendants AS (
@@ -202,7 +202,7 @@ class SkuClassifier:
                 target_category AS (
                     SELECT category_id, parent_category_id
                     FROM normalized_categories 
-                    WHERE rimi_category_code = %s
+                    WHERE barbora_category_code = %s
                 ),
                 -- Find all descendants (children, grandchildren, etc.) - search DOWN
                 descendants AS (
