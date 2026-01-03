@@ -380,6 +380,7 @@ def section_category_processing():
                     total_products = 0
                     skipped = 0
                     errors = 0
+                    error_details = []
                     
                     for i, cat in enumerate(all_l3_categories):
                         progress_bar.progress((i + 1) / len(all_l3_categories))
@@ -389,6 +390,7 @@ def section_category_processing():
                             category_path = cat['category_path']
                             if not category_path:
                                 errors += 1
+                                error_details.append(f"{cat['name_lv']}: Missing category path")
                                 continue
                                 
                             products = parser.extract_products_from_category(category_path)
@@ -423,6 +425,9 @@ def section_category_processing():
                                 conn.commit()
                                 total_jobs += 1
                                 total_products += len(valid_products)
+                            else:
+                                errors += 1
+                                error_details.append(f"{cat['name_lv']}: No valid products found (path: {category_path})")
                                 
                         except psycopg2.IntegrityError:
                             conn.rollback()
@@ -430,6 +435,7 @@ def section_category_processing():
                         except Exception as e:
                             conn.rollback()
                             errors += 1
+                            error_details.append(f"{cat['name_lv']}: {str(e)[:100]}")
                         
                         time.sleep(0.5)
                     
@@ -441,6 +447,11 @@ def section_category_processing():
                         st.info(f"Skipped {skipped} categories (already have active jobs)")
                     if errors > 0:
                         st.warning(f"{errors} categories had errors")
+                        with st.expander("View error details"):
+                            for err in error_details[:50]:
+                                st.text(err)
+                            if len(error_details) > 50:
+                                st.text(f"... and {len(error_details) - 50} more errors")
                     
             except Exception as e:
                 st.error(f"Error: {str(e)}")
