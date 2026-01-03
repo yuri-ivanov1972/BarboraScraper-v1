@@ -41,13 +41,13 @@ class ProductViewDatabase:
         query = """
         SELECT 
             category_id,
-            rimi_category_code,
+            barbora_category_code,
             name_lv,
             name_en,
             level,
             parent_category_id
         FROM normalized_categories
-        ORDER BY rimi_category_code
+        ORDER BY barbora_category_code
         """
         
         with self.connection.cursor() as cursor:
@@ -142,7 +142,7 @@ class ProductViewDatabase:
             p.quantity_value,
             p.quantity_unit,
             p.rimi_url,
-            nc.rimi_category_code,
+            nc.barbora_category_code,
             nc.name_lv as category_name,
             nf.nutri_score_grade,
             nf.carbs_sugars,
@@ -226,7 +226,7 @@ class ProductViewDatabase:
             p.quantity_unit,
             p.rimi_url,
             p.country_of_origin,
-            nc.rimi_category_code,
+            nc.barbora_category_code,
             nc.name_lv as category_name,
             nf.nutri_score_grade,
             nf.nutri_score_points,
@@ -314,7 +314,7 @@ class ProductViewDatabase:
             p.category_id,
             p.quantity_value,
             p.quantity_unit,
-            nc.rimi_category_code,
+            nc.barbora_category_code,
             nc.name_lv as category_name,
             nf.nutri_score_grade,
             nf.carbs_sugars,
