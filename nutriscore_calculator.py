@@ -88,11 +88,97 @@ HALF_FVN_CATEGORIES = {
     'SH-4-12-85'   # Sauces - Tomato sauces and pastes
 }
 
-BARBORA_FAT_CATEGORIES: set[int] = set()
-BARBORA_CHEESE_CATEGORIES: set[int] = set()
-BARBORA_FULL_FVN_CATEGORIES: set[int] = set()
-BARBORA_HALF_FVN_CATEGORIES: set[int] = set()
-BARBORA_BEVERAGE_CATEGORIES: set[int] = set()
+BARBORA_FAT_CATEGORIES: set[int] = {
+    26,   # Citas eļļas
+    28,   # Olīveļļa
+    29,   # Rapšu eļļa
+    30,   # Saulespuķu eļļa
+    323,  # Sviests, margarīns un tauki
+    324,  # Margarīns un tauku maisījumi
+    325,  # Sviests
+}
+
+BARBORA_CHEESE_CATEGORIES: set[int] = {
+    309,  # Cietais siers
+    310,  # Fermentēts siers
+    311,  # Fetas un brinzas siers
+    312,  # Kausētais siers
+    313,  # Kazas un aitas siers
+    314,  # Krēmveida siers
+    315,  # Mascarpone un ricotta siers
+    316,  # Mozzarella un burrata siers
+    317,  # Pelējuma siers
+    318,  # Siers šķēlēs un rīvēts
+    319,  # Uzkodu siers un sieru nūjiņas
+}
+
+BARBORA_FULL_FVN_CATEGORIES: set[int] = {
+    3,    # Avokado
+    4,    # Banāni
+    5,    # Citrusaugļi
+    6,    # Eksotiskie augļi un kauleņi
+    7,    # Melones un arbūzi
+    8,    # Sezoniāli augļi un ogas
+    9,    # Vīnogas un ogas
+    10,   # Āboli un bumbieri
+    12,   # Apstrādāti dārzeņi
+    13,   # Bietes un citi sakņaugi
+    14,   # Garšaugi
+    15,   # Gurķi un tomāti
+    16,   # Kartupeļi, burkāni un kāposti
+    17,   # Kukurūza, zirņi, pupas un sparģeļi
+    18,   # Paprika un baklažāni
+    19,   # Salāti un to maisījumi
+    20,   # Sīpoli, puravi un ķiploki
+    21,   # Ķirbji un cukini
+    120,  # Citi rieksti
+    121,  # Indijas rieksti un pistācijas
+    122,  # Lazdu rieksti un valrieksti
+    123,  # Mandeles
+    124,  # Riekstu maisījumi
+    125,  # Riekstu, žāvētu augļu un ogu maisījums
+    126,  # Sēklas
+    127,  # Zemesrieksti
+    128,  # Žāvēti augļi un ogas
+    342,  # Saldētas ogas
+    343,  # Saldēti dārzeņi, sēnes un to maisījumi
+    344,  # Saldēti kartupeļi
+}
+
+BARBORA_HALF_FVN_CATEGORIES: set[int] = {
+    55,   # Citi konservēti dārzeņi
+    57,   # Konservēta kukurūza
+    58,   # Konservētas bietes
+    59,   # Konservētas ogas un augļi
+    61,   # Konservēti dārzeņu maisījumi
+    62,   # Konservēti gurķi
+    63,   # Konservēti pipari
+    64,   # Konservēti pākšaugi
+    65,   # Konservēti tomāti
+    66,   # Konservēti zaļie zirnīši
+    67,   # Konservēti ēdieni un zupas
+    69,   # Melnās un citas olīvas
+    70,   # Zaļās olīvas
+}
+
+BARBORA_BEVERAGE_CATEGORIES: set[int] = {
+    184,  # Bezalkoholiskais alus un sidrs
+    185,  # Bezalkoholiskais vīns
+    187,  # Enerģijas dzērieni
+    188,  # Izotoniskie dzērieni
+    190,  # Gāzētas limonādes
+    191,  # Kombuča
+    192,  # Kvass
+    193,  # Ledus tējas
+    194,  # Negāzētas limonādes
+    196,  # Nektāri
+    197,  # Smūtiji un augļu kokteiļi
+    198,  # Sulas
+    199,  # Sulu dzērieni
+    200,  # Svaigi spiesta sula
+    202,  # Gāzēts ūdens
+    203,  # Negāzēts ūdens
+}
 
 
 def convert_salt_to_sodium(salt: float) -> float:
