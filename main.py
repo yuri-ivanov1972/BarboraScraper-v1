@@ -387,10 +387,10 @@ def section_category_processing():
                         status_text.text(f"Processing {cat['name_lv']}...")
                         
                         try:
-                            category_path = cat['category_path']
+                            category_path = get_category_path_for_url(cat['category_id'])
                             if not category_path:
                                 errors += 1
-                                error_details.append(f"{cat['name_lv']}: Missing category path")
+                                error_details.append(f"{cat['name_lv']}: Missing category path (ID: {cat['category_id']})")
                                 continue
                                 
                             products = parser.extract_products_from_category(category_path)
