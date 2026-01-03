@@ -370,10 +370,6 @@ def section_category_processing():
                 if not all_l3_categories:
                     st.error("No level 3 categories with valid Barbora codes found")
                 else:
-                    # DEBUG: Limit to first 3 categories for testing
-                    test_categories = all_l3_categories[:3]
-                    st.info(f"DEBUG: Testing with {len(test_categories)} categories (limited from {len(all_l3_categories)})")
-                    
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
@@ -386,14 +382,12 @@ def section_category_processing():
                     errors = 0
                     error_details = []
                     
-                    for i, cat in enumerate(test_categories):
-                        progress_bar.progress((i + 1) / len(test_categories))
+                    for i, cat in enumerate(all_l3_categories):
+                        progress_bar.progress((i + 1) / len(all_l3_categories))
                         status_text.text(f"Processing {cat['name_lv']}...")
                         
                         try:
                             category_path = get_category_path_for_url(cat['category_id'])
-                            st.write(f"DEBUG [{cat['name_lv']}]: path={category_path}")
-                            
                             if not category_path:
                                 errors += 1
                                 error_details.append(f"{cat['name_lv']}: Missing category path (ID: {cat['category_id']})")
@@ -401,7 +395,6 @@ def section_category_processing():
                                 
                             products = parser.extract_products_from_category(category_path)
                             valid_products = [p for p in products if p.sku and p.url]
-                            st.write(f"DEBUG [{cat['name_lv']}]: found {len(products)} products, {len(valid_products)} valid")
                             
                             if valid_products:
                                 cur.execute("""
@@ -436,16 +429,13 @@ def section_category_processing():
                                 errors += 1
                                 error_details.append(f"{cat['name_lv']}: No valid products found (path: {category_path})")
                                 
-                        except psycopg2.IntegrityError as ie:
+                        except psycopg2.IntegrityError:
                             conn.rollback()
                             skipped += 1
-                            st.write(f"DEBUG [{cat['name_lv']}]: IntegrityError - {str(ie)[:100]}")
                         except Exception as e:
                             conn.rollback()
                             errors += 1
-                            import traceback
                             error_msg = f"{type(e).__name__}: {str(e)}"
-                            st.write(f"DEBUG [{cat['name_lv']}]: Exception - {error_msg[:200]}")
                             error_details.append(f"{cat['name_lv']}: {error_msg[:100]}")
                         
                         time.sleep(0.5)
