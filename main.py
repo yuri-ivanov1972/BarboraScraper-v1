@@ -411,7 +411,7 @@ def section_category_processing():
                                     RETURNING id
                                 """, (cat['barbora_category_code'], cat['category_id'], len(valid_products), update_mode))
                                 
-                                job_id = cur.fetchone()[0]
+                                job_id = cur.fetchone()['id']
                                 
                                 import json
                                 for p in valid_products:
