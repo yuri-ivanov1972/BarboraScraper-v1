@@ -1,6 +1,5 @@
 """
-Standalone Nutriscore Calculator Module
-Can be imported and used by other Replit applications for nutrition score calculations.
+Standalone Nutriscore Calculator Module for Barbora products.
 
 Usage:
     from nutriscore_calculator import NutriscoreCalculator
@@ -13,82 +12,14 @@ Usage:
         salt=1.8,
         protein=12.0,
         fiber=5,
-        category_code="SH-2-1-1"
+        category_id=309
     )
     print(f"Nutriscore: {result['grade']} (Score: {result['score']})")
 """
 
 from typing import Dict, Tuple, Any, Optional
 
-# Category mappings for product classification
-FAT_CATEGORIES = {
-    'SH-11-7-16',  # Margarines
-    'SH-11-7-17',  # Butter
-    'SH-11-7-18',  # Butter with additives
-    'SH-11-7-19',  # Fat mixtures
-    'SH-4-3-14',   # Coconut oil
-    'SH-4-3-15',   # Olive oil
-    'SH-4-3-16',   # Rapeseed oil
-    'SH-4-3-17',   # Sunflower oil
-    'SH-4-3-18'    # Special and other oils
-}
-
-CHEESE_CATEGORIES = {
-    'SH-11-9-25',  # Hard cheese
-    'SH-11-9-26',  # Fermented cheese
-    'SH-11-9-27',  # Feta, Mozzarella cheese
-    'SH-11-9-28',  # Processed cheese
-    'SH-11-9-29',  # Goat, sheep cheese
-    'SH-11-9-30',  # Cream cheese
-    'SH-11-9-31',  # Other cheese
-    'SH-11-9-32'   # Blue cheese
-}
-
-FULL_FVN_CATEGORIES = {
-    'SH-12-4-10',  # Frozen fruits and berries
-    'SH-12-4-11',  # Frozen vegetables and mixtures
-    'SH-12-4-12',  # Frozen potatoes
-    'SH-13-9-17',  # Nuts and dried fruits - Others
-    'SH-13-9-18',  # Nuts and dried fruits - Nuts
-    'SH-13-9-20',  # Nuts and dried fruits - Seeds
-    'SH-13-9-21',  # Nuts and dried fruits - Dried fruits and berries
-    'SH-13-9-23',  # Nuts and dried fruits - Dried fruit and nut mixes
-    'SH-2-1-2',    # Fruits - Apples and pears
-    'SH-2-1-3',    # Fruits - Bananas
-    'SH-2-1-4',    # Fruits - Citrus fruits
-    'SH-2-1-5',    # Fruits - Exotic fruits
-    'SH-2-1-6',    # Fruits - Melons and watermelons
-    'SH-2-1-7',    # Fruits - Stone fruits
-    'SH-2-1-9',    # Fruits - Berries
-    'SH-2-2',      # Vegetables
-    'SH-2-2-10',   # Vegetables - Beets and other root vegetables
-    'SH-2-2-12',   # Vegetables - Cucumbers and tomatoes
-    'SH-2-2-13',   # Vegetables - Potatoes and carrots
-    'SH-2-2-14',   # Vegetables - Legumes, corn and asparagus
-    'SH-2-2-16',   # Vegetables - Peppers
-    'SH-2-2-17',   # Vegetables - Processed vegetables
-    'SH-2-2-18',   # Vegetables - Cabbage and lettuce
-    'SH-2-2-19',   # Vegetables - Onions, leeks and garlic
-    'SH-2-2-20',   # Vegetables - Herbs
-    'SH-2-2-9'     # Vegetables - Pumpkins and squash
-}
-
-HALF_FVN_CATEGORIES = {
-    'SH-4-10-55',  # Canned products - Other canned vegetables
-    'SH-4-10-57',  # Canned products - Canned corn
-    'SH-4-10-58',  # Canned products - Canned peppers
-    'SH-4-10-59',  # Canned products - Canned beets
-    'SH-4-10-60',  # Canned products - Canned olives
-    'SH-4-10-62',  # Canned products - Canned fruits and berries
-    'SH-4-10-63',  # Canned products - Canned purees
-    'SH-4-10-65',  # Canned products - Canned cucumbers
-    'SH-4-10-66',  # Canned products - Canned legumes
-    'SH-4-10-67',  # Canned products - Canned tomatoes
-    'SH-4-10-68',  # Canned products - Canned peas
-    'SH-4-12-85'   # Sauces - Tomato sauces and pastes
-}
-
-BARBORA_FAT_CATEGORIES: set[int] = {
+FAT_CATEGORIES: set[int] = {
     26,   # Citas eļļas
     28,   # Olīveļļa
     29,   # Rapšu eļļa
@@ -98,7 +29,7 @@ BARBORA_FAT_CATEGORIES: set[int] = {
     325,  # Sviests
 }
 
-BARBORA_CHEESE_CATEGORIES: set[int] = {
+CHEESE_CATEGORIES: set[int] = {
     309,  # Cietais siers
     310,  # Fermentēts siers
     311,  # Fetas un brinzas siers
@@ -112,7 +43,7 @@ BARBORA_CHEESE_CATEGORIES: set[int] = {
     319,  # Uzkodu siers un sieru nūjiņas
 }
 
-BARBORA_FULL_FVN_CATEGORIES: set[int] = {
+FULL_FVN_CATEGORIES: set[int] = {
     3,    # Avokado
     4,    # Banāni
     5,    # Citrusaugļi
@@ -145,7 +76,7 @@ BARBORA_FULL_FVN_CATEGORIES: set[int] = {
     344,  # Saldēti kartupeļi
 }
 
-BARBORA_HALF_FVN_CATEGORIES: set[int] = {
+HALF_FVN_CATEGORIES: set[int] = {
     55,   # Citi konservēti dārzeņi
     57,   # Konservēta kukurūza
     58,   # Konservētas bietes
@@ -161,7 +92,7 @@ BARBORA_HALF_FVN_CATEGORIES: set[int] = {
     70,   # Zaļās olīvas
 }
 
-BARBORA_BEVERAGE_CATEGORIES: set[int] = {
+BEVERAGE_CATEGORIES: set[int] = {
     184,  # Bezalkoholiskais alus un sidrs
     185,  # Bezalkoholiskais vīns
     187,  # Enerģijas dzērieni
@@ -187,7 +118,7 @@ def convert_salt_to_sodium(salt: float) -> float:
 
 
 def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float, 
-                        sodium: float, protein: float, fiber: int = 0, 
+                        sodium: float, protein: float, fiber: float = 0, 
                         fruits_veg_nuts: int = 0, is_beverage: bool = False, 
                         is_fat: bool = False, is_cheese: bool = False) -> Tuple[int, str, Dict[str, int]]:
     """
@@ -209,7 +140,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     - tuple: (numeric_score, letter_grade, component_scores)
     """
     
-    # Energy points (kJ/100g)
     if energy_kj <= 335:
         energy_points = 0
     elif energy_kj <= 670:
@@ -233,7 +163,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     else:
         energy_points = 10
     
-    # Sugars points (g/100g)
     if sugars <= 4.5:
         sugars_points = 0
     elif sugars <= 9:
@@ -257,7 +186,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     else:
         sugars_points = 10
     
-    # Saturated fat points (g/100g)
     if saturated_fat <= 1:
         saturated_fat_points = 0
     elif saturated_fat <= 2:
@@ -281,7 +209,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     else:
         saturated_fat_points = 10
     
-    # Sodium points (mg/100g)
     if sodium <= 90:
         sodium_points = 0
     elif sodium <= 180:
@@ -305,7 +232,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     else:
         sodium_points = 10
     
-    # Fiber points (g/100g)
     if fiber <= 0.9:
         fiber_points = 0
     elif fiber <= 1.9:
@@ -319,7 +245,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     else:
         fiber_points = 5
     
-    # Protein points (g/100g)
     if protein <= 1.6:
         protein_points = 0
     elif protein <= 3.2:
@@ -333,7 +258,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     else:
         protein_points = 5
     
-    # Fruits, vegetables, nuts points (%)
     if fruits_veg_nuts <= 40:
         fvn_points = 0
     elif fruits_veg_nuts <= 60:
@@ -343,15 +267,11 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
     else:
         fvn_points = 5
     
-    # Calculate total negative and positive points
     negative_points = energy_points + sugars_points + saturated_fat_points + sodium_points
     positive_points = fiber_points + protein_points + fvn_points
     
-    # Special rules for different product types
     if is_beverage:
-        # For beverages, only water and fiber count as positive points
         positive_points = fiber_points
-        # Different thresholds for beverages
         final_score = negative_points - positive_points
         
         if final_score <= 1:
@@ -363,9 +283,7 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
         else:
             grade = 'E'
     else:
-        # For regular foods
         if is_fat or is_cheese:
-            # For fats and cheese, protein points are only awarded if negative points are >= 11
             if negative_points < 11:
                 positive_points = fiber_points + fvn_points
             else:
@@ -373,7 +291,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
         
         final_score = negative_points - positive_points
         
-        # Determine grade based on final score
         if final_score <= -1:
             grade = 'A'
         elif final_score <= 2:
@@ -385,7 +302,6 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
         else:
             grade = 'E'
     
-    # Component breakdown for debugging
     components = {
         'negative_points': negative_points,
         'positive_points': positive_points,
@@ -402,26 +318,18 @@ def calculate_nutriscore(energy_kj: float, sugars: float, saturated_fat: float,
 
 
 class NutriscoreCalculator:
-    """
-    Standalone calculator for Nutri-Score calculations.
-    Can be used by other Replit applications.
-    """
+    """Standalone calculator for Nutri-Score calculations."""
     
     def __init__(self):
         self.fat_categories = FAT_CATEGORIES
         self.cheese_categories = CHEESE_CATEGORIES
         self.full_fvn_categories = FULL_FVN_CATEGORIES
         self.half_fvn_categories = HALF_FVN_CATEGORIES
-        self.barbora_fat_categories = BARBORA_FAT_CATEGORIES
-        self.barbora_cheese_categories = BARBORA_CHEESE_CATEGORIES
-        self.barbora_full_fvn_categories = BARBORA_FULL_FVN_CATEGORIES
-        self.barbora_half_fvn_categories = BARBORA_HALF_FVN_CATEGORIES
-        self.barbora_beverage_categories = BARBORA_BEVERAGE_CATEGORIES
+        self.beverage_categories = BEVERAGE_CATEGORIES
     
     def calculate_single_product(self, energy_kj: float, sugars: float, 
                                saturated_fat: float, salt: float, protein: float,
                                fiber: float = 0, fruits_veg_nuts: int = 0,
-                               category_code: Optional[str] = None,
                                category_id: Optional[int] = None) -> Dict[str, Any]:
         """
         Calculate nutriscore for a single product.
@@ -434,39 +342,27 @@ class NutriscoreCalculator:
             protein: Protein in g/100g
             fiber: Fiber in g/100g (optional, default: 0)
             fruits_veg_nuts: % fruits/vegetables/nuts (optional, default: 0)
-            category_code: Product category code for Rimi (optional, string like 'SH-x-x-x')
-            category_id: Product category ID for Barbora (optional, integer)
+            category_id: Product category ID (optional, integer)
         
         Returns:
             Dictionary with score, grade, and detailed breakdown
         """
         try:
-            # Convert salt to sodium
             sodium = convert_salt_to_sodium(salt)
             
-            # Determine product classification - check Barbora category_id first, then Rimi category_code
             if category_id is not None:
-                is_beverage = category_id in self.barbora_beverage_categories
-                is_fat = category_id in self.barbora_fat_categories
-                is_cheese = category_id in self.barbora_cheese_categories
-                if category_id in self.barbora_full_fvn_categories:
+                is_beverage = category_id in self.beverage_categories
+                is_fat = category_id in self.fat_categories
+                is_cheese = category_id in self.cheese_categories
+                if category_id in self.full_fvn_categories:
                     fruits_veg_nuts = 100
-                elif category_id in self.barbora_half_fvn_categories:
-                    fruits_veg_nuts = 50
-            elif category_code:
-                is_beverage = category_code.startswith('SH-5')
-                is_fat = category_code in self.fat_categories
-                is_cheese = category_code in self.cheese_categories
-                if category_code in self.full_fvn_categories:
-                    fruits_veg_nuts = 100
-                elif category_code in self.half_fvn_categories:
+                elif category_id in self.half_fvn_categories:
                     fruits_veg_nuts = 50
             else:
                 is_beverage = False
                 is_fat = False
                 is_cheese = False
             
-            # Calculate nutriscore
             score, grade, components = calculate_nutriscore(
                 energy_kj=energy_kj,
                 sugars=sugars,
