@@ -1,0 +1,26 @@
+~/workspace$ python worker.py --resume-all --heartbeat-interval 30 --chunk-size 3 --max-workers 1
+2026-01-03 14:05:34,377 - __main__ - INFO - Worker 939e42035e28_3784_1767449134 initialized, log file: logs/worker_939e42035e28_3784_1767449134_20260103_140534.log
+2026-01-03 14:05:34,377 - __main__ - INFO - ============================================================
+2026-01-03 14:05:34,377 - __main__ - INFO - 🔧 DEVELOPMENT MODE: Using development database
+2026-01-03 14:05:34,377 - __main__ - INFO - ============================================================
+2026-01-03 14:05:34,377 - __main__ - INFO - Worker 939e42035e28_3784_1767449134 starting in resume-all mode
+2026-01-03 14:05:37,201 - __main__ - INFO - Worker registered: 939e42035e28_3784_1767449134 on 939e42035e28 (PID: 3784)
+2026-01-03 14:05:40,172 - __main__ - INFO - Acquired job #4: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2 (priority: 5)
+2026-01-03 14:05:40,583 - __main__ - INFO - 💾 Initial memory usage: 46.5 MB
+2026-01-03 14:05:40,583 - __main__ - INFO - Processing job #4: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+2026-01-03 14:05:40,943 - __main__ - INFO - 📌 Job category: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2 (fallback for invalid extracted categories)
+2026-01-03 14:05:41,307 - __main__ - INFO - 🔄 Incremental mode: classifying 14 SKUs...
+2026-01-03 14:05:41,668 - __main__ - INFO - ❌ Error during chunked processing: column "rimi_category_code" does not exist
+LINE 7:                     WHERE rimi_category_code = '02c640fc-7b5...
+                                  ^
+
+🔧 BATCH: Closed 0 reused coordinators
+2026-01-03 14:05:44,146 - __main__ - INFO - Batch processor closed 0 coordinator connections
+2026-01-03 14:05:44,542 - __main__ - INFO - Job #4 completed: 0/14 successful
+2026-01-03 14:05:44,903 - __main__ - INFO - No more jobs in queue, exiting
+2026-01-03 14:05:44,903 - __main__ - INFO - Shutting down worker...
+2026-01-03 14:05:45,300 - __main__ - INFO - Worker 939e42035e28_3784_1767449134 shutdown complete
+~/workspace$ 
+
+
+
