@@ -17,6 +17,7 @@ import re
 
 from barbora_parser import BarboraParser
 from nutriscore_calculator import NutriscoreCalculator
+from ingredient_processor import IngredientProcessor
 
 
 def normalize_latvian_text(text: str) -> str:
@@ -71,6 +72,9 @@ class BarboraWorker:
             logger.info("NutriscoreCalculator initialized with category mappings from database")
         finally:
             init_conn.close()
+        
+        self.ingredient_processor = IngredientProcessor(status_callback=lambda msg: logger.info(msg))
+        logger.info("IngredientProcessor initialized")
         
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -244,6 +248,13 @@ class BarboraWorker:
                     product_id = self.save_product(product_data, category_id, product_url)
                     if product_id and product_record.get('price') is not None:
                         self.save_price_history_from_listing(product_id, product_record)
+                    
+                    if product_id and product_data.ingredients:
+                        try:
+                            self.ingredient_processor.process_product_ingredients(sku, product_data.ingredients)
+                        except Exception as ing_err:
+                            logger.warning(f"Ingredient processing failed for {sku}: {ing_err}")
+                    
                     self.update_sku_status(job_id, sku, 'completed')
                     logger.info(f"Processed: {sku} - {product_data.name[:50] if product_data.name else 'Unknown'}")
                 else:
@@ -550,23 +561,35 @@ class BarboraWorker:
         """Main worker loop"""
         logger.info(f"Worker {self.worker_id} starting...")
         
-        while self.running:
-            job = self.claim_job()
-            
-            if job:
-                try:
-                    self.process_job(job)
-                except Exception as e:
-                    logger.error(f"Job processing error: {e}")
-                    self.complete_job(job['id'], 'failed', str(e)[:500])
-            else:
-                if single_run:
-                    logger.info("No jobs found, exiting (single-run mode)")
-                    break
-                logger.info("No jobs in queue, waiting 30s...")
-                time.sleep(30)
+        try:
+            while self.running:
+                job = self.claim_job()
+                
+                if job:
+                    try:
+                        self.process_job(job)
+                    except Exception as e:
+                        logger.error(f"Job processing error: {e}")
+                        self.complete_job(job['id'], 'failed', str(e)[:500])
+                else:
+                    if single_run:
+                        logger.info("No jobs found, exiting (single-run mode)")
+                        break
+                    logger.info("No jobs in queue, waiting 30s...")
+                    time.sleep(30)
+        finally:
+            self._cleanup()
         
         logger.info("Worker stopped")
+    
+    def _cleanup(self):
+        """Clean up resources before shutdown"""
+        try:
+            if self.ingredient_processor:
+                self.ingredient_processor.close()
+                logger.info("IngredientProcessor closed")
+        except Exception as e:
+            logger.warning(f"Error closing IngredientProcessor: {e}")
 
 
 def main():
