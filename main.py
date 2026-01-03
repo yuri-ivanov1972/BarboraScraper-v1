@@ -436,13 +436,17 @@ def section_category_processing():
                                 errors += 1
                                 error_details.append(f"{cat['name_lv']}: No valid products found (path: {category_path})")
                                 
-                        except psycopg2.IntegrityError:
+                        except psycopg2.IntegrityError as ie:
                             conn.rollback()
                             skipped += 1
+                            st.write(f"DEBUG [{cat['name_lv']}]: IntegrityError - {str(ie)[:100]}")
                         except Exception as e:
                             conn.rollback()
                             errors += 1
-                            error_details.append(f"{cat['name_lv']}: {str(e)[:100]}")
+                            import traceback
+                            error_msg = f"{type(e).__name__}: {str(e)}"
+                            st.write(f"DEBUG [{cat['name_lv']}]: Exception - {error_msg[:200]}")
+                            error_details.append(f"{cat['name_lv']}: {error_msg[:100]}")
                         
                         time.sleep(0.5)
                     
