@@ -1,0 +1,453 @@
+~/workspace$ python worker.py --resume-all --heartbeat-interval 30 --chunk-size 3 --max-workers 1
+2026-01-03 14:12:35,613 - __main__ - INFO - Worker 939e42035e28_4749_1767449555 initialized, log file: logs/worker_939e42035e28_4749_1767449555_20260103_141235.log
+2026-01-03 14:12:35,613 - __main__ - INFO - ============================================================
+2026-01-03 14:12:35,613 - __main__ - INFO - 🔧 DEVELOPMENT MODE: Using development database
+2026-01-03 14:12:35,613 - __main__ - INFO - ============================================================
+2026-01-03 14:12:35,614 - __main__ - INFO - Worker 939e42035e28_4749_1767449555 starting in resume-all mode
+2026-01-03 14:12:36,123 - __main__ - INFO - Worker registered: 939e42035e28_4749_1767449555 on 939e42035e28 (PID: 4749)
+2026-01-03 14:12:37,006 - __main__ - WARNING - Acquired stale job #4 (previous worker: 939e42035e28_3784_1767449134)
+2026-01-03 14:12:37,808 - __main__ - INFO - 💾 Initial memory usage: 45.5 MB
+2026-01-03 14:12:37,809 - __main__ - INFO - Processing job #4: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+2026-01-03 14:12:38,159 - __main__ - INFO - 📌 Job category: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2 (fallback for invalid extracted categories)
+2026-01-03 14:12:38,525 - __main__ - INFO - 🔄 Incremental mode: classifying 14 SKUs...
+2026-01-03 14:12:38,898 - __main__ - INFO -   ✨ New products: 14 (will do full scrape)
+2026-01-03 14:12:38,898 - __main__ - INFO -   🔄 Existing products: 0 (price update from listing)
+2026-01-03 14:12:38,898 - __main__ - INFO -   ❌ Removed products: 0 (mark inactive)
+2026-01-03 14:12:38,898 - __main__ - INFO - 📦 Processing 14 NEW products in chunks of 3
+2026-01-03 14:12:38,898 - __main__ - INFO - 
+🔄 Chunk 1: Processing 3 products (SKUs 1-3)
+2026-01-03 14:12:40,080 - __main__ - INFO - Starting batch processing of 3 products
+🚀 BATCH: Starting thread processing for 000000000000442958
+🔄 BATCH: Processing product 000000000000442958
+🔄 BATCH: Using automatic category extraction for 000000000000442958
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+[COORDINATOR] 🔧 COORDINATOR: Initializing components (attempt 1/3)
+[COORDINATOR] 🔧 COORDINATOR: Importing RobustWebClient...
+[COORDINATOR] 🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...
+[COORDINATOR] 🔧 COORDINATOR: Creating RobustWebClient instance...
+[COORDINATOR] 🔧 COORDINATOR: Web client created: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...
+[COORDINATOR] Connected to DEVELOPMENT (DATABASE_URL) database: neondb @ 169.254.254.254:5432
+[COORDINATOR] 🔧 COORDINATOR: DB updater created: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] ✅ COORDINATOR: Enhanced coordinator initialized with robust components
+🔧 BATCH: Created reusable enhanced coordinator for thread 139977957570240
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000000442958 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000000442958)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000442958
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000442958
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000442958
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000000442958
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000000442958
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000000442958
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000000442958
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000000442958
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000000442958
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000000442958
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000000442958
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000000442958
+[COORDINATOR] Product SKU 000000000000442958 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000000442958...
+🔍 BATCH: Success status for 000000000000442958: False
+❌ BATCH: 000000000000442958 failed with error: Processing failed
+❌ BATCH: 000000000000442958 detailed errors: ['Product not found on website']
+🚀 BATCH: Starting thread processing for 000000000000456204
+🔄 BATCH: Processing product 000000000000456204
+🔄 BATCH: Using automatic category extraction for 000000000000456204
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000000456204 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000000456204)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000456204
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000456204
+2026-01-03 14:12:44,475 - __main__ - INFO - ✗ 000000000000442958 failed: Processing failed
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000456204
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000000456204
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000000456204
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000000456204
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000000456204
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000000456204
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000000456204
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000000456204
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000000456204
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000000456204
+[COORDINATOR] Product SKU 000000000000456204 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000000456204...
+🔍 BATCH: Success status for 000000000000456204: False
+❌ BATCH: 000000000000456204 failed with error: Processing failed
+❌ BATCH: 000000000000456204 detailed errors: ['Product not found on website']
+🚀 BATCH: Starting thread processing for 000000000000477632
+🔄 BATCH: Processing product 000000000000477632
+🔄 BATCH: Using automatic category extraction for 000000000000477632
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-0_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000000477632 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-0_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000000477632)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000477632
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000477632
+2026-01-03 14:12:48,402 - __main__ - INFO - ✗ 000000000000456204 failed: Processing failed
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000477632
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000000477632
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000000477632
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000000477632
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000000477632
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000000477632
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000000477632
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000000477632
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000000477632
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000000477632
+[COORDINATOR] Product SKU 000000000000477632 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000000477632...
+🔍 BATCH: Success status for 000000000000477632: False
+❌ BATCH: 000000000000477632 failed with error: Processing failed
+❌ BATCH: 000000000000477632 detailed errors: ['Product not found on website']
+2026-01-03 14:12:52,309 - __main__ - INFO - ✗ 000000000000477632 failed: Processing failed
+[COORDINATOR] Database connection closed
+[COORDINATOR] Enhanced coordinator closed
+🔧 BATCH: Closed 1 reused coordinators
+2026-01-03 14:12:52,310 - __main__ - INFO - Batch processor closed 1 coordinator connections
+2026-01-03 14:12:52,310 - __main__ - INFO - Batch processing completed: 0 successful, 3 failed
+2026-01-03 14:12:53,950 - __main__ - INFO - ✓ Chunk 1 completed in 15.1s (0/3 successful)
+2026-01-03 14:12:53,950 - __main__ - INFO - 💾 Memory after chunk: 47.4 MB (Δ+2.0 MB)
+2026-01-03 14:12:54,450 - __main__ - INFO - 
+🔄 Chunk 2: Processing 3 products (SKUs 4-6)
+2026-01-03 14:12:55,697 - __main__ - INFO - Starting batch processing of 3 products
+🚀 BATCH: Starting thread processing for 000000000000511639
+🔄 BATCH: Processing product 000000000000511639
+🔄 BATCH: Using automatic category extraction for 000000000000511639
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-1_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+[COORDINATOR] 🔧 COORDINATOR: Initializing components (attempt 1/3)
+[COORDINATOR] 🔧 COORDINATOR: Importing RobustWebClient...
+[COORDINATOR] 🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...
+[COORDINATOR] 🔧 COORDINATOR: Creating RobustWebClient instance...
+[COORDINATOR] 🔧 COORDINATOR: Web client created: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...
+[COORDINATOR] Connected to DEVELOPMENT (DATABASE_URL) database: neondb @ 169.254.254.254:5432
+[COORDINATOR] 🔧 COORDINATOR: DB updater created: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] ✅ COORDINATOR: Enhanced coordinator initialized with robust components
+🔧 BATCH: Created reusable enhanced coordinator for thread 139977957570240
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000000511639 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-1_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000000511639)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000511639
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000511639
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000511639
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000000511639
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000000511639
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000000511639
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000000511639
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000000511639
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000000511639
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000000511639
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000000511639
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000000511639
+[COORDINATOR] Product SKU 000000000000511639 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000000511639...
+🔍 BATCH: Success status for 000000000000511639: False
+❌ BATCH: 000000000000511639 failed with error: Processing failed
+❌ BATCH: 000000000000511639 detailed errors: ['Product not found on website']
+🚀 BATCH: Starting thread processing for 000000000000709236
+🔄 BATCH: Processing product 000000000000709236
+🔄 BATCH: Using automatic category extraction for 000000000000709236
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-1_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000000709236 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-1_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000000709236)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000709236
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000709236
+2026-01-03 14:13:00,781 - __main__ - INFO - ✗ 000000000000511639 failed: Processing failed
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000709236
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000000709236
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000000709236
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000000709236
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000000709236
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000000709236
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000000709236
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000000709236
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000000709236
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000000709236
+[COORDINATOR] Product SKU 000000000000709236 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000000709236...
+🔍 BATCH: Success status for 000000000000709236: False
+❌ BATCH: 000000000000709236 failed with error: Processing failed
+❌ BATCH: 000000000000709236 detailed errors: ['Product not found on website']
+🚀 BATCH: Starting thread processing for 000000000000800713
+🔄 BATCH: Processing product 000000000000800713
+🔄 BATCH: Using automatic category extraction for 000000000000800713
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-1_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000000800713 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-1_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000000800713)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000800713
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000800713
+2026-01-03 14:13:05,672 - __main__ - INFO - ✗ 000000000000709236 failed: Processing failed
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000800713
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000000800713
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000000800713
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000000800713
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000000800713
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000000800713
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000000800713
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000000800713
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000000800713
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000000800713
+[COORDINATOR] Product SKU 000000000000800713 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000000800713...
+🔍 BATCH: Success status for 000000000000800713: False
+❌ BATCH: 000000000000800713 failed with error: Processing failed
+❌ BATCH: 000000000000800713 detailed errors: ['Product not found on website']
+2026-01-03 14:13:10,746 - __main__ - INFO - ✗ 000000000000800713 failed: Processing failed
+[COORDINATOR] Database connection closed
+[COORDINATOR] Enhanced coordinator closed
+🔧 BATCH: Closed 1 reused coordinators
+2026-01-03 14:13:10,748 - __main__ - INFO - Batch processor closed 1 coordinator connections
+2026-01-03 14:13:10,748 - __main__ - INFO - Batch processing completed: 0 successful, 3 failed
+2026-01-03 14:13:12,370 - __main__ - INFO - ✓ Chunk 2 completed in 17.9s (0/3 successful)
+2026-01-03 14:13:12,370 - __main__ - INFO - 💾 Memory after chunk: 47.4 MB (Δ+2.0 MB)
+2026-01-03 14:13:12,871 - __main__ - INFO - 
+🔄 Chunk 3: Processing 3 products (SKUs 7-9)
+2026-01-03 14:13:14,091 - __main__ - INFO - Starting batch processing of 3 products
+🚀 BATCH: Starting thread processing for 000000000000869711
+🔄 BATCH: Processing product 000000000000869711
+🔄 BATCH: Using automatic category extraction for 000000000000869711
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-2_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+[COORDINATOR] 🔧 COORDINATOR: Initializing components (attempt 1/3)
+[COORDINATOR] 🔧 COORDINATOR: Importing RobustWebClient...
+[COORDINATOR] 🔧 COORDINATOR: Importing EnhancedDatabaseUpdater...
+[COORDINATOR] 🔧 COORDINATOR: Creating RobustWebClient instance...
+[COORDINATOR] 🔧 COORDINATOR: Web client created: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔧 COORDINATOR: Creating EnhancedDatabaseUpdater instance...
+[COORDINATOR] Connected to DEVELOPMENT (DATABASE_URL) database: neondb @ 169.254.254.254:5432
+[COORDINATOR] 🔧 COORDINATOR: DB updater created: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] ✅ COORDINATOR: Enhanced coordinator initialized with robust components
+🔧 BATCH: Created reusable enhanced coordinator for thread 139977957570240
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000000869711 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-2_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000000869711)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000869711
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000869711
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000000869711
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000000869711
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000000869711
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000000869711
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000000869711
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000000869711
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000000869711
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000000869711
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000000869711
+^C2026-01-03 14:13:18,594 - __main__ - INFO - Received signal 2, initiating graceful shutdown...
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000000869711
+[COORDINATOR] Product SKU 000000000000869711 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000000869711...
+🔍 BATCH: Success status for 000000000000869711: False
+❌ BATCH: 000000000000869711 failed with error: Processing failed
+❌ BATCH: 000000000000869711 detailed errors: ['Product not found on website']
+🚀 BATCH: Starting thread processing for 000000000001050976
+🔄 BATCH: Processing product 000000000001050976
+🔄 BATCH: Using automatic category extraction for 000000000001050976
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-2_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000001050976 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-2_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000001050976)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000001050976
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000001050976
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/produkti/p/000000000001050976
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/products/000000000001050976
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/products/000000000001050976
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/lv/products/000000000001050976
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/en/products/000000000001050976
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/en/products/000000000001050976
+[COORDINATOR] Product not found (404): https://www.rimi.lv/e-veikals/en/products/000000000001050976
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/products/000000000001050976
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/products/000000000001050976
+^C2026-01-03 14:13:21,752 - __main__ - INFO - Received signal 2, initiating graceful shutdown...
+2026-01-03 14:13:21,753 - __main__ - INFO - ⚠️ Processing interrupted by user - progress saved
+2026-01-03 14:13:22,210 - __main__ - INFO - Shutting down worker...
+[COORDINATOR] Product not found (404): https://www.rimi.lv/products/000000000001050976
+[COORDINATOR] Product SKU 000000000001050976 not found with any URL pattern
+[COORDINATOR] 🔍 COORDINATOR: Product data result: <class 'NoneType'>, keys: None
+[COORDINATOR] ❌ COORDINATOR: Product not found on website
+🔄 BATCH: Processing completed, result type: <class 'enhanced_update_coordinator.ProcessingResult'>
+🔄 BATCH: Result success: False
+🔄 BATCH: Result errors: ['Product not found on website']
+🔄 BATCH: Coordinator reused successfully (not closing)
+🔍 BATCH: Checking result for 000000000001050976...
+🔍 BATCH: Success status for 000000000001050976: False
+❌ BATCH: 000000000001050976 failed with error: Processing failed
+❌ BATCH: 000000000001050976 detailed errors: ['Product not found on website']
+🚀 BATCH: Starting thread processing for 000000000001114729
+🔄 BATCH: Processing product 000000000001114729
+🔄 BATCH: Using automatic category extraction for 000000000001114729
+🔄 BATCH: Fallback category if extraction fails: 02c640fc-7b5c-46b0-b204-ffc9f8cd39d2
+🔄 BATCH: Thread ID: 139977957570240
+🔄 BATCH: Thread name: ThreadPoolExecutor-2_0
+🔄 BATCH: Getting reusable enhanced coordinator...
+🔄 BATCH: Calling process_single_product_with_auto_category (force_update=False)...
+[COORDINATOR] 🔄 COORDINATOR: Processing product 000000000001114729 with automatic category extraction
+[COORDINATOR] 🔄 COORDINATOR: Thread ID: 139977957570240
+[COORDINATOR] 🔄 COORDINATOR: Thread name: ThreadPoolExecutor-2_0
+[COORDINATOR] 🔄 COORDINATOR: Step 1: Fetching product data for category extraction...
+[COORDINATOR] 🔍 COORDINATOR: Checking component initialization...
+[COORDINATOR] 🔍 COORDINATOR: Web client: <class 'robust_web_client.RobustWebClient'>
+[COORDINATOR] 🔍 COORDINATOR: DB updater: <class 'enhanced_database_updater.EnhancedDatabaseUpdater'>
+[COORDINATOR] 🔄 COORDINATOR: Calling web_client.get_product_data(000000000001114729)...
+[COORDINATOR] Trying URL pattern: https://www.rimi.lv/e-veikals/lv/produkti/p/000000000001114729
+[COORDINATOR] Attempt 1/3: Fetching https://www.rimi.lv/e-veikals/lv/produkti/p/000000000001114729
+2026-01-03 14:13:22,611 - __main__ - INFO - Worker 939e42035e28_4749_1767449555 shutdown complete
+Traceback (most recent call last):
+  File "/home/runner/workspace/batch_processor.py", line 176, in process_product_batch
+    for future in as_completed(future_to_product):
+  File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/concurrent/futures/_base.py", line 243, in as_completed
+    waiter.event.wait(wait_timeout)
+  File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 629, in wait
+    signaled = self._cond.wait(timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 327, in wait
+    waiter.acquire()
+  File "/home/runner/workspace/worker.py", line 94, in _signal_handler
+    raise KeyboardInterrupt("Shutdown signal received")
+KeyboardInterrupt: Shutdown signal received
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/workspace/worker.py", line 580, in <module>
+    main()
+  File "/home/runner/workspace/worker.py", line 566, in main
+    worker.run(mode='resume-all')
+  File "/home/runner/workspace/worker.py", line 481, in run
+    self.process_job(job)
+  File "/home/runner/workspace/worker.py", line 342, in process_job
+    results = processor.process_sku_list_chunked(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/batch_processor.py", line 437, in process_sku_list_chunked
+    chunk_results = self.process_product_batch(products, None, force_update=force_update, fallback_category_code=job_category_code)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/batch_processor.py", line 170, in process_product_batch
+    with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+  File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/concurrent/futures/_base.py", line 647, in __exit__
+    self.shutdown(wait=True)
+  File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/concurrent/futures/thread.py", line 235, in shutdown
+    t.join()
+  File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 1119, in join
+    self._wait_for_tstate_lock()
+  File "/nix/store/7d088dip86hlzri9sk0h78b63yfmx0a0-python3-3.11.13/lib/python3.11/threading.py", line 1139, in _wait_for_tstate_lock
+    if lock.acquire(block, timeout):
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/workspace/worker.py", line 94, in _signal_handler
+    raise KeyboardInterrupt("Shutdown signal received")
+KeyboardInterrupt: Shutdown signal received
