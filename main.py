@@ -1038,24 +1038,17 @@ def section_nutriscore_recalculation():
     This will update the `nutri_score_grade` and `nutri_score_points` in the database.
     """)
     
-    from nutriscore_calculator import NutriscoreCalculator, FAT_CATEGORIES, CHEESE_CATEGORIES, FULL_FVN_CATEGORIES, HALF_FVN_CATEGORIES
+    from nutriscore_calculator import NutriscoreCalculator, FAT_UUIDS, CHEESE_UUIDS, FULL_FVN_UUIDS, HALF_FVN_UUIDS, BEVERAGE_UUIDS
     
-    with st.expander("📋 Current Category Mappings", expanded=False):
+    with st.expander("📋 Current Category Mappings (UUIDs)", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
-            st.write("**Fat Categories:**")
-            for cat in sorted(FAT_CATEGORIES):
-                st.caption(cat)
-            st.write("**Cheese Categories:**")
-            for cat in sorted(CHEESE_CATEGORIES):
-                st.caption(cat)
+            st.write(f"**Fat Categories:** {len(FAT_UUIDS)} UUIDs")
+            st.write(f"**Cheese Categories:** {len(CHEESE_UUIDS)} UUIDs")
+            st.write(f"**Beverage Categories:** {len(BEVERAGE_UUIDS)} UUIDs")
         with col2:
-            st.write("**100% Fruits/Veg/Nuts:**")
-            for cat in sorted(FULL_FVN_CATEGORIES):
-                st.caption(cat)
-            st.write("**50% Fruits/Veg/Nuts:**")
-            for cat in sorted(HALF_FVN_CATEGORIES):
-                st.caption(cat)
+            st.write(f"**100% Fruits/Veg/Nuts:** {len(FULL_FVN_UUIDS)} UUIDs")
+            st.write(f"**50% Fruits/Veg/Nuts:** {len(HALF_FVN_UUIDS)} UUIDs")
     
     mode = st.radio(
         "Recalculation Mode:",
@@ -1280,7 +1273,8 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
         if product.get(field) is None:
             return {'success': False, 'skipped': True, 'message': f'Missing required field: {field}'}
     
-    calculator = NutriscoreCalculator()
+    db._ensure_connection()
+    calculator = NutriscoreCalculator(db.connection)
     
     try:
         fiber_value = product.get('fiber')
@@ -1293,7 +1287,7 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
             salt=float(product['salt']),
             protein=float(product['protein']),
             fiber=fiber_float,
-            category_code=product.get('category_code')
+            category_id=product.get('category_id')
         )
         
         if result['success']:
@@ -1320,7 +1314,7 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
                 'details': {
                     'sku': product['sku'],
                     'name': product['name'],
-                    'category_code': product.get('category_code'),
+                    'category_id': product.get('category_id'),
                     'old_grade': old_grade,
                     'old_score': old_score,
                     'new_grade': new_grade,

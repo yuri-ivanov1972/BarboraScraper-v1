@@ -24,10 +24,10 @@ class DatabaseUpdater:
         self.db_config = db_config
         self.db_url = db_config.products_db_url
         
-        self.nutri_calculator = NutriscoreCalculator()
         self.ingredient_processor = None
         self.conn = None
         self._connect()
+        self.nutri_calculator = NutriscoreCalculator(self.conn)
     
     def _connect(self):
         """Establish database connection with retry logic"""

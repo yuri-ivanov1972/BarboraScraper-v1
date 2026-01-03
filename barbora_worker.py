@@ -64,7 +64,13 @@ class BarboraWorker:
         self.running = True
         self.db_url = os.environ['DATABASE_URL']
         self.parser = BarboraParser(status_callback=lambda msg: logger.info(msg))
-        self.nutriscore_calculator = NutriscoreCalculator()
+        
+        init_conn = psycopg2.connect(self.db_url)
+        try:
+            self.nutriscore_calculator = NutriscoreCalculator(init_conn)
+            logger.info("NutriscoreCalculator initialized with category mappings from database")
+        finally:
+            init_conn.close()
         
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
