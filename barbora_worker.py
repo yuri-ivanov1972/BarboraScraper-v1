@@ -293,20 +293,30 @@ class BarboraWorker:
                 nutri_score_grade = None
                 
                 n = product.nutrition
-                if n.energy_kj is not None and n.sugars is not None and n.saturated_fat is not None and n.salt is not None and n.protein is not None:
+                if n.energy_kj is not None:
                     result = self.nutriscore_calculator.calculate_single_product(
-                        energy_kj=n.energy_kj or 0,
-                        sugars=n.sugars or 0,
-                        saturated_fat=n.saturated_fat or 0,
-                        salt=n.salt or 0,
-                        protein=n.protein or 0,
-                        fiber=n.fiber or 0,
+                        energy_kj=n.energy_kj,
+                        sugars=n.sugars if n.sugars is not None else 0,
+                        saturated_fat=n.saturated_fat if n.saturated_fat is not None else 0,
+                        salt=n.salt if n.salt is not None else 0,
+                        protein=n.protein if n.protein is not None else 0,
+                        fiber=n.fiber if n.fiber is not None else 0,
                         category_id=category_id
                     )
                     if result.get('success'):
                         nutri_score_points = result['score']
                         nutri_score_grade = result['grade']
                         logger.debug(f"Nutri-Score: {nutri_score_grade} ({nutri_score_points} pts)")
+                
+                energy_kj = n.energy_kj
+                energy_kcal = n.energy_kcal
+                fat_total = n.fat if n.fat is not None else (0 if energy_kj is not None else None)
+                fat_saturated = n.saturated_fat if n.saturated_fat is not None else (0 if energy_kj is not None else None)
+                carbs_total = n.carbohydrates if n.carbohydrates is not None else (0 if energy_kj is not None else None)
+                carbs_sugars = n.sugars if n.sugars is not None else (0 if energy_kj is not None else None)
+                protein_val = n.protein if n.protein is not None else (0 if energy_kj is not None else None)
+                salt_val = n.salt if n.salt is not None else (0 if energy_kj is not None else None)
+                fiber_val = n.fiber if n.fiber is not None else (0 if energy_kj is not None else None)
                 
                 cur.execute("""
                     INSERT INTO nutritionfacts (product_id, energy_kj, energy_kcal, fat_total, fat_saturated, 
@@ -327,10 +337,8 @@ class BarboraWorker:
                         nutri_score_points = EXCLUDED.nutri_score_points,
                         nutri_score_grade = EXCLUDED.nutri_score_grade
                 """, (product_id, 
-                      product.nutrition.energy_kj, product.nutrition.energy_kcal,
-                      product.nutrition.fat, product.nutrition.saturated_fat,
-                      product.nutrition.carbohydrates, product.nutrition.sugars,
-                      product.nutrition.protein, product.nutrition.salt, product.nutrition.fiber,
+                      energy_kj, energy_kcal, fat_total, fat_saturated,
+                      carbs_total, carbs_sugars, protein_val, salt_val, fiber_val,
                       product.ingredients, nutri_score_points, nutri_score_grade))
             
             if product.photo_urls:
