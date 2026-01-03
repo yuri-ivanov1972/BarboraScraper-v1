@@ -523,7 +523,7 @@ def section_product_view():
         # Display category name
         if st.session_state.selected_category_id:
             category_query = """
-            SELECT name_lv, rimi_category_code 
+            SELECT name_lv, barbora_category_code 
             FROM normalized_categories 
             WHERE category_id = %s
             """
@@ -532,7 +532,7 @@ def section_product_view():
                 cursor.execute(category_query, (st.session_state.selected_category_id,))
                 cat_info = cursor.fetchone()
                 if cat_info:
-                    st.subheader(f"{cat_info['name_lv']} ({cat_info['rimi_category_code']})")
+                    st.subheader(f"{cat_info['name_lv']} ({cat_info['barbora_category_code']})")
         else:
             st.subheader("Visi produkti")
         
@@ -687,12 +687,12 @@ def render_product_detail_view():
     
     # Category
     st.subheader("📂 Kategorija")
-    st.write(f"{product.get('category_name', 'N/A')} ({product.get('rimi_category_code', 'N/A')})")
+    st.write(f"{product.get('category_name', 'N/A')} ({product.get('barbora_category_code', 'N/A')})")
     
-    # Link to Rimi
-    if product.get('rimi_url'):
+    # Link to Barbora
+    if product.get('barbora_url'):
         st.subheader("🔗 Saites")
-        st.markdown(f"[Skatīt Rimi.lv]({product['rimi_url']})")
+        st.markdown(f"[Skatīt Barbora.lv]({product['barbora_url']})")
     
     db.close()
 
@@ -966,7 +966,7 @@ def section_change_report():
                     axis=1
                 )
                 
-                display_df = df[['name', 'category_name', 'previous_display', 'current_display', 'price_change_pct', 'rimi_url']].copy()
+                display_df = df[['name', 'category_name', 'previous_display', 'current_display', 'price_change_pct', 'barbora_url']].copy()
                 display_df.columns = ['Product', 'Category', 'Previous (€)', 'Current (€)', 'Change (%)', 'Link']
                 st.dataframe(
                     display_df, 
@@ -974,9 +974,9 @@ def section_change_report():
                     hide_index=True,
                     column_config={
                         "Link": st.column_config.LinkColumn(
-                            "Rimi",
+                            "Barbora",
                             display_text="Open",
-                            help="Click to view product on Rimi website"
+                            help="Click to view product on Barbora website"
                         )
                     }
                 )
@@ -1097,14 +1097,14 @@ def section_nutriscore_recalculation():
         db._ensure_connection()
         with db.connection.cursor() as cur:
             cur.execute("""
-                SELECT rimi_category_code, name_lv 
+                SELECT barbora_category_code, name_lv 
                 FROM normalized_categories 
                 WHERE level = 2 
                 ORDER BY name_lv
             """)
             categories = [dict(row) for row in cur.fetchall()]
         
-        category_options = {f"{c['name_lv']} ({c['rimi_category_code']})": c['rimi_category_code'] for c in categories}
+        category_options = {f"{c['name_lv']} ({c['barbora_category_code']})": c['barbora_category_code'] for c in categories}
         
         selected_category_name = st.selectbox("Select Category:", list(category_options.keys()))
         selected_category_code = category_options.get(selected_category_name)
@@ -1208,7 +1208,7 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
             p.product_id,
             p.sku,
             p.name,
-            nc.rimi_category_code as category_code,
+            nc.barbora_category_code as category_code,
             nf.energy_kj,
             nf.carbs_sugars as sugars,
             nf.fat_saturated as saturated_fat,
@@ -1229,7 +1229,7 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
     
     params = []
     if category_code:
-        query += " AND nc.rimi_category_code LIKE %s"
+        query += " AND nc.barbora_category_code LIKE %s"
         params.append(f"{category_code}%")
     
     query += " ORDER BY p.sku"
@@ -1247,7 +1247,7 @@ def recalculate_nutriscore_for_product(db: ProductViewDatabase, sku: str):
             p.product_id,
             p.sku,
             p.name,
-            nc.rimi_category_code as category_code,
+            nc.barbora_category_code as category_code,
             nf.energy_kj,
             nf.carbs_sugars as sugars,
             nf.fat_saturated as saturated_fat,
