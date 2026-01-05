@@ -1,0 +1,116 @@
+2026-01-05 03:50:52.29
+39690d35
+User
+2026-01-05 01:50:52,298 - worker - INFO - 🔄 Incremental mode: classifying 222 SKUs...
+2026-01-05 03:50:52.46
+39690d35
+User
+^
+2026-01-05 03:50:52.46
+39690d35
+User
+2026-01-05 01:50:52,463 - worker - INFO - ❌ Error during chunked processing: column "barbora_category_code" does not exist
+2026-01-05 03:50:52.46
+39690d35
+User
+LINE 7: WHERE barbora_category_code = 'SH-4-14'
+2026-01-05 03:50:52.71
+39690d35
+User
+2026-01-05 01:50:52,711 - worker - INFO - Batch processor closed 0 coordinator connections
+2026-01-05 03:50:52.91
+39690d35
+User
+2026-01-05 01:50:52,910 - worker - INFO - Job #3382 completed: 0/222 successful
+2026-01-05 03:51:34.11
+39690d35
+User
+2026-01-05 01:51:34,113 - worker - WARNING - Acquired stale job #3344 (previous worker: sched_nixos_27_1767562831)
+2026-01-05 03:51:34.53
+39690d35
+User
+2026-01-05 01:51:34,539 - worker - INFO - 💾 Initial memory usage: 94.1 MB
+2026-01-05 03:51:34.53
+39690d35
+User
+2026-01-05 01:51:34,539 - worker - INFO - Processing job #3344: SH-6-1
+2026-01-05 03:51:34.71
+39690d35
+User
+2026-01-05 01:51:34,716 - worker - INFO - 📌 Job category: SH-6-1 (fallback for invalid extracted categories)
+2026-01-05 03:51:34.88
+39690d35
+User
+2026-01-05 01:51:34,886 - worker - INFO - 🔄 Incremental mode: classifying 57 SKUs...
+2026-01-05 03:51:35.06
+39690d35
+User
+^
+2026-01-05 03:51:35.06
+39690d35
+User
+2026-01-05 01:51:35,062 - worker - INFO - ❌ Error during chunked processing: column "barbora_category_code" does not exist
+2026-01-05 03:51:35.06
+39690d35
+User
+LINE 7: WHERE barbora_category_code = 'SH-6-1'
+2026-01-05 03:51:35.27
+39690d35
+User
+2026-01-05 01:51:35,277 - worker - INFO - Batch processor closed 0 coordinator connections
+2026-01-05 03:51:35.47
+39690d35
+User
+2026-01-05 01:51:35,474 - worker - INFO - Job #3344 completed: 0/57 successful
+2026-01-05 04:00:18.71
+39690d35
+User
+2026-01-05 02:00:18,712 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 04:00 Latvia time (uptime: 4h 19m)
+2026-01-05 05:00:18.73
+39690d35
+User
+2026-01-05 03:00:18,730 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 05:00 Latvia time (uptime: 5h 19m)
+2026-01-05 06:00:18.75
+39690d35
+User
+2026-01-05 04:00:18,749 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 06:00 Latvia time (uptime: 6h 19m)
+2026-01-05 06:00:18.75
+39690d35
+User
+2026-01-05 04:00:18,752 - __main__ - INFO - ============================================================
+2026-01-05 06:00:18.75
+39690d35
+User
+2026-01-05 04:00:18,752 - __main__ - INFO - ============================================================
+2026-01-05 06:00:18.75
+39690d35
+User
+2026-01-05 04:00:18,752 - __main__ - INFO - SCHEDULED: Generating daily report (06:00)
+2026-01-05 06:00:19.25
+39690d35
+User
+2026-01-05 04:00:19,255 - __main__ - WARNING - Report generation issue: Failed to save report to database
+2026-01-05 07:00:19.27
+39690d35
+User
+2026-01-05 05:00:19,272 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 07:00 Latvia time (uptime: 7h 19m)
+2026-01-05 08:00:19.28
+39690d35
+User
+2026-01-05 06:00:19,287 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 08:00 Latvia time (uptime: 8h 19m)
+2026-01-05 09:00:19.30
+39690d35
+User
+2026-01-05 07:00:19,303 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 09:00 Latvia time (uptime: 9h 19m)
+2026-01-05 10:00:19.31
+39690d35
+User
+2026-01-05 08:00:19,317 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 10:00 Latvia time (uptime: 10h 19m)
+2026-01-05 11:00:19.33
+39690d35
+User
+2026-01-05 09:00:19,330 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 11:00 Latvia time (uptime: 11h 19m)
+2026-01-05 12:00:19.34
+39690d35
+User
+2026-01-05 10:00:19,347 - __main__ - INFO - 💓 Scheduler heartbeat - 2026-01-05 12:00 Latvia time (uptime: 12h 19m)
