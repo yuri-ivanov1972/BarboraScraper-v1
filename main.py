@@ -7,6 +7,8 @@ import streamlit as st
 from product_view_db import ProductViewDatabase
 import time
 import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 st.set_page_config(
     page_title="Maxima Product Scraper",
@@ -1351,10 +1353,151 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
         return {'success': False, 'message': str(e)}
 
 
+def section_lightweight_update():
+    """Section: Lightweight Price/Availability Update"""
+    st.header("Lightweight Price Update")
+    
+    st.info("""
+    Fast update of prices and availability from category listing pages (10-50x faster than full scraping).
+    - Updates existing products' price, availability, and discount info
+    - Detects new products and queues them for full scraping
+    - Does NOT update nutrition, ingredients, or photos (use full scraping for that)
+    """)
+    
+    from barbora_lightweight_updater import BarboraLightweightUpdater
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("Run Lightweight Update")
+        
+        limit_categories = st.number_input(
+            "Limit categories (0 = all)", 
+            min_value=0, max_value=300, value=0,
+            help="For testing: limit to first N categories. Set to 0 to process all."
+        )
+        
+        if st.button("Start Lightweight Update", type="primary"):
+            from datetime import datetime
+            start_time = datetime.now()
+            
+            updater = BarboraLightweightUpdater(status_callback=lambda msg: None)
+            
+            categories = updater.get_all_level3_categories()
+            if limit_categories > 0:
+                categories = categories[:limit_categories]
+            
+            existing_skus = updater.get_existing_skus()
+            
+            st.write(f"Processing **{len(categories)}** categories, **{len(existing_skus)}** existing products in DB")
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            stats_placeholder = st.empty()
+            
+            summary = {
+                'start_time': start_time.isoformat(),
+                'categories_processed': 0,
+                'products_checked': 0,
+                'products_updated': 0,
+                'price_changes': 0,
+                'availability_changes': 0,
+                'new_products_found': 0,
+                'new_product_jobs_created': 0,
+                'errors': []
+            }
+            
+            for i, category in enumerate(categories):
+                progress_bar.progress((i + 1) / len(categories))
+                status_text.text(f"Processing {category['name_lv']}...")
+                
+                try:
+                    stats = updater.process_category(category, existing_skus)
+                    
+                    summary['categories_processed'] += 1
+                    summary['products_checked'] += stats.get('products_found', 0)
+                    summary['products_updated'] += stats.get('updated', 0)
+                    summary['price_changes'] += stats.get('price_changes', 0)
+                    summary['availability_changes'] += stats.get('availability_changes', 0)
+                    summary['new_products_found'] += stats.get('new', 0)
+                    
+                    if stats.get('new_job_id'):
+                        summary['new_product_jobs_created'] += 1
+                    
+                    if stats.get('errors'):
+                        summary['errors'].extend(stats['errors'][:2])
+                        
+                except Exception as e:
+                    summary['errors'].append(f"{category['name_lv']}: {str(e)}")
+                
+                stats_placeholder.markdown(f"""
+                **Progress:** {summary['categories_processed']}/{len(categories)} categories  
+                **Products checked:** {summary['products_checked']}  
+                **Updated:** {summary['products_updated']} | **Price changes:** {summary['price_changes']} | **Availability changes:** {summary['availability_changes']}  
+                **New products:** {summary['new_products_found']} (jobs: {summary['new_product_jobs_created']})
+                """)
+                
+                time.sleep(0.3)
+            
+            status_text.empty()
+            progress_bar.empty()
+            
+            st.success(f"Completed! Updated {summary['products_updated']} products, found {summary['new_products_found']} new products")
+            
+            if summary['errors']:
+                with st.expander(f"Errors ({len(summary['errors'])})"):
+                    for err in summary['errors'][:20]:
+                        st.write(f"- {err}")
+            
+            try:
+                end_time = datetime.now()
+                summary['end_time'] = end_time.isoformat()
+                summary['duration_seconds'] = (end_time - start_time).total_seconds()
+                run_id = updater.save_run_history(summary)
+                st.info(f"Run saved to history (ID: {run_id}) - Duration: {summary['duration_seconds']:.1f}s")
+            except Exception as e:
+                st.warning(f"Could not save run history: {e}")
+    
+    with col2:
+        st.subheader("Run History")
+        
+        try:
+            conn = psycopg2.connect(os.environ['DATABASE_URL'], cursor_factory=RealDictCursor)
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT run_id, started_at, duration_seconds, 
+                       categories_processed, products_updated, price_changes,
+                       new_products_found, errors_count, status
+                FROM lightweight_update_runs
+                ORDER BY started_at DESC
+                LIMIT 10
+            """)
+            runs = cur.fetchall()
+            conn.close()
+            
+            if runs:
+                for run in runs:
+                    started = run['started_at']
+                    if started:
+                        started_str = started.strftime('%Y-%m-%d %H:%M') if hasattr(started, 'strftime') else str(started)[:16]
+                    else:
+                        started_str = 'N/A'
+                    
+                    duration = run['duration_seconds'] or 0
+                    st.markdown(f"""
+                    **Run #{run['run_id']}** - {started_str}  
+                    {run['categories_processed']} cats | {run['products_updated']} updated | {run['price_changes']} price changes | {run['new_products_found']} new
+                    """)
+            else:
+                st.write("No runs yet")
+        except Exception as e:
+            st.warning(f"Could not load history: {e}")
+
+
 def main():
     st.title("🛒 Maxima Product Scraper")
     
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -1386,6 +1529,12 @@ def main():
             st.session_state.view_mode = 'nutriscore_recalc'
             st.rerun()
     
+    with col6:
+        if st.button("⚡ Lightweight Update", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'lightweight_update' else "secondary"):
+            st.session_state.view_mode = 'lightweight_update'
+            st.rerun()
+    
     st.divider()
     
     if st.session_state.view_mode == 'category_processing':
@@ -1396,6 +1545,8 @@ def main():
         section_change_report()
     elif st.session_state.view_mode == 'nutriscore_recalc':
         section_nutriscore_recalculation()
+    elif st.session_state.view_mode == 'lightweight_update':
+        section_lightweight_update()
     else:
         section_nutrition_enrichment()
 
