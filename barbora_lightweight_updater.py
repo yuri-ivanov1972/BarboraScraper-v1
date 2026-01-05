@@ -123,11 +123,20 @@ class BarboraLightweightUpdater:
         old_price_per_unit = float(row['price_per_unit']) if row['price_per_unit'] else None
         old_discount = float(row['discount_price']) if row['discount_price'] else None
         
-        new_price = product.price
         new_available = product.is_available
         new_price_per_unit = product.comparative_unit_price
         new_price_per_unit_type = product.comparative_unit
-        new_discount = product.retail_price if product.retail_price and product.retail_price != product.price else None
+        
+        # Barbora JSON: price = sale price (what customer pays), retail_price = regular base price
+        # DB schema: price = regular price, discount_price = discounted sale price
+        if product.retail_price and product.price and product.price < product.retail_price:
+            # Product is discounted
+            new_price = product.retail_price  # Regular price goes in 'price' column
+            new_discount = product.price      # Discounted price goes in 'discount_price' column
+        else:
+            # No discount
+            new_price = product.price
+            new_discount = None
         
         price_changed = old_price != new_price
         availability_changed = old_available != new_available
