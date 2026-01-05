@@ -106,6 +106,24 @@ The application features a modular Python architecture comprising:
       - Records inserted when ANY price field changes (regular price, discount, or price-per-unit)
       - New products get full individual page scraping with all 4 price fields stored
       - Errors properly tracked and failed SKUs marked with error messages
+
+    - **Barbora Lightweight Update System** (for daily price/availability updates):
+      - **Purpose**: Fast updates of prices and availability from category listing JSON (10-50x faster than full scraping)
+      - **Key files**:
+        - `barbora_lightweight_updater.py`: Core update logic
+        - `lightweight_scheduler.py`: Scheduler for 2am Latvia time (ENABLED=False by default)
+      - **How it works**:
+        1. Extracts products from category listing JSON (no individual page visits)
+        2. Compares SKUs against existing products in database
+        3. For existing products: Inserts new price_history records when price/availability changes
+        4. For new products: Queues them for full scraping via job queue
+      - **CLI usage**:
+        - `python lightweight_scheduler.py --dry-run` - Show what would be done
+        - `python lightweight_scheduler.py --run-now` - Run update immediately
+        - `python lightweight_scheduler.py --enable` - Start scheduler loop
+      - **Streamlit UI**: "Lightweight Update" button with progress display and run history
+      - **Database**: `lightweight_update_runs` table tracks run history and statistics
+      - **Scheduler**: Runs at 2:00 AM Europe/Riga time, disabled by default until manually tested
       
     - **Autoscale Deployment Limitations** (temporary until Reserved VM migration):
       - **90-second wall-clock timeout** for non-HTTP background processes
