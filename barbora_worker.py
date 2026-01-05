@@ -557,15 +557,17 @@ class BarboraWorker:
             if close_conn:
                 conn.close()
     
-    def run(self, single_run: bool = False):
+    def run(self, single_run: bool = False, exit_when_empty: bool = False):
         """Main worker loop"""
         logger.info(f"Worker {self.worker_id} starting...")
+        processed_any = False
         
         try:
             while self.running:
                 job = self.claim_job()
                 
                 if job:
+                    processed_any = True
                     try:
                         self.process_job(job)
                     except Exception as e:
@@ -574,6 +576,12 @@ class BarboraWorker:
                 else:
                     if single_run:
                         logger.info("No jobs found, exiting (single-run mode)")
+                        break
+                    if exit_when_empty and processed_any:
+                        logger.info("Queue empty after processing, exiting (--exit-when-empty)")
+                        break
+                    if exit_when_empty and not processed_any:
+                        logger.info("No jobs in queue, exiting (--exit-when-empty)")
                         break
                     logger.info("No jobs in queue, waiting 30s...")
                     time.sleep(30)
@@ -596,10 +604,11 @@ def main():
     parser = argparse.ArgumentParser(description='Barbora Worker')
     parser.add_argument('--worker-id', help='Worker ID (auto-generated if not provided)')
     parser.add_argument('--single-run', action='store_true', help='Process one job and exit')
+    parser.add_argument('--exit-when-empty', action='store_true', help='Exit when queue is empty (instead of waiting)')
     args = parser.parse_args()
     
     worker = BarboraWorker(worker_id=args.worker_id)
-    worker.run(single_run=args.single_run)
+    worker.run(single_run=args.single_run, exit_when_empty=args.exit_when_empty)
 
 
 if __name__ == '__main__':
