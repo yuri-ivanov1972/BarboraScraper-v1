@@ -66,6 +66,17 @@ def run_lightweight_update():
     except Exception as e:
         log_status(f"  Warning: Could not save to history: {e}")
     
+    new_products = summary.get('new_products_found', 0)
+    if new_products > 0:
+        log_status(f"Processing {new_products} new products with worker...")
+        try:
+            from barbora_worker import BarboraWorker
+            worker = BarboraWorker()
+            worker.run(exit_when_empty=True)
+            log_status("Worker finished processing new products")
+        except Exception as e:
+            log_status(f"Warning: Worker failed: {e}")
+    
     return summary
 
 
