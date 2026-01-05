@@ -171,9 +171,9 @@ class ChangeReportGenerator:
             p.product_id,
             p.sku,
             p.name,
-            p.rimi_url,
+            p.barbora_url,
             nc.name_lv as category_name,
-            nc.rimi_category_code as category_code,
+            nc.barbora_category_code as category_code,
             prev.effective_price as previous_price,
             c.effective_price as current_price,
             prev.price as previous_regular_price,
@@ -240,7 +240,7 @@ class ChangeReportGenerator:
             p.sku,
             p.name,
             nc.name_lv as category_name,
-            nc.rimi_category_code as category_code,
+            nc.barbora_category_code as category_code,
             prev.is_available as previous_available,
             c.is_available as current_available,
             c.price as current_price,
@@ -293,7 +293,7 @@ class ChangeReportGenerator:
             p.sku,
             p.name,
             nc.name_lv as category_name,
-            nc.rimi_category_code as category_code,
+            nc.barbora_category_code as category_code,
             cp.price,
             cp.is_available,
             cp.recorded_at
@@ -363,14 +363,14 @@ class ChangeReportGenerator:
         SELECT 
             nc.category_id,
             nc.name_lv as category_name,
-            nc.rimi_category_code as category_code,
+            nc.barbora_category_code as category_code,
             COUNT(*) as total_products,
             SUM(is_new) as new_products,
             SUM(price_changed) as price_changed,
             SUM(availability_changed) as availability_changed
         FROM product_changes pc
         JOIN normalized_categories nc ON pc.category_id = nc.category_id
-        GROUP BY nc.category_id, nc.name_lv, nc.rimi_category_code
+        GROUP BY nc.category_id, nc.name_lv, nc.barbora_category_code
         HAVING SUM(is_new) > 0 OR SUM(price_changed) > 0 OR SUM(availability_changed) > 0
         ORDER BY (SUM(is_new) + SUM(price_changed) + SUM(availability_changed)) DESC
         """
