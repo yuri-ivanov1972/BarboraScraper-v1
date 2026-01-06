@@ -37,8 +37,8 @@ set +e
 
 while true; do
     echo "[$(date)] Starting scheduler with --enable flag..."
-    python lightweight_scheduler.py --enable > logs/scheduler.log 2>&1
-    EXIT_CODE=$?
+    python -u lightweight_scheduler.py --enable 2>&1 | tee -a logs/scheduler.log
+    EXIT_CODE=${PIPESTATUS[0]}
     echo "[$(date)] Scheduler exited with code $EXIT_CODE"
     
     if [ $EXIT_CODE -ne 0 ]; then

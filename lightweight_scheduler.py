@@ -91,10 +91,16 @@ def scheduler_loop(enabled_override=False):
     print()
     
     last_run_date = None
+    check_count = 0
     
     while True:
         now = get_latvia_time()
         today = now.date()
+        check_count += 1
+        
+        # Log heartbeat every 30 minutes (30 checks)
+        if check_count % 30 == 0:
+            print(f"[{now.strftime('%Y-%m-%d %H:%M:%S %Z')}] Scheduler alive - waiting for {SCHEDULE_HOUR:02d}:{SCHEDULE_MINUTE:02d}")
         
         if is_enabled and is_scheduled_time() and last_run_date != today:
             print(f"\n{'='*60}")
