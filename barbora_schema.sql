@@ -46,7 +46,8 @@ CREATE TABLE products (
     enrichment_skipped BOOLEAN DEFAULT false,
     ingredients TEXT,
     allergens TEXT,
-    description TEXT
+    description TEXT,
+    rimi_category_code TEXT
 );
 
 CREATE INDEX idx_products_sku ON products (sku);
