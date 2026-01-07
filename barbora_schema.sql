@@ -47,7 +47,7 @@ CREATE TABLE products (
     ingredients TEXT,
     allergens TEXT,
     description TEXT,
-    rimi_category_code TEXT
+    rimi_category_code INTEGER
 );
 
 CREATE INDEX idx_products_sku ON products (sku);
