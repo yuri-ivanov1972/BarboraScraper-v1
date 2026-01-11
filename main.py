@@ -9,6 +9,11 @@ import time
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from combined_ingredient_analyzer import (
+    get_analysis_stats, run_test_batch, run_full_analysis, 
+    reset_all_analysis, batch_update_ingredients, BATCH_SIZE,
+    refresh_materialized_view
+)
 
 st.set_page_config(
     page_title="Maxima Product Scraper",
@@ -1494,10 +1499,124 @@ def section_lightweight_update():
             st.warning(f"Could not load history: {e}")
 
 
+def section_ingredient_analysis():
+    """Combined Ingredient Analysis with AI categorization and NOVA4 suspicion detection"""
+    st.header("🧪 Combined Ingredient Analysis")
+    
+    stats = get_analysis_stats()
+    if stats:
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Ingredients", stats['total'])
+        with col2:
+            st.metric("🌿 Natural", stats['natural_count'])
+        with col3:
+            st.metric("🏭 Processed", stats['processed_count'])
+        with col4:
+            st.metric("❓ Unanalyzed", stats['unanalyzed'])
+        
+        st.subheader("Suspicion Levels")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("🔴 Avoid", stats['avoid_count'])
+        with col2:
+            st.metric("🟠 Limit", stats['limit_count'])
+        with col3:
+            st.metric("🟡 Caution", stats['caution_count'])
+        with col4:
+            st.metric("✅ Clean", stats['clean_count'])
+    else:
+        st.warning("Could not load ingredient statistics")
+    
+    st.divider()
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🧪 Run Test Batch (40 ingredients)", use_container_width=True):
+            with st.spinner("Analyzing test batch..."):
+                results = run_test_batch(batch_count=1)
+                if results:
+                    st.session_state.test_results = results
+                    st.success(f"Analyzed {len(results)} ingredients")
+                else:
+                    st.info("No unanalyzed ingredients found")
+    
+    with col2:
+        if st.button("🚀 Run Full Analysis", type="primary", use_container_width=True):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def update_progress(processed, total):
+                if total > 0:
+                    progress_bar.progress(processed / total)
+                    status_text.text(f"Processed {processed}/{total} ingredients")
+            
+            result = run_full_analysis(progress_callback=update_progress)
+            
+            progress_bar.empty()
+            status_text.empty()
+            
+            if result.get('error'):
+                st.error(result['error'])
+            elif result.get('message'):
+                st.info(result['message'])
+            else:
+                st.success(f"Completed! Processed {result.get('processed', 0)} ingredients in {result.get('batches', 0)} batches")
+    
+    if 'test_results' in st.session_state and st.session_state.test_results:
+        st.subheader("Test Results Preview")
+        
+        for result in st.session_state.test_results[:10]:
+            suspicion = result.get('suspicion_level')
+            if suspicion == 'avoid':
+                icon = "🔴"
+            elif suspicion == 'limit':
+                icon = "🟠"
+            elif suspicion == 'caution':
+                icon = "🟡"
+            elif suspicion == 'clean':
+                icon = "✅"
+            else:
+                icon = "⚪"
+            
+            category_icon = "🏭" if result.get('is_processed') else ("🌿" if result.get('is_processed') == False else "❓")
+            
+            st.markdown(f"""
+            {icon} {category_icon} **{result.get('clean_name', 'N/A')}**  
+            Category: `{result.get('category')}` | Suspicion: `{suspicion or 'N/A'}` | Type: `{result.get('suspicion_category') or 'N/A'}`  
+            {f"_{result.get('health_note')}_" if result.get('health_note') else ''}
+            """)
+    
+    st.divider()
+    
+    with st.expander("🔧 Advanced Options"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 Refresh Materialized View", use_container_width=True):
+                with st.spinner("Refreshing view..."):
+                    success = refresh_materialized_view()
+                    if success:
+                        st.success("Materialized view refreshed successfully")
+                    else:
+                        st.error("Failed to refresh materialized view")
+        
+        with col2:
+            st.warning("Reset will clear all analysis data")
+            if st.button("🗑️ Reset All Analysis", type="secondary", use_container_width=True):
+                count = reset_all_analysis()
+                st.info(f"Reset {count} ingredients for re-analysis")
+                st.rerun()
+        
+        st.info(f"Batch size: {BATCH_SIZE} ingredients per AI call")
+        st.caption("Cost: ~$0.005-0.02 per batch using Replit AI Integrations (billed to credits)")
+
+
 def main():
     st.title("🛒 Maxima Product Scraper")
     
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -1535,6 +1654,12 @@ def main():
             st.session_state.view_mode = 'lightweight_update'
             st.rerun()
     
+    with col7:
+        if st.button("🧪 Ingredients AI", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'ingredient_analysis' else "secondary"):
+            st.session_state.view_mode = 'ingredient_analysis'
+            st.rerun()
+    
     st.divider()
     
     if st.session_state.view_mode == 'category_processing':
@@ -1547,6 +1672,8 @@ def main():
         section_nutriscore_recalculation()
     elif st.session_state.view_mode == 'lightweight_update':
         section_lightweight_update()
+    elif st.session_state.view_mode == 'ingredient_analysis':
+        section_ingredient_analysis()
     else:
         section_nutrition_enrichment()
 

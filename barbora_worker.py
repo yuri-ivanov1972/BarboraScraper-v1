@@ -598,6 +598,28 @@ class BarboraWorker:
                 logger.info("IngredientProcessor closed")
         except Exception as e:
             logger.warning(f"Error closing IngredientProcessor: {e}")
+    
+    def refresh_product_ingredient_cards(self):
+        """Refresh the materialized view for product card data sharing"""
+        conn = None
+        try:
+            logger.info("Refreshing product_ingredient_cards materialized view...")
+            start_time = time.time()
+            
+            conn = psycopg2.connect(self.db_url)
+            conn.autocommit = True
+            cur = conn.cursor()
+            
+            cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY product_ingredient_cards")
+            
+            elapsed = time.time() - start_time
+            logger.info(f"Materialized view refreshed in {elapsed:.1f}s")
+            
+        except Exception as e:
+            logger.error(f"Failed to refresh materialized view: {e}")
+        finally:
+            if conn:
+                conn.close()
 
 
 def main():

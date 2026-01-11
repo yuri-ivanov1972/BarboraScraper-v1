@@ -357,10 +357,33 @@ def run_test_batch(batch_count: int = 1) -> list[dict]:
     return results
 
 
+def refresh_materialized_view() -> bool:
+    """Refresh the product_ingredient_cards materialized view"""
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        return False
+    
+    conn = None
+    try:
+        conn = psycopg2.connect(database_url)
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("REFRESH MATERIALIZED VIEW CONCURRENTLY product_ingredient_cards")
+        print("Materialized view product_ingredient_cards refreshed")
+        return True
+    except Exception as e:
+        print(f"Failed to refresh materialized view: {e}")
+        return False
+    finally:
+        if conn:
+            conn.close()
+
+
 def run_full_analysis(progress_callback=None) -> dict:
     """
     Run full combined analysis on all unanalyzed ingredients.
     Uses single connection throughout for transaction consistency.
+    Automatically refreshes the materialized view upon completion.
     
     Args:
         progress_callback: Optional function(processed, total) for progress updates
@@ -414,6 +437,13 @@ def run_full_analysis(progress_callback=None) -> dict:
             
             print(f"Batch {batch_num}: processed {len(results)} ingredients ({processed}/{total})")
         
+        conn.close()
+        conn = None
+        
+        if processed > 0:
+            print("Refreshing materialized view...")
+            refresh_materialized_view()
+        
         return {
             "processed": processed,
             "total": total,
@@ -421,7 +451,8 @@ def run_full_analysis(progress_callback=None) -> dict:
         }
     
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def reset_all_analysis():

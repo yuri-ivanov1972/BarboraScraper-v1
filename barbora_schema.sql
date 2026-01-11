@@ -263,15 +263,24 @@ CREATE TABLE lightweight_update_runs (
 -- INGREDIENT ANALYSIS TABLES
 -- ============================================================================
 
--- Unique ingredients with frequency counts
+-- Unique ingredients with frequency counts and AI analysis
 CREATE TABLE ingredient_analysis (
     id SERIAL PRIMARY KEY,
     ingredient TEXT NOT NULL,
     frequency INTEGER NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    clean_name TEXT,
+    category VARCHAR(20) DEFAULT 'uncategorized',
+    is_processed BOOLEAN,
+    suspicion_level TEXT,
+    suspicion_category TEXT,
+    health_note TEXT
 );
 
 CREATE UNIQUE INDEX ingredient_analysis_ingredient_idx ON ingredient_analysis (ingredient);
+CREATE INDEX idx_ingredient_analysis_category ON ingredient_analysis(category);
+CREATE INDEX idx_ingredient_analysis_suspicion ON ingredient_analysis(suspicion_level);
+CREATE INDEX idx_ingredient_analysis_processed ON ingredient_analysis(is_processed);
 
 -- Ingredient to product mapping
 CREATE TABLE ingredient_product_mapping (
@@ -280,6 +289,46 @@ CREATE TABLE ingredient_product_mapping (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (ingredient_id, product_sku)
 );
+
+CREATE INDEX idx_ingredient_product_mapping_sku ON ingredient_product_mapping(product_sku);
+
+-- ============================================================================
+-- MATERIALIZED VIEWS
+-- ============================================================================
+
+-- Product ingredient cards for fast API responses
+CREATE MATERIALIZED VIEW product_ingredient_cards AS
+SELECT 
+    p.sku,
+    p.name,
+    p.category_id,
+    nc.name_lv AS category_name,
+    COALESCE(
+        jsonb_agg(
+            jsonb_build_object(
+                'id', ia.id,
+                'name', COALESCE(ia.clean_name, ia.ingredient),
+                'category', ia.category,
+                'is_processed', ia.is_processed,
+                'suspicion_level', ia.suspicion_level,
+                'suspicion_category', ia.suspicion_category,
+                'health_note', ia.health_note
+            ) ORDER BY ia.frequency DESC
+        ) FILTER (WHERE ia.id IS NOT NULL),
+        '[]'::jsonb
+    ) AS ingredients,
+    COUNT(ia.id) FILTER (WHERE ia.category = 'natural') AS natural_count,
+    COUNT(ia.id) FILTER (WHERE ia.category = 'processed') AS processed_count,
+    COUNT(ia.id) FILTER (WHERE ia.suspicion_level = 'avoid') AS avoid_count,
+    COUNT(ia.id) FILTER (WHERE ia.suspicion_level = 'limit') AS limit_count,
+    COUNT(ia.id) FILTER (WHERE ia.suspicion_level = 'caution') AS caution_count
+FROM products p
+LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
+LEFT JOIN ingredient_product_mapping ipm ON p.sku = ipm.product_sku
+LEFT JOIN ingredient_analysis ia ON ipm.ingredient_id = ia.id
+GROUP BY p.sku, p.name, p.category_id, nc.name_lv;
+
+CREATE UNIQUE INDEX idx_product_ingredient_cards_sku ON product_ingredient_cards(sku);
 
 -- ============================================================================
 -- NOTES
@@ -303,3 +352,14 @@ CREATE TABLE ingredient_product_mapping (
 --
 -- Cross-store matching:
 -- - rimi_category_code: Links Barbora products to Rimi category IDs for price comparison
+--
+-- AI Ingredient Analysis Fields:
+-- - clean_name: AI-cleaned ingredient name (removes parentheses, asterisks, percentages)
+-- - category: 'natural', 'processed', or 'uncategorized'
+-- - is_processed: TRUE=processed, FALSE=natural, NULL=uncategorized
+-- - suspicion_level: 'avoid', 'limit', 'caution', 'clean', or NULL (NULL for natural ingredients)
+-- - suspicion_category: 'sweetener', 'emulsifier', 'dye', 'flavor_enhancer', 'preservative', 'filler', 'processing_aid', 'industrial_fat'
+-- - health_note: Brief health concern in Latvian (max 200 chars)
+--
+-- Materialized View Refresh:
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY product_ingredient_cards;
