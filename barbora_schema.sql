@@ -1,6 +1,6 @@
 -- Barbora Product Scraper Database Schema
 -- PostgreSQL 16
--- Generated: 2026-01-05
+-- Generated: 2026-01-11
 -- 
 -- This schema supports a grocery price tracking system that:
 -- - Tracks products, categories, prices, and availability over time
@@ -300,3 +300,6 @@ CREATE TABLE ingredient_product_mapping (
 -- Data Sources (data_source column):
 -- - 'barbora_scrape': Full product page scraping
 -- - 'lightweight_update': Fast price update from category listing JSON
+--
+-- Cross-store matching:
+-- - rimi_category_code: Links Barbora products to Rimi category IDs for price comparison
