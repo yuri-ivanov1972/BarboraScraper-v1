@@ -4,6 +4,7 @@ Two-section interface: Category Processing + Product View
 """
 
 import streamlit as st
+import pandas as pd
 from product_view_db import ProductViewDatabase
 import time
 import os
