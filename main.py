@@ -1058,9 +1058,148 @@ def section_change_report():
         st.code(traceback.format_exc())
 
 
+def section_fiber_estimation():
+    """Section: Fiber Estimation for Nutri-Score improvement"""
+    st.subheader("🌾 Fiber Estimation")
+    
+    st.info("""
+    Estimate fiber content for products missing fiber data to improve Nutri-Score accuracy.
+    
+    - Uses category defaults from AI analysis of typical fiber content
+    - Exception rules override defaults for specific product types (whole grain, dark chocolate, etc.)
+    - Products with existing fiber > 0 are skipped
+    - Estimated fiber is marked `is_fiber_correct=FALSE` until manually verified
+    """)
+    
+    from fiber_estimator import (
+        FiberEstimator, get_fiber_stats, get_products_for_estimation,
+        get_products_for_estimation_count, preview_fiber_estimates,
+        apply_all_fiber_estimates
+    )
+    
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        st.error("DATABASE_URL not configured")
+        return
+    
+    conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+    try:
+        stats = get_fiber_stats(conn)
+    finally:
+        conn.close()
+    
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Products", stats.get('total_products', 0))
+    with col2:
+        st.metric("Missing Fiber", stats.get('missing_fiber', 0))
+    with col3:
+        st.metric("Has Fiber", stats.get('has_fiber', 0))
+    with col4:
+        st.metric("Marked Correct", stats.get('marked_correct', 0))
+    
+    estimator = FiberEstimator()
+    
+    with st.expander("📋 Category Fiber Defaults"):
+        defaults_df = pd.DataFrame([
+            {"Category ID": k, "Fiber (g)": v} 
+            for k, v in sorted(estimator.category_defaults.items())
+        ])
+        st.dataframe(defaults_df, use_container_width=True, hide_index=True, height=300)
+    
+    with st.expander("⚠️ Exception Rules"):
+        exceptions_data = []
+        for rule in estimator.exception_rules:
+            exceptions_data.append({
+                "Category Prefix": rule['category_id_prefix'],
+                "Description": rule['category_description'],
+                "Keywords": ", ".join(rule['keywords']),
+                "Fiber (g)": rule['fiber'],
+                "Reason": rule['reason']
+            })
+        exceptions_df = pd.DataFrame(exceptions_data)
+        st.dataframe(exceptions_df, use_container_width=True, hide_index=True)
+    
+    st.divider()
+    
+    preview_limit = st.number_input("Preview limit (products to show)", min_value=10, max_value=500, value=50)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔍 Preview Fiber Estimates", type="primary", use_container_width=True):
+            with st.spinner("Calculating fiber estimates..."):
+                estimates, total_count = preview_fiber_estimates(limit=preview_limit)
+                
+                if not estimates:
+                    st.info("No products need fiber estimation (either all have fiber or no rimi_category_code mapping)")
+                else:
+                    st.success(f"**{total_count}** products ready for fiber estimation")
+                    
+                    preview_df = pd.DataFrame([{
+                        'sku': e['sku'],
+                        'name': e['name'][:50] if e['name'] else '',
+                        'category': e['rimi_category_code'],
+                        'old_fiber': e['old_fiber'] or 0,
+                        'new_fiber': e['new_fiber'],
+                        'match_type': e['match_type'],
+                        'before_grade': e.get('before_grade', ''),
+                        'new_grade': e.get('new_grade', '')
+                    } for e in estimates])
+                    
+                    st.dataframe(preview_df, use_container_width=True, hide_index=True)
+                    
+                    st.session_state['fiber_estimates_ready'] = True
+                    st.session_state['fiber_estimates_count'] = total_count
+    
+    with col2:
+        ready_count = st.session_state.get('fiber_estimates_count', 0)
+        button_label = f"✅ Apply All Estimates" if ready_count == 0 else f"✅ Apply All Estimates ({ready_count})"
+        
+        if st.button(button_label, use_container_width=True):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            def progress_callback(processed, total):
+                progress = processed / total if total > 0 else 0
+                progress_bar.progress(progress)
+                status_text.text(f"Applying fiber estimates to {processed}/{total} products...")
+            
+            status_text.text("Starting fiber estimation...")
+            
+            result = apply_all_fiber_estimates(progress_callback=progress_callback)
+            
+            progress_bar.progress(1.0)
+            status_text.text("Complete!")
+            
+            if result.get('error'):
+                st.error(result['error'])
+            else:
+                st.success(f"""
+                **Results:**
+                - Updated: **{result.get('updated', 0)}** products
+                - Grade changed: **{result.get('grades_changed', 0)}** products
+                """)
+                
+                st.session_state['fiber_estimates_ready'] = False
+                st.session_state['fiber_estimates_count'] = 0
+
+
 def section_nutriscore_recalculation():
-    """Section: Nutri-Score Recalculation"""
-    st.header("🔄 Nutri-Score Recalculation")
+    """Section: Nutri-Score Tools"""
+    st.header("📊 Nutri-Score Tools")
+    
+    tool = st.radio(
+        "Tool:",
+        ["🔄 Recalculate Nutri-Score", "🌾 Fiber Estimation"],
+        horizontal=True
+    )
+    
+    if tool == "🌾 Fiber Estimation":
+        section_fiber_estimation()
+        return
+    
+    st.subheader("🔄 Recalculate Nutri-Score")
     
     st.info("""
     Recalculate Nutri-Score for products using the updated category mappings.

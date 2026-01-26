@@ -18,6 +18,7 @@ import re
 from barbora_parser import BarboraParser
 from nutriscore_calculator import NutriscoreCalculator
 from ingredient_processor import IngredientProcessor
+from fiber_estimator import FiberEstimator
 
 
 def normalize_latvian_text(text: str) -> str:
@@ -75,6 +76,13 @@ class BarboraWorker:
         
         self.ingredient_processor = IngredientProcessor(status_callback=lambda msg: logger.info(msg))
         logger.info("IngredientProcessor initialized")
+        
+        try:
+            self.fiber_estimator = FiberEstimator()
+            logger.info("FiberEstimator initialized with category mappings")
+        except Exception as e:
+            logger.warning(f"FiberEstimator not available: {e}")
+            self.fiber_estimator = None
         
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -248,6 +256,8 @@ class BarboraWorker:
                     product_id = self.save_product(product_data, category_id, product_url)
                     if product_id and product_record.get('price') is not None:
                         self.save_price_history_from_listing(product_id, product_record)
+                    if product_id:
+                        self.apply_fiber_estimation(product_id)
                     
                     if product_id and product_data.ingredients:
                         try:
@@ -368,6 +378,89 @@ class BarboraWorker:
             
             conn.commit()
             return product_id
+        finally:
+            conn.close()
+    
+    def apply_fiber_estimation(self, product_id: int) -> bool:
+        """
+        Apply fiber estimation for a product if:
+        - Product has rimi_category_code
+        - Fiber is NULL or 0
+        - FiberEstimator is available
+        
+        Returns True if fiber was estimated and Nutri-Score recalculated.
+        """
+        if not self.fiber_estimator:
+            return False
+        
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            cur.execute("""
+                SELECT p.product_id, p.name, p.rimi_category_code, p.category_id,
+                       nf.fiber, nf.energy_kj, nf.fat_saturated, nf.carbs_sugars,
+                       nf.salt, nf.protein
+                FROM products p
+                JOIN nutritionfacts nf ON p.product_id = nf.product_id
+                WHERE p.product_id = %s
+            """, (product_id,))
+            
+            product = cur.fetchone()
+            if not product:
+                return False
+            
+            rimi_code = product.get('rimi_category_code')
+            current_fiber = product.get('fiber')
+            
+            if not rimi_code:
+                return False
+            
+            if current_fiber is not None and current_fiber > 0:
+                return False
+            
+            fiber_value, source, should_update, match_type = self.fiber_estimator.estimate_fiber(
+                product_name=product['name'],
+                rimi_category_code=rimi_code,
+                current_fiber=current_fiber
+            )
+            
+            if not should_update:
+                return False
+            
+            cur.execute("""
+                UPDATE nutritionfacts 
+                SET fiber = %s, is_fiber_correct = FALSE
+                WHERE product_id = %s
+            """, (fiber_value, product_id))
+            
+            if product['energy_kj'] is not None:
+                result = self.nutriscore_calculator.calculate_single_product(
+                    energy_kj=float(product['energy_kj']),
+                    sugars=float(product['carbs_sugars']) if product['carbs_sugars'] else 0,
+                    saturated_fat=float(product['fat_saturated']) if product['fat_saturated'] else 0,
+                    salt=float(product['salt']) if product['salt'] else 0,
+                    protein=float(product['protein']) if product['protein'] else 0,
+                    fiber=float(fiber_value),
+                    category_id=product['category_id']
+                )
+                
+                if result.get('success'):
+                    cur.execute("""
+                        UPDATE nutritionfacts 
+                        SET nutri_score_points = %s, nutri_score_grade = %s
+                        WHERE product_id = %s
+                    """, (result['score'], result['grade'], product_id))
+                    
+                    logger.debug(f"Product {product_id}: Fiber estimated {fiber_value}g ({match_type}), "
+                                f"Nutri-Score: {result['grade']}")
+            
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Error applying fiber estimation for product {product_id}: {e}")
+            conn.rollback()
+            return False
         finally:
             conn.close()
     

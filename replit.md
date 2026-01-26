@@ -135,6 +135,25 @@ The application features a modular Python architecture comprising:
       - **Root cause**: Autoscale designed for bursty request/response workloads, incompatible with long-running scraping
       - **Solution**: Migrate to Reserved VM for 24/7 uninterrupted processing (see below)
 
+    - **Fiber Estimation System** (for Nutri-Score accuracy improvement):
+      - **Purpose**: Estimate fiber content for products missing fiber data to improve Nutri-Score accuracy
+      - **Key files**:
+        - `fiber_estimation_config.json`: Category-to-fiber mappings and exception rules
+        - `fiber_estimator.py`: Core estimation logic with batch processing
+      - **How it works**:
+        1. Uses `rimi_category_code` column in products table to look up fiber defaults
+        2. Exception rules checked first (e.g., "Pilngraudu" pasta gets 7g instead of default)
+        3. Category defaults applied if no exception matches
+        4. Products with existing fiber > 0 are skipped
+        5. Nutri-Score automatically recalculated after fiber estimation
+      - **Database tracking**:
+        - `is_fiber_correct` column in nutritionfacts: TRUE = scraped/USDA data, FALSE = estimated
+      - **UI access**: Nutri-Score Tools tab → Fiber Estimation tool
+        - Preview estimates before applying
+        - Apply all estimates with progress bar
+        - View category defaults and exception rules
+      - **Worker integration**: `barbora_worker.apply_fiber_estimation(product_id)` method available for automatic estimation of new products with `rimi_category_code`
+
 ## External Dependencies
 - **Streamlit**: Web application framework.
 - **BeautifulSoup4**: HTML parsing.
