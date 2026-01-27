@@ -305,18 +305,18 @@ class USDAClient:
         
         return best_match
     
-    def search_and_get_top_matches(self, query: str, num_options: int = 5) -> List[USDAFoodMatch]:
+    def search_and_get_top_matches(self, query: str, num_options: int = 3) -> List[USDAFoodMatch]:
         """
         Search for food and return multiple matches with full nutrition data
         
         Args:
             query: Food name to search (in English)
-            num_options: Number of options to return (default 5)
+            num_options: Number of options to return (default 3)
             
         Returns:
             List of USDAFoodMatch objects with nutrition data, prioritizing "raw" items
         """
-        matches = self.search_food(query, page_size=num_options + 3)
+        matches = self.search_food(query, page_size=num_options + 2)
         
         if not matches:
             return []

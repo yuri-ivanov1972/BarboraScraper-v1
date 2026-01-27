@@ -451,12 +451,17 @@ class NutritionEnrichmentService:
         
         def process_with_index(args):
             idx, product = args
-            translator, usda_client = get_thread_clients()
-            match = self.process_single_product(product, translator=translator, usda_client=usda_client)
-            with results_lock:
-                completed_count[0] += 1
-                self.status_callback(f"✓ [{completed_count[0]}/{len(products)}] {product.name[:40]}...")
-            return idx, match
+            try:
+                translator, usda_client = get_thread_clients()
+                match = self.process_single_product(product, translator=translator, usda_client=usda_client)
+                with results_lock:
+                    completed_count[0] += 1
+                    self.status_callback(f"✓ [{completed_count[0]}/{len(products)}] {product.name[:40]}...")
+                return idx, match
+            except Exception as e:
+                with results_lock:
+                    self.status_callback(f"⚠️ Thread error for {product.name[:30]}: {str(e)[:100]}")
+                raise
         
         indexed_products = list(enumerate(products))
         results = [None] * len(products)
@@ -469,8 +474,8 @@ class NutritionEnrichmentService:
                     idx, match = future.result()
                     results[idx] = match
                 except Exception as e:
-                    idx = futures[future]
-                    self.status_callback(f"⚠️ Error processing product {idx}: {str(e)}")
+                    idx = futures.get(future, -1)
+                    self.status_callback(f"⚠️ Error processing product {idx}: {str(e)[:100]}")
         
         self._flush_translation_cache()
         
