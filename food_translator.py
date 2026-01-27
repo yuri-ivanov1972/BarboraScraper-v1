@@ -394,7 +394,10 @@ class FoodTranslator:
                         'base_url': base_url
                     }
                 )
-        except Exception:
+            else:
+                self.status_callback("⚠️ Gemini AI not available: missing AI_INTEGRATIONS env vars")
+        except Exception as e:
+            self.status_callback(f"⚠️ Failed to initialize Gemini client: {str(e)}")
             self._gemini_client = None
     
     def _normalize_name(self, name: str) -> str:
@@ -488,7 +491,7 @@ class FoodTranslator:
             self.status_callback(f"⚠️ Google Translate failed: {str(e)}")
             return None
     
-    def _translate_with_gemini(self, text: str, max_retries: int = 3) -> Optional[str]:
+    def _translate_with_gemini(self, text: str, max_retries: int = 5) -> Optional[str]:
         """
         Translate using Gemini AI via Replit AI Integrations.
         Uses gemini-2.5-flash model with retry logic for rate limits.
@@ -506,6 +509,7 @@ Latvian product name: {text}
 English translation:"""
         
         import time
+        import random
         
         for attempt in range(max_retries):
             try:
@@ -522,9 +526,18 @@ English translation:"""
                 
             except Exception as e:
                 error_msg = str(e)
-                if "429" in error_msg or "RATELIMIT" in error_msg or "quota" in error_msg.lower():
-                    wait_time = 2 ** attempt
-                    self.status_callback(f"⚠️ Rate limited, waiting {wait_time}s...")
+                is_rate_limit = (
+                    "429" in error_msg or 
+                    "RATELIMIT" in error_msg or 
+                    "quota" in error_msg.lower() or
+                    "rate limit" in error_msg.lower()
+                )
+                
+                if is_rate_limit:
+                    base_wait = min(2 ** attempt, 64)
+                    jitter = random.uniform(0, base_wait * 0.5)
+                    wait_time = base_wait + jitter
+                    self.status_callback(f"⚠️ Rate limited (attempt {attempt + 1}/{max_retries}), waiting {wait_time:.1f}s...")
                     time.sleep(wait_time)
                     continue
                 else:
