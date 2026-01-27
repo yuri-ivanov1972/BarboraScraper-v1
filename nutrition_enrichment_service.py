@@ -16,6 +16,8 @@ from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 from food_translator import FoodTranslator, TranslationResult
 from usda_enrichment import USDAClient, USDAFoodMatch, NutritionData
@@ -122,16 +124,110 @@ class NutritionEnrichmentService:
     """
     
     def __init__(self, status_callback=None):
-        self.status_callback = status_callback or print
+        self._raw_callback = status_callback or print
+        self._callback_lock = threading.Lock()
         self.db_url = os.environ.get('DATABASE_URL')
         
-        google_key = os.environ.get('GOOGLE_TRANSLATE_API_KEY')
-        self.translator = FoodTranslator(google_api_key=google_key, status_callback=self.status_callback)
+        self._google_key = os.environ.get('GOOGLE_TRANSLATE_API_KEY')
+        self.translator = FoodTranslator(google_api_key=self._google_key, status_callback=self.status_callback)
         self.usda_client = USDAClient(status_callback=self.status_callback)
+        self._translation_cache = {}
+        self._cache_lock = threading.Lock()
+    
+    def status_callback(self, msg: str):
+        """Thread-safe status callback"""
+        with self._callback_lock:
+            self._raw_callback(msg)
+    
+    def _create_thread_clients(self):
+        """Create thread-local translator and USDA client"""
+        translator = FoodTranslator(google_api_key=self._google_key, status_callback=self.status_callback)
+        usda_client = USDAClient(status_callback=self.status_callback)
+        return translator, usda_client
         
     def _get_connection(self):
         """Get database connection"""
         return psycopg2.connect(self.db_url)
+    
+    def _get_cache_key(self, name: str, category: Optional[str] = None) -> str:
+        """Generate cache key from product name and category"""
+        import hashlib
+        key = f"{name.lower().strip()}|{category or ''}"
+        return hashlib.sha256(key.encode()).hexdigest()[:32]
+    
+    def _prefetch_translations(self, products: List[ProductForEnrichment]):
+        """Prefetch all translations from DB cache in one query"""
+        cache_keys = [(self._get_cache_key(p.name, p.category_name), p.name) for p in products]
+        keys_only = [k[0] for k in cache_keys]
+        
+        conn = self._get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    SELECT product_name_hash, product_name, english_translation, translation_method, confidence
+                    FROM translation_cache
+                    WHERE product_name_hash = ANY(%s)
+                """, (keys_only,))
+                rows = cur.fetchall()
+                
+                with self._cache_lock:
+                    for row in rows:
+                        result = TranslationResult(
+                            original=row['product_name'],
+                            english=row['english_translation'],
+                            method=f"cache:{row['translation_method']}",
+                            confidence=float(row['confidence']) if row['confidence'] else 0.8
+                        )
+                        self._translation_cache[row['product_name_hash']] = result
+                
+                self.status_callback(f"📚 Prefetched {len(rows)} translations from cache")
+        finally:
+            conn.close()
+    
+    def _get_cached_translation(self, name: str, category: Optional[str] = None) -> Optional[TranslationResult]:
+        """Check in-memory cache for existing translation"""
+        cache_key = self._get_cache_key(name, category)
+        
+        with self._cache_lock:
+            return self._translation_cache.get(cache_key)
+    
+    def _save_translation_cache(self, name: str, category: Optional[str], result: TranslationResult):
+        """Save translation to in-memory cache (DB save is batched)"""
+        cache_key = self._get_cache_key(name, category)
+        
+        with self._cache_lock:
+            self._translation_cache[cache_key] = result
+            if not hasattr(self, '_pending_cache_saves'):
+                self._pending_cache_saves = []
+            self._pending_cache_saves.append((cache_key, name, category, result))
+    
+    def _flush_translation_cache(self):
+        """Batch save pending translations to database"""
+        with self._cache_lock:
+            pending = getattr(self, '_pending_cache_saves', [])
+            self._pending_cache_saves = []
+        
+        if not pending:
+            return
+        
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                for cache_key, name, category, result in pending:
+                    try:
+                        cur.execute("""
+                            INSERT INTO translation_cache (product_name_hash, product_name, category_name, english_translation, translation_method, confidence)
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (product_name_hash) DO NOTHING
+                        """, (cache_key, name, category, result.english, result.method, result.confidence))
+                    except Exception as e:
+                        self.status_callback(f"⚠️ Cache save error: {str(e)[:50]}")
+            conn.commit()
+            self.status_callback(f"💾 Saved {len(pending)} translations to cache")
+        except Exception as e:
+            self.status_callback(f"⚠️ Cache flush error: {str(e)[:50]}")
+        finally:
+            conn.close()
     
     def get_enrichment_stats(self) -> Dict[str, int]:
         """Get statistics about products needing enrichment"""
@@ -301,13 +397,23 @@ class NutritionEnrichmentService:
         finally:
             conn.close()
     
-    def process_single_product(self, product: ProductForEnrichment, num_options: int = 5) -> EnrichmentMatch:
+    def process_single_product(self, product: ProductForEnrichment, num_options: int = 5, 
+                               translator=None, usda_client=None) -> EnrichmentMatch:
         """Process a single product: translate and search USDA for multiple options"""
         self.status_callback(f"\n🔄 Processing: {product.name} (SKU: {product.sku})")
         
-        translation = self.translator.translate(product.name, category_name=product.category_name)
+        _translator = translator or self.translator
+        _usda_client = usda_client or self.usda_client
         
-        usda_options = self.usda_client.search_and_get_top_matches(translation.english, num_options=num_options)
+        cached = self._get_cached_translation(product.name, product.category_name)
+        if cached:
+            self.status_callback(f"📚 Cache hit: '{cached.english}'")
+            translation = cached
+        else:
+            translation = _translator.translate(product.name, category_name=product.category_name)
+            self._save_translation_cache(product.name, product.category_name, translation)
+        
+        usda_options = _usda_client.search_and_get_top_matches(translation.english, num_options=num_options)
         
         match = EnrichmentMatch(
             product=product,
@@ -324,18 +430,51 @@ class NutritionEnrichmentService:
         
         return match
     
-    def process_batch(self, products: List[ProductForEnrichment]) -> EnrichmentBatch:
-        """Process a batch of products for enrichment"""
+    def process_batch(self, products: List[ProductForEnrichment], max_workers: int = 3) -> EnrichmentBatch:
+        """Process a batch of products for enrichment using parallel processing"""
         batch = EnrichmentBatch()
         
         self.status_callback(f"\n{'='*50}")
-        self.status_callback(f"🚀 Processing batch of {len(products)} products")
+        self.status_callback(f"🚀 Processing batch of {len(products)} products (parallel, {max_workers} workers)")
         self.status_callback(f"{'='*50}")
         
-        for i, product in enumerate(products, 1):
-            self.status_callback(f"\n[{i}/{len(products)}] Processing...")
-            match = self.process_single_product(product)
-            batch.matches.append(match)
+        self._prefetch_translations(products)
+        
+        results_lock = threading.Lock()
+        completed_count = [0]
+        thread_clients = threading.local()
+        
+        def get_thread_clients():
+            if not hasattr(thread_clients, 'translator'):
+                thread_clients.translator, thread_clients.usda_client = self._create_thread_clients()
+            return thread_clients.translator, thread_clients.usda_client
+        
+        def process_with_index(args):
+            idx, product = args
+            translator, usda_client = get_thread_clients()
+            match = self.process_single_product(product, translator=translator, usda_client=usda_client)
+            with results_lock:
+                completed_count[0] += 1
+                self.status_callback(f"✓ [{completed_count[0]}/{len(products)}] {product.name[:40]}...")
+            return idx, match
+        
+        indexed_products = list(enumerate(products))
+        results = [None] * len(products)
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(process_with_index, item): item[0] for item in indexed_products}
+            
+            for future in as_completed(futures):
+                try:
+                    idx, match = future.result()
+                    results[idx] = match
+                except Exception as e:
+                    idx = futures[future]
+                    self.status_callback(f"⚠️ Error processing product {idx}: {str(e)}")
+        
+        self._flush_translation_cache()
+        
+        batch.matches = [r for r in results if r is not None]
         
         self.status_callback(f"\n{'='*50}")
         self.status_callback(f"📊 Batch complete: {batch.total} total, {batch.pending} pending, {batch.no_match} no match")
