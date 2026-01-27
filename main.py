@@ -748,6 +748,16 @@ def section_nutrition_enrichment():
         with col4:
             st.metric("From Rimi", stats['from_rimi'])
         
+        # Show scan button if no products are flagged but some need enrichment
+        unflagged_count = service.get_unflagged_missing_count()
+        if unflagged_count > 0:
+            st.warning(f"Found {unflagged_count} products with missing nutrition data that aren't flagged for enrichment.")
+            if st.button("🔍 Scan & Flag Products", type="primary"):
+                with st.spinner("Scanning products with missing nutrition data..."):
+                    result = service.scan_and_flag_products()
+                    st.success(f"Flagged {result['flagged']} products for enrichment!")
+                    st.rerun()
+        
         st.divider()
         
         col1, col2, col3 = st.columns([1, 1, 2])

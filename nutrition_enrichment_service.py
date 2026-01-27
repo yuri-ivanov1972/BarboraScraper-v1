@@ -160,6 +160,60 @@ class NutritionEnrichmentService:
         finally:
             conn.close()
     
+    def scan_and_flag_products(self) -> Dict[str, int]:
+        """
+        Scan for products with missing nutrition data and flag them for enrichment.
+        Returns count of newly flagged products.
+        """
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                # Find products with missing/empty nutrition data that aren't already flagged
+                cur.execute("""
+                    UPDATE products p
+                    SET needs_enrichment = TRUE, updated_at = NOW()
+                    FROM nutritionfacts nf
+                    WHERE p.product_id = nf.product_id
+                      AND (p.needs_enrichment IS NULL OR p.needs_enrichment = FALSE)
+                      AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                      AND (
+                          (nf.energy_kj IS NULL OR nf.energy_kj = 0)
+                          AND (nf.energy_kcal IS NULL OR nf.energy_kcal = 0)
+                      )
+                    RETURNING p.product_id
+                """)
+                flagged_ids = cur.fetchall()
+                flagged_count = len(flagged_ids)
+                conn.commit()
+                
+                self.status_callback(f"Flagged {flagged_count} products for enrichment")
+                
+                return {
+                    'flagged': flagged_count
+                }
+        finally:
+            conn.close()
+    
+    def get_unflagged_missing_count(self) -> int:
+        """Get count of products with missing nutrition that aren't flagged yet"""
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT COUNT(*)
+                    FROM products p
+                    JOIN nutritionfacts nf ON p.product_id = nf.product_id
+                    WHERE (p.needs_enrichment IS NULL OR p.needs_enrichment = FALSE)
+                      AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                      AND (
+                          (nf.energy_kj IS NULL OR nf.energy_kj = 0)
+                          AND (nf.energy_kcal IS NULL OR nf.energy_kcal = 0)
+                      )
+                """)
+                return cur.fetchone()[0] or 0
+        finally:
+            conn.close()
+    
     def get_products_needing_enrichment(self, limit: int = 20, offset: int = 0) -> List[ProductForEnrichment]:
         """Get products that need nutrition data enrichment"""
         conn = self._get_connection()
