@@ -730,9 +730,16 @@ def section_nutrition_enrichment():
         st.session_state.enrichment_processing = False
     if 'enrichment_log' not in st.session_state:
         st.session_state.enrichment_log = []
+    if 'enrichment_log_buffer' not in st.session_state:
+        st.session_state.enrichment_log_buffer = []
+    
+    import threading
+    log_buffer = st.session_state.enrichment_log_buffer
+    log_lock = threading.Lock()
     
     def log_callback(msg):
-        st.session_state.enrichment_log.append(msg)
+        with log_lock:
+            log_buffer.append(msg)
     
     try:
         service = NutritionEnrichmentService(status_callback=log_callback)
@@ -778,6 +785,8 @@ def section_nutrition_enrichment():
         with col3:
             if st.button("🔄 Load Batch", type="primary", disabled=st.session_state.enrichment_processing):
                 st.session_state.enrichment_log = []
+                st.session_state.enrichment_log_buffer = []
+                log_buffer.clear()
                 st.session_state.enrichment_processing = True
                 st.session_state.enrichment_category_id = selected_category_id
                 st.rerun()
@@ -798,8 +807,12 @@ def section_nutrition_enrichment():
                     st.session_state.enrichment_batch = batch
                 else:
                     st.success("No products need enrichment in this category!")
+                st.session_state.enrichment_log = list(log_buffer)
                 st.session_state.enrichment_processing = False
                 st.rerun()
+        
+        if log_buffer:
+            st.session_state.enrichment_log = list(log_buffer)
         
         if st.session_state.enrichment_log:
             with st.expander("Processing Log", expanded=False):
@@ -832,6 +845,8 @@ def section_nutrition_enrichment():
                 if st.button("🆕 New Batch"):
                     st.session_state.enrichment_batch = None
                     st.session_state.enrichment_log = []
+                    st.session_state.enrichment_log_buffer = []
+                    log_buffer.clear()
                     st.rerun()
             
             st.divider()
