@@ -500,9 +500,13 @@ class FoodTranslator:
         if not self._gemini_client:
             return None
         
+        category_context = ""
+        if hasattr(self, '_current_category') and self._current_category:
+            category_context = f"\nProduct category (Latvian): {self._current_category}"
+        
         prompt = f"""Translate this Latvian food product name to English. 
 Return ONLY the English translation, nothing else.
-Focus on the food item type, not the brand name.
+Focus on the food item type, not the brand name.{category_context}
 
 Latvian product name: {text}
 
@@ -547,7 +551,7 @@ English translation:"""
         self.status_callback(f"⚠️ Gemini translation failed after {max_retries} retries")
         return None
     
-    def translate(self, product_name: str, use_google_fallback: bool = True, use_gemini_fallback: bool = True) -> TranslationResult:
+    def translate(self, product_name: str, use_google_fallback: bool = True, use_gemini_fallback: bool = True, category_name: Optional[str] = None) -> TranslationResult:
         """
         Translate a Latvian product name to English
         
@@ -555,10 +559,12 @@ English translation:"""
             product_name: Latvian product name (e.g., "Ingvers kg")
             use_google_fallback: Whether to use Google Translate for unknown terms
             use_gemini_fallback: Whether to use Gemini AI for unknown terms
+            category_name: Optional category name (Latvian) for context in AI translation
             
         Returns:
             TranslationResult with English name and confidence
         """
+        self._current_category = category_name
         normalized = self._normalize_name(product_name)
         self.status_callback(f"🔤 Translating: '{product_name}' → normalized: '{normalized}'")
         

@@ -214,12 +214,40 @@ class NutritionEnrichmentService:
         finally:
             conn.close()
     
-    def get_products_needing_enrichment(self, limit: int = 20, offset: int = 0) -> List[ProductForEnrichment]:
-        """Get products that need nutrition data enrichment"""
+    def get_categories_needing_enrichment(self) -> List[dict]:
+        """Get categories that have products needing enrichment"""
         conn = self._get_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
+                    SELECT 
+                        nc.category_id,
+                        nc.name_lv,
+                        COUNT(p.product_id) as product_count
+                    FROM normalized_categories nc
+                    JOIN products p ON p.category_id = nc.category_id
+                    WHERE p.needs_enrichment = TRUE
+                      AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                    GROUP BY nc.category_id, nc.name_lv
+                    ORDER BY nc.name_lv
+                """)
+                return [dict(row) for row in cur.fetchall()]
+        finally:
+            conn.close()
+    
+    def get_products_needing_enrichment(self, limit: int = 20, offset: int = 0, category_id: Optional[int] = None) -> List[ProductForEnrichment]:
+        """Get products that need nutrition data enrichment, optionally filtered by category"""
+        conn = self._get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                category_filter = ""
+                params = []
+                if category_id:
+                    category_filter = "AND p.category_id = %s"
+                    params.append(category_id)
+                params.extend([limit, offset])
+                
+                cur.execute(f"""
                     SELECT 
                         p.product_id,
                         p.sku,
@@ -239,9 +267,10 @@ class NutritionEnrichmentService:
                     LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
                     WHERE p.needs_enrichment = TRUE
                       AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                      {category_filter}
                     ORDER BY COALESCE(p.enrichment_skipped, FALSE) ASC, p.product_id
                     LIMIT %s OFFSET %s
-                """, (limit, offset))
+                """, params)
                 
                 rows = cur.fetchall()
                 products = []
@@ -276,7 +305,7 @@ class NutritionEnrichmentService:
         """Process a single product: translate and search USDA for multiple options"""
         self.status_callback(f"\n🔄 Processing: {product.name} (SKU: {product.sku})")
         
-        translation = self.translator.translate(product.name)
+        translation = self.translator.translate(product.name, category_name=product.category_name)
         
         usda_options = self.usda_client.search_and_get_top_matches(translation.english, num_options=num_options)
         
