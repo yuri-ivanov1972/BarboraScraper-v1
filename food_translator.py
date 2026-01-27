@@ -367,7 +367,8 @@ class FoodTranslator:
     """
     Translates Latvian food names to English
     
-    Uses a local dictionary for common terms with optional Google Cloud Translation fallback.
+    Uses a local dictionary for common terms with optional Google Cloud Translation 
+    or Gemini AI fallback via Replit AI Integrations.
     """
     
     def __init__(self, google_api_key: Optional[str] = None, status_callback=None):
@@ -375,6 +376,26 @@ class FoodTranslator:
         self.status_callback = status_callback or print
         self.dictionary = LATVIAN_TO_ENGLISH
         self._google_client = None
+        self._gemini_client = None
+        self._init_gemini_client()
+    
+    def _init_gemini_client(self):
+        """Initialize Gemini client via Replit AI Integrations (no API key required)"""
+        try:
+            api_key = os.environ.get("AI_INTEGRATIONS_GEMINI_API_KEY")
+            base_url = os.environ.get("AI_INTEGRATIONS_GEMINI_BASE_URL")
+            
+            if api_key and base_url:
+                from google import genai
+                self._gemini_client = genai.Client(
+                    api_key=api_key,
+                    http_options={
+                        'api_version': '',
+                        'base_url': base_url
+                    }
+                )
+        except Exception:
+            self._gemini_client = None
     
     def _normalize_name(self, name: str) -> str:
         """Remove weight, quantity, and brand patterns from product name"""
@@ -467,13 +488,60 @@ class FoodTranslator:
             self.status_callback(f"⚠️ Google Translate failed: {str(e)}")
             return None
     
-    def translate(self, product_name: str, use_google_fallback: bool = True) -> TranslationResult:
+    def _translate_with_gemini(self, text: str, max_retries: int = 3) -> Optional[str]:
+        """
+        Translate using Gemini AI via Replit AI Integrations.
+        Uses gemini-2.5-flash model with retry logic for rate limits.
+        No API key required - uses Replit AI Integrations, charges billed to user credits.
+        """
+        if not self._gemini_client:
+            return None
+        
+        prompt = f"""Translate this Latvian food product name to English. 
+Return ONLY the English translation, nothing else.
+Focus on the food item type, not the brand name.
+
+Latvian product name: {text}
+
+English translation:"""
+        
+        import time
+        
+        for attempt in range(max_retries):
+            try:
+                response = self._gemini_client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt
+                )
+                
+                if response.text:
+                    translated = response.text.strip().strip('"\'')
+                    self.status_callback(f"🤖 Gemini translated: '{text}' → '{translated}'")
+                    return translated
+                return None
+                
+            except Exception as e:
+                error_msg = str(e)
+                if "429" in error_msg or "RATELIMIT" in error_msg or "quota" in error_msg.lower():
+                    wait_time = 2 ** attempt
+                    self.status_callback(f"⚠️ Rate limited, waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    self.status_callback(f"⚠️ Gemini translation failed: {error_msg}")
+                    return None
+        
+        self.status_callback(f"⚠️ Gemini translation failed after {max_retries} retries")
+        return None
+    
+    def translate(self, product_name: str, use_google_fallback: bool = True, use_gemini_fallback: bool = True) -> TranslationResult:
         """
         Translate a Latvian product name to English
         
         Args:
             product_name: Latvian product name (e.g., "Ingvers kg")
             use_google_fallback: Whether to use Google Translate for unknown terms
+            use_gemini_fallback: Whether to use Gemini AI for unknown terms
             
         Returns:
             TranslationResult with English name and confidence
@@ -500,6 +568,16 @@ class FoodTranslator:
                     english=google_translation,
                     method='google',
                     confidence=0.9
+                )
+        
+        if use_gemini_fallback:
+            gemini_translation = self._translate_with_gemini(normalized)
+            if gemini_translation:
+                return TranslationResult(
+                    original=product_name,
+                    english=gemini_translation,
+                    method='gemini',
+                    confidence=0.85
                 )
         
         if dict_translation:
