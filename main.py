@@ -1404,13 +1404,16 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
             p.product_id,
             p.sku,
             p.name,
+            p.category_id,
             nc.barbora_category_code as category_code,
             nf.energy_kj,
             nf.carbs_sugars as sugars,
             nf.fat_saturated as saturated_fat,
+            nf.fat_total,
             nf.salt,
             nf.protein,
             nf.fiber,
+            nf.ingredients_text,
             nf.nutri_score_grade as current_grade,
             nf.nutri_score_points as current_score
         FROM products p
@@ -1486,6 +1489,9 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
         fiber_value = product.get('fiber')
         fiber_float = float(fiber_value) if fiber_value is not None else 0.0
         
+        total_fat_value = product.get('fat_total')
+        total_fat_float = float(total_fat_value) if total_fat_value is not None else None
+        
         result = calculator.calculate_single_product(
             energy_kj=float(product['energy_kj']),
             sugars=float(product['sugars']),
@@ -1493,7 +1499,10 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
             salt=float(product['salt']),
             protein=float(product['protein']),
             fiber=fiber_float,
-            category_id=product.get('category_id')
+            total_fat=total_fat_float,
+            category_id=product.get('category_id'),
+            product_name=product.get('name'),
+            ingredients_text=product.get('ingredients_text')
         )
         
         if result['success']:
