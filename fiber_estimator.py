@@ -58,7 +58,7 @@ class FiberEstimator:
     def estimate_fiber(
         self, 
         product_name: str, 
-        rimi_category_code: Optional[str],
+        rimi_category_code: Optional[int],
         current_fiber: Optional[float]
     ) -> Tuple[float, str, bool, str]:
         """
@@ -66,7 +66,7 @@ class FiberEstimator:
         
         Args:
             product_name: Product name for exception matching
-            rimi_category_code: Rimi category code (e.g. 'SH-4-16')
+            rimi_category_code: Rimi category ID (integer from products table)
             current_fiber: Current fiber value from database
             
         Returns:
@@ -79,12 +79,10 @@ class FiberEstimator:
         if current_fiber is not None and current_fiber > 0:
             return current_fiber, "Existing scraped/USDA value", False, "existing"
         
-        if not rimi_category_code:
+        if rimi_category_code is None:
             return 0.0, "No rimi_category_code", False, "none"
         
-        category_id = self.rimi_code_to_category_id(rimi_category_code)
-        if category_id is None:
-            return 0.0, f"Unknown code: {rimi_category_code}", False, "none"
+        category_id = int(rimi_category_code)
         
         exception_fiber, exception_reason = self.check_exception_rules(product_name, category_id)
         if exception_fiber is not None:
@@ -236,17 +234,16 @@ def recalculate_nutriscore_for_products(conn, product_ids: List[int]) -> int:
             if not row or row['energy_kj'] is None:
                 continue
             
-            result = calculate_nutriscore(
+            sodium = float(row['salt']) * 400 if row['salt'] else 0
+            
+            new_points, new_grade, _ = calculate_nutriscore(
                 energy_kj=float(row['energy_kj']) if row['energy_kj'] else 0,
                 saturated_fat=float(row['fat_saturated']) if row['fat_saturated'] else 0,
                 sugars=float(row['carbs_sugars']) if row['carbs_sugars'] else 0,
-                salt=float(row['salt']) if row['salt'] else 0,
+                sodium=sodium,
                 fiber=float(row['fiber']) if row['fiber'] else 0,
                 protein=float(row['protein']) if row['protein'] else 0
             )
-            
-            new_grade = result['grade']
-            new_points = result['total_points']
             
             cur.execute("""
                 UPDATE nutritionfacts 
@@ -294,26 +291,28 @@ def preview_fiber_estimates(limit: int = 50) -> Tuple[List[Dict], int]:
                 nf = cur.fetchone()
             
             if nf and nf['energy_kj']:
-                before_result = calculate_nutriscore(
+                sodium = float(nf['salt']) * 400 if nf['salt'] else 0
+                
+                before_score, before_grade, _ = calculate_nutriscore(
                     energy_kj=float(nf['energy_kj']) if nf['energy_kj'] else 0,
                     saturated_fat=float(nf['fat_saturated']) if nf['fat_saturated'] else 0,
                     sugars=float(nf['carbs_sugars']) if nf['carbs_sugars'] else 0,
-                    salt=float(nf['salt']) if nf['salt'] else 0,
+                    sodium=sodium,
                     fiber=float(est['old_fiber']) if est['old_fiber'] else 0,
                     protein=float(nf['protein']) if nf['protein'] else 0
                 )
                 
-                after_result = calculate_nutriscore(
+                after_score, after_grade, _ = calculate_nutriscore(
                     energy_kj=float(nf['energy_kj']) if nf['energy_kj'] else 0,
                     saturated_fat=float(nf['fat_saturated']) if nf['fat_saturated'] else 0,
                     sugars=float(nf['carbs_sugars']) if nf['carbs_sugars'] else 0,
-                    salt=float(nf['salt']) if nf['salt'] else 0,
+                    sodium=sodium,
                     fiber=float(est['new_fiber']) if est['new_fiber'] else 0,
                     protein=float(nf['protein']) if nf['protein'] else 0
                 )
                 
-                est['before_grade'] = before_result['grade']
-                est['new_grade'] = after_result['grade']
+                est['before_grade'] = before_grade
+                est['new_grade'] = after_grade
             else:
                 est['before_grade'] = None
                 est['new_grade'] = None
