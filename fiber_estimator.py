@@ -169,6 +169,50 @@ def get_products_for_estimation(conn, limit: int = 50) -> List[Dict]:
         return [dict(row) for row in cur.fetchall()]
 
 
+def get_products_for_estimation_by_categories(conn, category_ids: List[int], limit: int = 50) -> List[Dict]:
+    """
+    Get products that need fiber estimation, filtered by specific categories.
+    """
+    if not category_ids:
+        return []
+    
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT 
+                p.product_id,
+                p.sku,
+                p.name,
+                p.rimi_category_code,
+                nf.fiber,
+                nf.nutri_score_grade
+            FROM products p
+            JOIN nutritionfacts nf ON p.product_id = nf.product_id
+            WHERE (nf.fiber IS NULL OR nf.fiber = 0)
+              AND p.rimi_category_code = ANY(%s)
+              AND nf.energy_kj IS NOT NULL
+            ORDER BY p.name
+            LIMIT %s
+        """, (category_ids, limit))
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_products_for_estimation_count_by_categories(conn, category_ids: List[int]) -> int:
+    """Get count of products ready for fiber estimation in specific categories."""
+    if not category_ids:
+        return 0
+    
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM products p
+            JOIN nutritionfacts nf ON p.product_id = nf.product_id
+            WHERE (nf.fiber IS NULL OR nf.fiber = 0)
+              AND p.rimi_category_code = ANY(%s)
+              AND nf.energy_kj IS NOT NULL
+        """, (category_ids,))
+        return cur.fetchone()[0]
+
+
 def get_products_for_estimation_count(conn) -> int:
     """Get count of products ready for fiber estimation."""
     with conn.cursor() as cur:
@@ -258,9 +302,13 @@ def recalculate_nutriscore_for_products(conn, product_ids: List[int]) -> int:
     return changed
 
 
-def preview_fiber_estimates(limit: int = 50) -> Tuple[List[Dict], int]:
+def preview_fiber_estimates(limit: int = 50, only_nonzero_fiber: bool = True) -> Tuple[List[Dict], int]:
     """
     Preview fiber estimates without applying them.
+    
+    Args:
+        limit: Max number of products to preview
+        only_nonzero_fiber: If True, only show products from categories with fiber > 0
     
     Returns:
         Tuple of (preview_results, total_count_ready)
@@ -273,8 +321,13 @@ def preview_fiber_estimates(limit: int = 50) -> Tuple[List[Dict], int]:
     try:
         estimator = FiberEstimator()
         
-        products = get_products_for_estimation(conn, limit=limit)
-        total_count = get_products_for_estimation_count(conn)
+        if only_nonzero_fiber:
+            nonzero_categories = [cat_id for cat_id, fiber in estimator.category_defaults.items() if fiber > 0]
+            products = get_products_for_estimation_by_categories(conn, nonzero_categories, limit=limit)
+            total_count = get_products_for_estimation_count_by_categories(conn, nonzero_categories)
+        else:
+            products = get_products_for_estimation(conn, limit=limit)
+            total_count = get_products_for_estimation_count(conn)
         
         estimates = estimator.batch_estimate(products)
         
