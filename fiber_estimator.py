@@ -255,22 +255,26 @@ def apply_fiber_estimates(conn, estimates: List[Dict]) -> int:
 def recalculate_nutriscore_for_products(conn, product_ids: List[int]) -> int:
     """
     Recalculate Nutri-Score for specific products after fiber update.
-    Uses the existing nutriscore_calculator module.
+    Uses NutriscoreCalculator with full category and ingredient detection.
     
     Returns:
         Number of products with changed grades
     """
-    from nutriscore_calculator import calculate_nutriscore
+    from nutriscore_calculator import NutriscoreCalculator
+    
+    calculator = NutriscoreCalculator(conn)
     
     changed = 0
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         for product_id in product_ids:
             cur.execute("""
                 SELECT 
-                    nf.energy_kj, nf.fat_saturated, nf.carbs_sugars, 
-                    nf.salt, nf.fiber, nf.protein,
+                    p.name, p.category_id,
+                    nf.energy_kj, nf.fat_saturated, nf.fat_total, nf.carbs_sugars, 
+                    nf.salt, nf.fiber, nf.protein, nf.ingredients_text,
                     nf.nutri_score_grade as old_grade
                 FROM nutritionfacts nf
+                JOIN products p ON p.product_id = nf.product_id
                 WHERE nf.product_id = %s
             """, (product_id,))
             
@@ -278,25 +282,31 @@ def recalculate_nutriscore_for_products(conn, product_ids: List[int]) -> int:
             if not row or row['energy_kj'] is None:
                 continue
             
-            sodium = float(row['salt']) * 400 if row['salt'] else 0
-            
-            new_points, new_grade, _ = calculate_nutriscore(
+            result = calculator.calculate_single_product(
                 energy_kj=float(row['energy_kj']) if row['energy_kj'] else 0,
-                saturated_fat=float(row['fat_saturated']) if row['fat_saturated'] else 0,
                 sugars=float(row['carbs_sugars']) if row['carbs_sugars'] else 0,
-                sodium=sodium,
+                saturated_fat=float(row['fat_saturated']) if row['fat_saturated'] else 0,
+                salt=float(row['salt']) if row['salt'] else 0,
+                protein=float(row['protein']) if row['protein'] else 0,
                 fiber=float(row['fiber']) if row['fiber'] else 0,
-                protein=float(row['protein']) if row['protein'] else 0
+                total_fat=float(row['fat_total']) if row['fat_total'] else None,
+                category_id=row['category_id'],
+                product_name=row['name'],
+                ingredients_text=row['ingredients_text']
             )
             
-            cur.execute("""
-                UPDATE nutritionfacts 
-                SET nutri_score_grade = %s, nutri_score_points = %s
-                WHERE product_id = %s
-            """, (new_grade, new_points, product_id))
-            
-            if row['old_grade'] != new_grade:
-                changed += 1
+            if result['success']:
+                new_grade = result['grade']
+                new_points = result['score']
+                
+                cur.execute("""
+                    UPDATE nutritionfacts 
+                    SET nutri_score_grade = %s, nutri_score_points = %s
+                    WHERE product_id = %s
+                """, (new_grade, new_points, product_id))
+                
+                if row['old_grade'] != new_grade:
+                    changed += 1
     
     conn.commit()
     return changed
