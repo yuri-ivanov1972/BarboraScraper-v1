@@ -374,7 +374,8 @@ def load_category_ids(conn) -> Dict[str, Set[int]]:
     """
     all_uuids = FATS_OILS_NUTS_UUIDS | CHEESE_UUIDS | RED_MEAT_UUIDS | FULL_FVN_UUIDS | HALF_FVN_UUIDS | BEVERAGE_UUIDS
     
-    with conn.cursor() as cur:
+    cur = conn.cursor()
+    try:
         cur.execute("""
             SELECT category_id, barbora_category_code 
             FROM normalized_categories 
@@ -382,8 +383,15 @@ def load_category_ids(conn) -> Dict[str, Set[int]]:
         """, (list(all_uuids),))
         
         rows = cur.fetchall()
+    finally:
+        cur.close()
     
-    uuid_to_id = {row[1]: row[0] for row in rows}
+    uuid_to_id = {}
+    for row in rows:
+        if isinstance(row, dict):
+            uuid_to_id[row['barbora_category_code']] = row['category_id']
+        else:
+            uuid_to_id[row[1]] = row[0]
     
     missing = all_uuids - set(uuid_to_id.keys())
     if missing:
