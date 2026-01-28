@@ -533,6 +533,7 @@ class NutritionEnrichmentService:
                         protein = %s,
                         salt = %s,
                         fiber = %s,
+                        is_fiber_correct = CASE WHEN %s IS NOT NULL AND %s > 0 THEN TRUE ELSE is_fiber_correct END,
                         usda_fdc_id = %s,
                         data_source_date = NOW()
                     WHERE product_id = %s
@@ -546,6 +547,8 @@ class NutritionEnrichmentService:
                     nutrition.protein,
                     nutrition.salt,
                     nutrition.fiber,
+                    nutrition.fiber,
+                    nutrition.fiber,
                     usda_fdc_id,
                     match.product.product_id
                 ))
@@ -554,8 +557,8 @@ class NutritionEnrichmentService:
                     cur.execute("""
                         INSERT INTO nutritionfacts 
                         (product_id, energy_kcal, energy_kj, fat_total, fat_saturated, 
-                         carbs_total, carbs_sugars, protein, salt, fiber, usda_fdc_id, data_source_date)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                         carbs_total, carbs_sugars, protein, salt, fiber, usda_fdc_id, data_source_date, is_fiber_correct)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s)
                     """, (
                         match.product.product_id,
                         nutrition.energy_kcal,
@@ -567,7 +570,8 @@ class NutritionEnrichmentService:
                         nutrition.protein,
                         nutrition.salt,
                         nutrition.fiber,
-                        usda_fdc_id
+                        usda_fdc_id,
+                        nutrition.fiber is not None and nutrition.fiber > 0
                     ))
                 
                 cur.execute("""
