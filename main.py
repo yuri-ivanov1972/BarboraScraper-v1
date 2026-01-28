@@ -1300,7 +1300,7 @@ def section_nutriscore_recalculation():
             """)
             categories = [dict(row) for row in cur.fetchall()]
         
-        category_options = {f"{'  ' if c['level'] == 3 else ''}{c['name_lv']}": c['barbora_category_code'] for c in categories}
+        category_options = {f"{'  └ ' if c['level'] == 3 else ''}{c['name_lv']} [{c['barbora_category_code'][:8]}]": c['barbora_category_code'] for c in categories}
         
         selected_category_name = st.selectbox("Select Category:", list(category_options.keys()))
         selected_category_code = category_options.get(selected_category_name)
@@ -1428,8 +1428,8 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
     
     params = []
     if category_code:
-        query += " AND nc.barbora_category_code LIKE %s"
-        params.append(f"{category_code}%")
+        query += " AND nc.barbora_category_code = %s"
+        params.append(category_code)
     
     query += " ORDER BY p.sku"
     
