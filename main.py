@@ -1293,14 +1293,14 @@ def section_nutriscore_recalculation():
         db._ensure_connection()
         with db.connection.cursor() as cur:
             cur.execute("""
-                SELECT barbora_category_code, name_lv 
+                SELECT barbora_category_code, name_lv, level
                 FROM normalized_categories 
-                WHERE level = 2 
-                ORDER BY name_lv
+                WHERE level IN (2, 3)
+                ORDER BY level, name_lv
             """)
             categories = [dict(row) for row in cur.fetchall()]
         
-        category_options = {f"{c['name_lv']} ({c['barbora_category_code']})": c['barbora_category_code'] for c in categories}
+        category_options = {f"{'  ' if c['level'] == 3 else ''}{c['name_lv']}": c['barbora_category_code'] for c in categories}
         
         selected_category_name = st.selectbox("Select Category:", list(category_options.keys()))
         selected_category_code = category_options.get(selected_category_name)
