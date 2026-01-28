@@ -1199,7 +1199,7 @@ def section_fiber_estimation():
             status_text = st.empty()
             
             def progress_callback(processed, total):
-                progress = processed / total if total > 0 else 0
+                progress = min(processed / total, 1.0) if total > 0 else 0
                 progress_bar.progress(progress)
                 status_text.text(f"Applying fiber estimates to {processed}/{total} products...")
             
