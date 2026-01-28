@@ -1293,14 +1293,14 @@ def section_nutriscore_recalculation():
         db._ensure_connection()
         with db.connection.cursor() as cur:
             cur.execute("""
-                SELECT barbora_category_code, name_lv, level
+                SELECT barbora_category_code, name_lv
                 FROM normalized_categories 
-                WHERE level IN (2, 3)
-                ORDER BY level, name_lv
+                WHERE level = 2
+                ORDER BY name_lv
             """)
             categories = [dict(row) for row in cur.fetchall()]
         
-        category_options = {f"{'  └ ' if c['level'] == 3 else ''}{c['name_lv']} [{c['barbora_category_code'][:8]}]": c['barbora_category_code'] for c in categories}
+        category_options = {c['name_lv']: c['barbora_category_code'] for c in categories}
         
         selected_category_name = st.selectbox("Select Category:", list(category_options.keys()))
         selected_category_code = category_options.get(selected_category_name)
@@ -1428,8 +1428,15 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
     
     params = []
     if category_code:
-        query += " AND nc.barbora_category_code = %s"
-        params.append(category_code)
+        query += """ AND (nc.barbora_category_code = %s 
+            OR nc.category_id IN (
+                SELECT c2.category_id FROM normalized_categories c2
+                WHERE c2.parent_category_id = (
+                    SELECT c3.category_id FROM normalized_categories c3
+                    WHERE c3.barbora_category_code = %s
+                )
+            ))"""
+        params.extend([category_code, category_code])
     
     query += " ORDER BY p.sku"
     
