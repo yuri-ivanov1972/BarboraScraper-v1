@@ -375,9 +375,13 @@ def preview_fiber_estimates(limit: int = 50, only_nonzero_fiber: bool = True) ->
         conn.close()
 
 
-def apply_all_fiber_estimates(progress_callback=None) -> Dict:
+def apply_all_fiber_estimates(progress_callback=None, only_nonzero_fiber: bool = True) -> Dict:
     """
     Apply fiber estimates to all eligible products and recalculate Nutri-Scores.
+    
+    Args:
+        progress_callback: Optional callback(processed, total) for progress updates
+        only_nonzero_fiber: If True, only process products from categories with fiber > 0
     
     Returns:
         Dict with statistics
@@ -390,7 +394,13 @@ def apply_all_fiber_estimates(progress_callback=None) -> Dict:
     try:
         estimator = FiberEstimator()
         
-        total_count = get_products_for_estimation_count(conn)
+        if only_nonzero_fiber:
+            nonzero_categories = [cat_id for cat_id, fiber in estimator.category_defaults.items() if fiber > 0]
+            total_count = get_products_for_estimation_count_by_categories(conn, nonzero_categories)
+        else:
+            nonzero_categories = None
+            total_count = get_products_for_estimation_count(conn)
+            
         if total_count == 0:
             return {"message": "No products need fiber estimation", "updated": 0, "grades_changed": 0}
         
@@ -400,7 +410,10 @@ def apply_all_fiber_estimates(progress_callback=None) -> Dict:
         processed = 0
         
         while True:
-            products = get_products_for_estimation(conn, limit=batch_size)
+            if only_nonzero_fiber:
+                products = get_products_for_estimation_by_categories(conn, nonzero_categories, limit=batch_size)
+            else:
+                products = get_products_for_estimation(conn, limit=batch_size)
             if not products:
                 break
             
