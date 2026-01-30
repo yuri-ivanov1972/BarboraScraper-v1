@@ -607,6 +607,66 @@ def section_product_view():
     db.close()
 
 
+def save_nutrition_edits(product_id: int, category_id: int, ingredients_text: str,
+                         energy_kj: float, energy_kcal: float, fat_total: float,
+                         fat_saturated: float, carbs_total: float, carbs_sugars: float,
+                         fiber: float, protein: float, salt: float, mark_manual: bool):
+    """Save manually edited nutrition facts and recalculate Nutri-Score."""
+    from nutriscore_calculator import NutriscoreCalculator
+    
+    db = ProductViewDatabase()
+    db._ensure_connection()
+    
+    try:
+        # Calculate new Nutri-Score
+        calculator = NutriscoreCalculator(db.connection)
+        
+        result = calculator.calculate_single_product(
+            energy_kj=energy_kj,
+            sugars_g=carbs_sugars,
+            salt_g=salt,
+            satfat_g=fat_saturated,
+            protein_g=protein,
+            fiber_g=fiber,
+            fvl_pct=0,
+            category_id=category_id,
+            product_name=None,
+            ingredients_text=ingredients_text
+        )
+        
+        new_grade = result.get('grade', 'U')
+        new_points = result.get('final_score', 0)
+        
+        # Update nutritionfacts table
+        with db.connection.cursor() as cur:
+            cur.execute("""
+                UPDATE nutritionfacts SET
+                    energy_kj = %s,
+                    energy_kcal = %s,
+                    fat_total = %s,
+                    fat_saturated = %s,
+                    carbs_total = %s,
+                    carbs_sugars = %s,
+                    fiber = %s,
+                    protein = %s,
+                    salt = %s,
+                    nutri_score_grade = %s,
+                    nutri_score_points = %s,
+                    nutrition_manual_edit = %s
+                WHERE product_id = %s
+            """, (
+                energy_kj, energy_kcal, fat_total, fat_saturated,
+                carbs_total, carbs_sugars, fiber, protein, salt,
+                new_grade, new_points, mark_manual, product_id
+            ))
+            db.connection.commit()
+    except Exception as e:
+        db.connection.rollback()
+        raise e
+    finally:
+        db.close()
+
+
 def render_product_detail_view():
     """Render detailed product view (similar to reference app)"""
     
@@ -694,6 +754,113 @@ def render_product_detail_view():
     with col3:
         if product.get('fiber') is not None:
             st.metric("Šķiedrvielas", f"{product['fiber']}g")
+    
+    # Manual edit indicator
+    if product.get('nutrition_manual_edit'):
+        st.info("✏️ Šis produkts ir manuāli rediģēts (aizsargāts no automātiskās pārrakstīšanas)")
+    
+    # Nutrition editing expander
+    with st.expander("✏️ Rediģēt uzturvielu informāciju"):
+        st.markdown("**Uzturvielu dati uz 100g/ml:**")
+        
+        # Initialize edit values from product
+        edit_key_prefix = f"edit_{product['product_id']}_"
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            energy_kj = st.number_input(
+                "Enerģija (kJ)", 
+                value=float(product.get('energy_kj') or 0),
+                min_value=0.0,
+                step=1.0,
+                key=f"{edit_key_prefix}energy_kj"
+            )
+            energy_kcal = st.number_input(
+                "Enerģija (kcal)", 
+                value=float(product.get('energy_kcal') or 0),
+                min_value=0.0,
+                step=1.0,
+                key=f"{edit_key_prefix}energy_kcal"
+            )
+            fat_total = st.number_input(
+                "Tauki (g)", 
+                value=float(product.get('fat_total') or 0),
+                min_value=0.0,
+                step=0.1,
+                key=f"{edit_key_prefix}fat_total"
+            )
+            fat_saturated = st.number_input(
+                "Piesātinātie tauki (g)", 
+                value=float(product.get('fat_saturated') or 0),
+                min_value=0.0,
+                step=0.1,
+                key=f"{edit_key_prefix}fat_saturated"
+            )
+            salt = st.number_input(
+                "Sāls (g)", 
+                value=float(product.get('salt') or 0),
+                min_value=0.0,
+                step=0.01,
+                key=f"{edit_key_prefix}salt"
+            )
+        
+        with col2:
+            carbs_total = st.number_input(
+                "Ogļhidrāti (g)", 
+                value=float(product.get('carbs_total') or 0),
+                min_value=0.0,
+                step=0.1,
+                key=f"{edit_key_prefix}carbs_total"
+            )
+            carbs_sugars = st.number_input(
+                "Cukuri (g)", 
+                value=float(product.get('carbs_sugars') or 0),
+                min_value=0.0,
+                step=0.1,
+                key=f"{edit_key_prefix}carbs_sugars"
+            )
+            fiber = st.number_input(
+                "Šķiedrvielas (g)", 
+                value=float(product.get('fiber') or 0),
+                min_value=0.0,
+                step=0.1,
+                key=f"{edit_key_prefix}fiber"
+            )
+            protein = st.number_input(
+                "Olbaltumvielas (g)", 
+                value=float(product.get('protein') or 0),
+                min_value=0.0,
+                step=0.1,
+                key=f"{edit_key_prefix}protein"
+            )
+        
+        # Checkbox for manual edit flag
+        mark_manual = st.checkbox(
+            "Atzīmēt kā manuāli rediģētu (novērsis automātisko pārrakstīšanu)",
+            value=True,
+            key=f"{edit_key_prefix}mark_manual"
+        )
+        
+        # Save button
+        if st.button("💾 Saglabāt un pārrēķināt Nutri-Score", type="primary", key=f"{edit_key_prefix}save"):
+            save_nutrition_edits(
+                product_id=product['product_id'],
+                category_id=product.get('category_id'),
+                ingredients_text=product.get('ingredients_text'),
+                energy_kj=energy_kj,
+                energy_kcal=energy_kcal,
+                fat_total=fat_total,
+                fat_saturated=fat_saturated,
+                carbs_total=carbs_total,
+                carbs_sugars=carbs_sugars,
+                fiber=fiber,
+                protein=protein,
+                salt=salt,
+                mark_manual=mark_manual
+            )
+            st.success("✅ Uzturvielu dati saglabāti un Nutri-Score pārrēķināts!")
+            st.rerun()
     
     # Ingredients
     if product.get('ingredients_text'):

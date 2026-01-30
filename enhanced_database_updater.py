@@ -272,6 +272,13 @@ class EnhancedDatabaseUpdater:
             )
             
             if existing_nutrition:
+                existing_record = existing_nutrition[0]
+                
+                # Skip manually edited products to preserve user corrections
+                if existing_record.get('nutrition_manual_edit'):
+                    self.status_callback(f"⏭️ Skipping product ID {product_id}: manually edited nutrition data protected")
+                    return True
+                
                 # Update existing record - build dynamic UPDATE query
                 update_fields = []
                 update_values = []
@@ -280,8 +287,6 @@ class EnhancedDatabaseUpdater:
                     'ingredients_text', 'energy_kcal', 'energy_kj', 'fat_total', 'fat_saturated',
                     'carbs_total', 'carbs_sugars', 'protein', 'salt', 'fiber'
                 ]
-                
-                existing_record = existing_nutrition[0]
                 
                 for field in nutrition_fields:
                     if field in nutrition_data:
@@ -341,12 +346,14 @@ class EnhancedDatabaseUpdater:
     def force_recalculate_nutriscore(self, product_id: int) -> bool:
         """Force recalculate nutri-score for a product"""
         try:
-            # Get nutrition data
+            # Get nutrition data including ingredients_text for sweetener detection
             nutrition_query = """
-                SELECT energy_kcal, fat_total, fat_saturated, carbs_total, carbs_sugars, 
-                       protein, salt, fiber
-                FROM nutritionfacts 
-                WHERE product_id = %s
+                SELECT nf.energy_kcal, nf.energy_kj, nf.fat_total, nf.fat_saturated, 
+                       nf.carbs_total, nf.carbs_sugars, nf.protein, nf.salt, nf.fiber,
+                       nf.ingredients_text, p.category_id, p.name
+                FROM nutritionfacts nf
+                JOIN products p ON nf.product_id = p.product_id
+                WHERE nf.product_id = %s
             """
             nutrition_result = self._execute_query(nutrition_query, (product_id,), fetch=True)
             
@@ -414,73 +421,65 @@ class EnhancedDatabaseUpdater:
                 self.status_callback("=" * 50)
                 return False
             
-            # Calculate nutri-score using the calculator
+            # Calculate nutri-score using the calculator with category and ingredients for beverage detection
             self.status_callback("✓ All required fields present with non-zero values - proceeding with calculation")
             try:
-                from nutriscore_calculator import calculate_nutriscore
-                
-                # Convert salt to sodium (mg/100g) for nutri-score calculation
-                sodium_mg = nutrition.get('salt', 0) * 400 if nutrition.get('salt') else 0
+                from nutriscore_calculator import NutriscoreCalculator
                 
                 # Convert kcal to kj if needed (1 kcal = 4.184 kj)
                 energy_kj = nutrition.get('energy_kj', 0) or (nutrition.get('energy_kcal', 0) * 4.184 if nutrition.get('energy_kcal') else 0)
+                
+                # Get category and ingredients for proper beverage sweetener detection
+                category_id = nutrition.get('category_id')
+                ingredients_text = nutrition.get('ingredients_text')
+                product_name = nutrition.get('name')
                 
                 # Show input values for calculation
                 self.status_callback("Input values for nutri-score calculation:")
                 self.status_callback(f"  - energy_kj: {energy_kj} (converted from kcal if needed)")
                 self.status_callback(f"  - sugars: {nutrition.get('carbs_sugars', 0) or 0}")
                 self.status_callback(f"  - saturated_fat: {nutrition.get('fat_saturated', 0) or 0}")
-                self.status_callback(f"  - sodium: {sodium_mg} (from salt: {nutrition.get('salt', 0)})")
+                self.status_callback(f"  - salt: {nutrition.get('salt', 0)}")
                 self.status_callback(f"  - protein: {nutrition.get('protein', 0) or 0}")
-                self.status_callback(f"  - fiber: {int(nutrition.get('fiber', 0))}")
+                self.status_callback(f"  - fiber: {nutrition.get('fiber', 0) or 0}")
+                self.status_callback(f"  - category_id: {category_id}")
                 
-                nutri_result = calculate_nutriscore(
+                # Use NutriscoreCalculator with db connection for category detection
+                calculator = NutriscoreCalculator(self.conn)
+                
+                nutri_result = calculator.calculate_single_product(
                     energy_kj=energy_kj,
-                    sugars=nutrition.get('carbs_sugars', 0) or 0,
-                    saturated_fat=nutrition.get('fat_saturated', 0) or 0,
-                    sodium=sodium_mg,
-                    protein=nutrition.get('protein', 0) or 0,
-                    fiber=int(nutrition.get('fiber', 0))
+                    sugars_g=nutrition.get('carbs_sugars', 0) or 0,
+                    salt_g=nutrition.get('salt', 0) or 0,
+                    satfat_g=nutrition.get('fat_saturated', 0) or 0,
+                    protein_g=nutrition.get('protein', 0) or 0,
+                    fiber_g=nutrition.get('fiber', 0) or 0,
+                    fvl_pct=0,
+                    category_id=category_id,
+                    product_name=product_name,
+                    ingredients_text=ingredients_text
                 )
                 
-                # Handle different return formats from nutri-score calculator
-                if nutri_result:
-                    # Calculator returns tuple: (points, grade, details)
-                    if isinstance(nutri_result, tuple) and len(nutri_result) >= 2:
-                        points, grade = nutri_result[0], nutri_result[1]
-                        self.status_callback(f"Nutri-score calculated: {grade} ({points} points)")
-                        
-                        # Update nutri-score in database
-                        update_query = """
-                            UPDATE nutritionfacts 
-                            SET nutri_score_grade = %s, nutri_score_points = %s, data_source_date = CURRENT_TIMESTAMP
-                            WHERE product_id = %s
-                        """
-                        self._execute_query(update_query, (grade, points, product_id))
-                        self.status_callback(f"✓ NUTRI-SCORE CALCULATION SUCCESS: {grade} ({points} points)")
-                        self.status_callback("=" * 50)
-                        return True
+                # Handle dictionary format from calculate_single_product
+                if nutri_result and isinstance(nutri_result, dict) and 'grade' in nutri_result:
+                    grade = nutri_result['grade']
+                    points = nutri_result.get('final_score', 0)
                     
-                    # Alternative: dictionary format
-                    elif isinstance(nutri_result, dict) and 'grade' in nutri_result and 'points' in nutri_result:
-                        grade, points = nutri_result['grade'], nutri_result['points']
-                        
-                        # Update nutri-score in database
-                        update_query = """
-                            UPDATE nutritionfacts 
-                            SET nutri_score_grade = %s, nutri_score_points = %s, data_source_date = CURRENT_TIMESTAMP
-                            WHERE product_id = %s
-                        """
-                        self._execute_query(update_query, (grade, points, product_id))
-                        self.status_callback(f"✓ NUTRI-SCORE CALCULATION SUCCESS: {grade} ({points} points)")
-                        self.status_callback("=" * 50)
-                        return True
+                    # Log sweetener detection for beverages
+                    if nutri_result.get('classification', {}).get('is_beverage'):
+                        has_sweeteners = nutri_result.get('classification', {}).get('has_sweeteners', False)
+                        self.status_callback(f"  - Beverage detected, sweeteners: {has_sweeteners}")
                     
-                    else:
-                        self.status_callback("✗ NUTRI-SCORE CALCULATION FAILED: Unexpected result format")
-                        self.status_callback(f"Calculator returned: {nutri_result}")
-                        self.status_callback(f"Result type: {type(nutri_result)}")
-                        self.status_callback("=" * 50)
+                    # Update nutri-score in database
+                    update_query = """
+                        UPDATE nutritionfacts 
+                        SET nutri_score_grade = %s, nutri_score_points = %s, data_source_date = CURRENT_TIMESTAMP
+                        WHERE product_id = %s
+                    """
+                    self._execute_query(update_query, (grade, points, product_id))
+                    self.status_callback(f"✓ NUTRI-SCORE CALCULATION SUCCESS: {grade} ({points} points)")
+                    self.status_callback("=" * 50)
+                    return True
                 else:
                     self.status_callback("✗ NUTRI-SCORE CALCULATION FAILED: No result from calculator")
                     self.status_callback("=" * 50)
