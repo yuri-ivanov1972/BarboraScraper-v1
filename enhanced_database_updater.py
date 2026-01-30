@@ -449,12 +449,13 @@ class EnhancedDatabaseUpdater:
                 
                 nutri_result = calculator.calculate_single_product(
                     energy_kj=energy_kj,
-                    sugars_g=nutrition.get('carbs_sugars', 0) or 0,
-                    salt_g=nutrition.get('salt', 0) or 0,
-                    satfat_g=nutrition.get('fat_saturated', 0) or 0,
-                    protein_g=nutrition.get('protein', 0) or 0,
-                    fiber_g=nutrition.get('fiber', 0) or 0,
-                    fvl_pct=0,
+                    sugars=nutrition.get('carbs_sugars', 0) or 0,
+                    salt=nutrition.get('salt', 0) or 0,
+                    saturated_fat=nutrition.get('fat_saturated', 0) or 0,
+                    protein=nutrition.get('protein', 0) or 0,
+                    fiber=nutrition.get('fiber', 0) or 0,
+                    total_fat=nutrition.get('fat_total'),
+                    fruits_veg_nuts=0,
                     category_id=category_id,
                     product_name=product_name,
                     ingredients_text=ingredients_text

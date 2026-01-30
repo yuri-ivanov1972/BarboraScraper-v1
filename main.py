@@ -623,12 +623,13 @@ def save_nutrition_edits(product_id: int, category_id: int, ingredients_text: st
         
         result = calculator.calculate_single_product(
             energy_kj=energy_kj,
-            sugars_g=carbs_sugars,
-            salt_g=salt,
-            satfat_g=fat_saturated,
-            protein_g=protein,
-            fiber_g=fiber,
-            fvl_pct=0,
+            sugars=carbs_sugars,
+            salt=salt,
+            saturated_fat=fat_saturated,
+            protein=protein,
+            fiber=fiber,
+            total_fat=fat_total,
+            fruits_veg_nuts=0,
             category_id=category_id,
             product_name=None,
             ingredients_text=ingredients_text
