@@ -541,7 +541,7 @@ def section_product_view():
             search_sql = """
             SELECT p.product_id, p.sku, p.name, p.name_norm,
                    nc.name_lv as category_name,
-                   (SELECT pp.photo_url FROM product_photos pp WHERE pp.product_id = p.product_id ORDER BY pp.is_primary DESC LIMIT 1) as photo_url,
+                   (SELECT pp.photo_url FROM productphotos pp WHERE pp.product_id = p.product_id ORDER BY pp.is_primary DESC LIMIT 1) as photo_url,
                    latest_price.price, latest_price.is_available
             FROM products p
             LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
