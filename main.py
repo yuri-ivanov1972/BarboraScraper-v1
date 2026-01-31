@@ -532,6 +532,54 @@ def section_product_view():
             render_category_tree_node(root_category, db, level=0)
     
     with col_main:
+        # Search by ID or SKU
+        search_query = st.text_input("🔍 Meklēt pēc produkta ID vai SKU", placeholder="Ievadiet ID vai SKU...")
+        
+        if search_query.strip():
+            # Search mode
+            search_term = search_query.strip()
+            search_sql = """
+            SELECT p.product_id, p.sku, p.name, p.name_norm,
+                   nc.name_lv as category_name,
+                   (SELECT pp.photo_url FROM product_photos pp WHERE pp.product_id = p.product_id ORDER BY pp.is_primary DESC LIMIT 1) as photo_url,
+                   latest_price.price, latest_price.is_available
+            FROM products p
+            LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
+            LEFT JOIN LATERAL (
+                SELECT price, is_available FROM product_price_history 
+                WHERE product_id = p.product_id 
+                ORDER BY recorded_at DESC LIMIT 1
+            ) latest_price ON true
+            WHERE p.product_id::text = %s OR p.sku = %s
+            LIMIT 10
+            """
+            db._ensure_connection()
+            with db.connection.cursor() as cursor:
+                cursor.execute(search_sql, (search_term, search_term))
+                search_results = cursor.fetchall()
+            
+            if search_results:
+                st.success(f"Atrasti {len(search_results)} produkti")
+                for prod in search_results:
+                    col_img, col_info = st.columns([1, 4])
+                    with col_img:
+                        if prod['photo_url']:
+                            st.image(prod['photo_url'], width=80)
+                        else:
+                            st.write("📷")
+                    with col_info:
+                        if st.button(f"**{prod['name']}**", key=f"search_{prod['product_id']}"):
+                            st.session_state.selected_product_id = prod['product_id']
+                            st.rerun()
+                        st.caption(f"ID: {prod['product_id']} | SKU: {prod['sku']} | {prod['category_name'] or 'Nav kategorijas'}")
+                        price_str = f"€{prod['price']:.2f}" if prod['price'] else "Nav cenas"
+                        avail_str = "✅ Pieejams" if prod['is_available'] else "❌ Nav pieejams"
+                        st.caption(f"{price_str} | {avail_str}")
+                    st.divider()
+            else:
+                st.warning(f"Produkti ar ID vai SKU '{search_term}' nav atrasti")
+            return
+        
         # Get products for selected category
         products, total = db.get_products_by_category(
             category_id=st.session_state.selected_category_id,
