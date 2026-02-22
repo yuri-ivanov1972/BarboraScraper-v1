@@ -152,6 +152,7 @@ BEVERAGE_UUIDS = {
     "dba4a762-f88e-418d-a434-896552b7e779",  # UHT Milk
     "4f93ccdf-77c9-408d-ad87-20391ae8fe63",  # Kefir and Kefir Drinks
     "16418c99-3f2f-4884-b8b7-68fe09d1f9bb",  # Buttermilk
+    "f5b46128-300d-458d-9be6-51815319e0e0",  # Drinking yogurt
 }
 
 LATVIAN_SWEETENER_INDICATORS = [
