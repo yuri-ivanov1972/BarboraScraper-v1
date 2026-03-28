@@ -285,27 +285,180 @@ class BarboraWorker:
         self.complete_job(job_id, final_status, f"Processed {processed} products, {errors} errors" if errors else None)
         logger.info(f"Job #{job_id} completed: {processed} processed, {errors} errors")
     
+    def _parse_quantity(self, name: str, neto_str: str = None):
+        """
+        Parse quantity_value and quantity_unit from product name and optional HTML neto value.
+
+        neto_str: raw number string from 'Neto daudzums (g/ml)' HTML field.
+                  The field is always expressed in grams or millilitres.
+
+        Returns: (Decimal or None, str or None)
+        """
+        from decimal import Decimal, InvalidOperation
+
+        if not name:
+            return None, None
+
+        name_stripped = name.strip()
+
+        # --- Variable weight: ends with "sver." (sold loose by weight) ---
+        if re.search(r'sver\.\s*$', name_stripped, re.IGNORECASE):
+            return None, None
+
+        # --- Multi-pack: NxM unit  e.g. "20x2,25g", "6 x 100g", "3 x 35g" ---
+        multi_match = re.search(
+            r'(\d+)\s*[xX×]\s*(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l)\b',
+            name_stripped, re.IGNORECASE
+        )
+        if multi_match:
+            try:
+                count    = Decimal(multi_match.group(1))
+                unit_qty = Decimal(multi_match.group(2).replace(',', '.'))
+                unit     = multi_match.group(3).lower()
+                return count * unit_qty, unit
+            except (InvalidOperation, ValueError):
+                pass
+
+        # --- Standard weight/volume: NUMBER g/kg/ml/l ---
+        # Word boundary after unit prevents "g" in "gab" from matching.
+        weight_match = re.search(
+            r'(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l)\b',
+            name_stripped, re.IGNORECASE
+        )
+        if weight_match:
+            unit = weight_match.group(2).lower()
+            if neto_str:
+                try:
+                    neto_val = Decimal(neto_str.strip())
+                    # neto is always in g/ml; convert to kg/l if name uses those units
+                    if unit in ('kg', 'l'):
+                        return neto_val / 1000, unit
+                    else:
+                        return neto_val, unit
+                except (InvalidOperation, ValueError):
+                    pass
+            try:
+                return Decimal(weight_match.group(1).replace(',', '.')), unit
+            except (InvalidOperation, ValueError):
+                return None, unit
+
+        # --- Bare "kg" at end of name without a leading number ---
+        # e.g. "Sīpoli sarkanie kg", "Cūkgaļas lāpstiņa bez kaula ar ādu kg"
+        if re.search(r'\bkg\s*$', name_stripped, re.IGNORECASE):
+            if neto_str:
+                try:
+                    # neto is in grams; convert to kg
+                    return Decimal(neto_str.strip()) / 1000, 'kg'
+                except (InvalidOperation, ValueError):
+                    pass
+            return None, 'kg'
+
+        # --- Piece count: "6gab." or bare "gab." at end ---
+        gab_match = re.search(r'(\d+)\s*gab\.?\b', name_stripped, re.IGNORECASE)
+        if gab_match:
+            try:
+                return Decimal(gab_match.group(1)), 'gab'
+            except (InvalidOperation, ValueError):
+                pass
+
+        if re.search(r'\bgab\.?\s*$', name_stripped, re.IGNORECASE):
+            return None, 'gab'
+
+        # --- neto_str only with no recognisable unit — don't assume g/ml ---
+        return None, None
+
+    def backfill_quantity_from_names(self, status_callback=None) -> dict:
+        """
+        Backfill quantity_value / quantity_unit for existing products that have
+        NULL values by re-parsing their stored product names.
+
+        Returns a summary dict with counts.
+        """
+        log = status_callback or (lambda msg: None)
+        conn = self._get_connection()
+        updated = 0
+        skipped = 0
+        failed  = 0
+
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT product_id, name
+                FROM products
+                WHERE quantity_value IS NULL AND quantity_unit IS NULL
+                ORDER BY product_id
+            """)
+            rows = cur.fetchall()
+            total = len(rows)
+            log(f"Found {total} products with no quantity data")
+
+            for i, row in enumerate(rows):
+                if isinstance(row, dict):
+                    pid, name = row['product_id'], row['name']
+                else:
+                    pid, name = row[0], row[1]
+
+                qty_val, qty_unit = self._parse_quantity(name)
+
+                if qty_val is None and qty_unit is None:
+                    skipped += 1
+                    continue
+
+                try:
+                    cur.execute("""
+                        UPDATE products
+                        SET quantity_value = %s, quantity_unit = %s
+                        WHERE product_id = %s
+                    """, (qty_val, qty_unit, pid))
+                    updated += 1
+                except Exception as e:
+                    logger.warning(f"Failed to update quantity for product_id={pid}: {e}")
+                    failed += 1
+
+                if (i + 1) % 500 == 0:
+                    conn.commit()
+                    log(f"  Progress: {i + 1}/{total} processed, {updated} updated so far")
+
+            conn.commit()
+            log(f"Backfill complete: {updated} updated, {skipped} no pattern found, {failed} errors")
+            return {'total': total, 'updated': updated, 'skipped': skipped, 'failed': failed}
+
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Backfill failed: {e}")
+            return {'total': 0, 'updated': 0, 'skipped': 0, 'failed': 1, 'error': str(e)}
+        finally:
+            conn.close()
+
     def save_product(self, product, category_id: int, product_url: str) -> int:
         """Save or update product in the database. Returns product_id."""
         conn = self._get_connection()
         product_id = None
         try:
             cur = conn.cursor()
-            
+
             name_norm = normalize_latvian_text(product.name) if product.name else None
-            
+
+            # Parse quantity from the HTML neto field (number-only string) + product name (unit)
+            qty_value, qty_unit = self._parse_quantity(product.name, getattr(product, 'weight', None))
+
             cur.execute("""
-                INSERT INTO products (sku, name, name_norm, barbora_url, category_id, country_of_origin, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                INSERT INTO products (sku, name, name_norm, barbora_url, category_id,
+                                      country_of_origin, quantity_value, quantity_unit,
+                                      created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (sku) DO UPDATE SET
                     name = EXCLUDED.name,
                     name_norm = EXCLUDED.name_norm,
                     barbora_url = EXCLUDED.barbora_url,
                     category_id = EXCLUDED.category_id,
                     country_of_origin = EXCLUDED.country_of_origin,
+                    quantity_value = COALESCE(EXCLUDED.quantity_value, products.quantity_value),
+                    quantity_unit  = COALESCE(EXCLUDED.quantity_unit,  products.quantity_unit),
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING product_id
-            """, (product.sku, product.name, name_norm, product_url, category_id, product.country_of_origin))
+            """, (product.sku, product.name, name_norm, product_url, category_id,
+                  product.country_of_origin, qty_value, qty_unit))
             
             product_id = cur.fetchone()[0]
             

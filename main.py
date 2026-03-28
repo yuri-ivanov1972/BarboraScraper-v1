@@ -1439,18 +1439,116 @@ def section_fiber_estimation():
                 st.session_state['fiber_estimates_count'] = 0
 
 
+def section_quantity_backfill():
+    """Section: Quantity Backfill — fill quantity_value / quantity_unit for existing products."""
+    st.subheader("📦 Quantity Backfill")
+
+    st.info(
+        "Parses `quantity_value` and `quantity_unit` from product names for all products "
+        "that currently have no quantity data. Products with a recognisable unit in their name "
+        "(e.g. '500 g', '0.75 l', '20x2.25g', 'kg') will be updated. "
+        "The remaining products will stay empty until they are re-scraped."
+    )
+
+    # --- Preview ---
+    db = ProductViewDatabase()
+    db._ensure_connection()
+    with db.connection.cursor() as cur:
+        cur.execute("SELECT COUNT(*) AS total FROM products WHERE quantity_value IS NULL AND quantity_unit IS NULL")
+        null_count = cur.fetchone()['total']
+        cur.execute("SELECT COUNT(*) AS total FROM products")
+        all_count = cur.fetchone()['total']
+        cur.execute("SELECT COUNT(*) AS total FROM products WHERE quantity_value IS NOT NULL OR quantity_unit IS NOT NULL")
+        filled_count = cur.fetchone()['total']
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total products", all_count)
+    col2.metric("Already have quantity", filled_count)
+    col3.metric("Missing quantity (will process)", null_count)
+
+    if null_count == 0:
+        st.success("All products already have quantity data.")
+        return
+
+    # --- Sample preview ---
+    with st.expander("Preview: sample of products that will be parsed", expanded=False):
+        from barbora_worker import BarboraWorker
+        worker = BarboraWorker.__new__(BarboraWorker)  # no DB connection needed for parsing
+        worker.nutriscore_calculator = None
+        worker.ingredient_processor = None
+        worker.fiber_estimator = None
+
+        with db.connection.cursor() as cur:
+            cur.execute("""
+                SELECT name FROM products
+                WHERE quantity_value IS NULL AND quantity_unit IS NULL
+                ORDER BY RANDOM() LIMIT 20
+            """)
+            sample_rows = [dict(r) for r in cur.fetchall()]
+
+        preview_data = []
+        for row in sample_rows:
+            v, u = worker._parse_quantity(row['name'])
+            preview_data.append({
+                'Name': row['name'],
+                'Parsed value': str(v) if v is not None else '—',
+                'Parsed unit': u if u else '—',
+            })
+
+        import pandas as pd
+        st.dataframe(pd.DataFrame(preview_data), use_container_width=True)
+
+    # --- Run ---
+    if st.button("▶ Run Quantity Backfill", type="primary"):
+        log_lines = []
+        progress = st.progress(0)
+        status_box = st.empty()
+
+        def log(msg):
+            log_lines.append(msg)
+            status_box.text(msg)
+
+        with st.spinner("Running backfill…"):
+            from barbora_worker import BarboraWorker
+            worker = BarboraWorker()
+            result = worker.backfill_quantity_from_names(status_callback=log)
+
+        progress.progress(1.0)
+
+        if 'error' in result:
+            st.error(f"Backfill failed: {result['error']}")
+        else:
+            st.success(
+                f"Done — {result['updated']} products updated, "
+                f"{result['skipped']} had no parseable pattern, "
+                f"{result['failed']} errors."
+            )
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Processed", result['total'])
+            c2.metric("Updated", result['updated'])
+            c3.metric("No pattern", result['skipped'])
+            c4.metric("Errors", result['failed'])
+
+        with st.expander("Log", expanded=False):
+            st.text("\n".join(log_lines))
+
+
 def section_nutriscore_recalculation():
     """Section: Nutri-Score Tools"""
     st.header("📊 Nutri-Score Tools")
     
     tool = st.radio(
         "Tool:",
-        ["🔄 Recalculate Nutri-Score", "🌾 Fiber Estimation"],
+        ["🔄 Recalculate Nutri-Score", "🌾 Fiber Estimation", "📦 Quantity Backfill"],
         horizontal=True
     )
-    
+
     if tool == "🌾 Fiber Estimation":
         section_fiber_estimation()
+        return
+
+    if tool == "📦 Quantity Backfill":
+        section_quantity_backfill()
         return
     
     st.subheader("🔄 Recalculate Nutri-Score")
