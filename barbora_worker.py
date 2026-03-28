@@ -84,8 +84,11 @@ class BarboraWorker:
             logger.warning(f"FiberEstimator not available: {e}")
             self.fiber_estimator = None
         
-        signal.signal(signal.SIGTERM, self._signal_handler)
-        signal.signal(signal.SIGINT, self._signal_handler)
+        try:
+            signal.signal(signal.SIGTERM, self._signal_handler)
+            signal.signal(signal.SIGINT, self._signal_handler)
+        except ValueError:
+            pass
         
         logger.info(f"Worker {self.worker_id} initialized")
         
