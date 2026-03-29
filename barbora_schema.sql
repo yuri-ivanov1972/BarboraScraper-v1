@@ -57,7 +57,8 @@ CREATE TABLE IF NOT EXISTS products (
     allergens           TEXT,
     description         TEXT,
     -- legacy / cross-system reference
-    rimi_category_code  INTEGER
+    rimi_category_code  INTEGER,
+    has_confirmed_match BOOLEAN         DEFAULT FALSE
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_sku              ON products (sku);
