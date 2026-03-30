@@ -13,7 +13,7 @@ echo ""
 mkdir -p logs
 
 echo "Starting lightweight update scheduler in background..."
-python -u lightweight_scheduler.py --enable 2>&1 | tee logs/scheduler.log &
+python -u lightweight_scheduler.py --enable > >(tee logs/scheduler.log) 2>&1 &
 SCHEDULER_PID=$!
 echo "Scheduler started (PID: $SCHEDULER_PID)"
 echo "Schedule: 2:00 AM Latvia time (Europe/Riga)"
