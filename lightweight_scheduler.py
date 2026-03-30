@@ -80,16 +80,31 @@ def run_lightweight_update():
     return summary
 
 
+def get_next_run_time():
+    """Return a human-readable string for the next scheduled 2am run."""
+    from datetime import timedelta
+    now = get_latvia_time()
+    next_run = now.replace(hour=SCHEDULE_HOUR, minute=SCHEDULE_MINUTE, second=0, microsecond=0)
+    if next_run <= now:
+        next_run += timedelta(days=1)
+    return next_run.strftime('%Y-%m-%d %H:%M:%S %Z')
+
+
 def scheduler_loop(enabled_override=False):
     """Main scheduler loop - runs indefinitely, checking every minute"""
     is_enabled = ENABLED or enabled_override
-    
+
+    now = get_latvia_time()
     print(f"Lightweight Update Scheduler started")
     print(f"  Schedule: {SCHEDULE_HOUR:02d}:{SCHEDULE_MINUTE:02d} {TIMEZONE}")
     print(f"  Enabled: {is_enabled}")
-    print(f"  Press Ctrl+C to stop")
+    print(f"  Current time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    if is_enabled:
+        print(f"  Next scheduled run: {get_next_run_time()}")
+    else:
+        print(f"  WARNING: Scheduler is disabled — pass --enable to activate")
     print()
-    
+
     last_run_date = None
     check_count = 0
     

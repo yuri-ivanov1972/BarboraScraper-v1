@@ -1228,7 +1228,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "beautifulsoup4", specifier = ">=4.12.3" },
-    { name = "google-genai", specifier = ">=1.57.0" },
+    { name = "google-genai", specifier = "==1.57.0" },
     { name = "openai", specifier = ">=1.59.5" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
