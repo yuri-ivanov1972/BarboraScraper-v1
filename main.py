@@ -10,11 +10,20 @@ import time
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from combined_ingredient_analyzer import (
-    get_analysis_stats, run_test_batch, run_full_analysis, 
-    reset_all_analysis, batch_update_ingredients, BATCH_SIZE,
-    refresh_materialized_view
-)
+try:
+    from combined_ingredient_analyzer import (
+        get_analysis_stats, run_test_batch, run_full_analysis,
+        reset_all_analysis, batch_update_ingredients, BATCH_SIZE,
+        refresh_materialized_view
+    )
+    _ANALYZER_AVAILABLE = True
+    _ANALYZER_ERROR = None
+except Exception as _analyzer_import_error:
+    _ANALYZER_AVAILABLE = False
+    _ANALYZER_ERROR = str(_analyzer_import_error)
+    BATCH_SIZE = 40
+    get_analysis_stats = run_test_batch = run_full_analysis = None
+    reset_all_analysis = batch_update_ingredients = refresh_materialized_view = None
 
 st.set_page_config(
     page_title="Maxima Product Scraper",
@@ -2009,7 +2018,15 @@ def section_lightweight_update():
 def section_ingredient_analysis():
     """Combined Ingredient Analysis with AI categorization and NOVA4 suspicion detection"""
     st.header("🧪 Combined Ingredient Analysis")
-    
+
+    if not _ANALYZER_AVAILABLE:
+        st.error(
+            "AI Analysis is temporarily unavailable due to a package issue on this server. "
+            "All other parts of the app work normally.\n\n"
+            f"**Technical detail:** `{_ANALYZER_ERROR}`"
+        )
+        return
+
     stats = get_analysis_stats()
     if stats:
         col1, col2, col3, col4 = st.columns(4)

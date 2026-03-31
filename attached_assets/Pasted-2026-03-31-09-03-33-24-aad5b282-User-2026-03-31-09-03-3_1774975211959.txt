@@ -1,0 +1,88 @@
+2026-03-31 09:03:33.24
+aad5b282
+User
+[2026-03-31 09:03:33 EEST] Scheduler alive - waiting for 02:00
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/google/genai/__init__.py", line 18, in <module>
+2026-03-31 09:32:53.84
+aad5b282
+User
+from . import types
+2026-03-31 09:32:53.84
+aad5b282
+User
+Traceback (most recent call last):
+2026-03-31 09:32:53.84
+aad5b282
+User
+from combined_ingredient_analyzer import (
+2026-03-31 09:32:53.84
+aad5b282
+User
+from . import interactions
+2026-03-31 09:32:53.84
+aad5b282
+User
+2026-03-31 06:32:53.780 Uncaught app execution
+2026-03-31 09:32:53.84
+aad5b282
+User
+^^^^^^
+2026-03-31 09:32:53.84
+aad5b282
+User
+from google import genai
+2026-03-31 09:32:53.84
+aad5b282
+User
+from .tool import Tool as Tool
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/google/genai/_interactions/types/__init__.py", line 20, in <module>
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 88, in exec_func_with_error_handling
+2026-03-31 09:32:53.84
+aad5b282
+User
+result = func()
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/google/genai/interactions.py", line 17, in <module>
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/combined_ingredient_analyzer.py", line 6, in <module>
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/google/genai/_interactions/__init__.py", line 20, in <module>
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 579, in code_to_exec
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/google/genai/_interactions/types/tool.py", line 24, in <module>
+2026-03-31 09:32:53.84
+aad5b282
+User
+File "/home/runner/workspace/main.py", line 13, in <module>
+2026-03-31 09:32:53.84
+aad5b282
+User
+from ._interactions.types import *
+2026-03-31 09:32:53.84
+aad5b282
+User
+exec(code, module.__dict__)
+2026-03-31 09:33:33.25
+aad5b282
+User
+[2026-03-31 09:33:33 EEST] Scheduler alive - waiting for 02:00
