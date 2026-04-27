@@ -14,7 +14,8 @@ Preferred approach: Simplified category-by-category analysis in read-only mode w
 - **product_price_history table** stores ALL price and availability data with columns: `price_history_id`, `product_id`, `price`, `currency`, `is_available`, `recorded_at`, `data_source`, `created_at`, `price_per_unit`, `price_per_unit_type`, `discount_price`, `discount_price_per_unit`
 - To get current price/availability: Query latest record from `product_price_history` using LATERAL JOIN
 - To update price/availability: INSERT new record into `product_price_history` (do NOT UPDATE products table)
-- Products table only tracks: `product_id`, `sku`, `name`, `name_norm`, `rimi_url`, `category_id`, `quantity_value`, `quantity_unit`, `created_at`, `updated_at`, `country_of_origin`, `nutrition_source`, `needs_enrichment`, `enrichment_reviewed`
+- Products table columns: `product_id`, `sku`, `name`, `name_norm`, `barbora_url`, `category_id`, `quantity_value`, `quantity_unit`, `created_at`, `updated_at`, `country_of_origin`, `nutrition_source`, `needs_enrichment`, `enrichment_reviewed`, `enrichment_skipped`, `ingredients`, `allergens`, `description`, `rimi_category_code`, `has_confirmed_match`
+- **Single schema file**: `barbora_schema.sql` — generated from live DB on 2026-04-27, covers all 15 tables. `database_schema.sql` and the old attached asset have been removed.
 
 **CRITICAL COMMUNICATION RULE**: NEVER invent, assume, or imagine facts, data, category names, product information, or system details. When you don't know something factual about the system, Rimi categories, product data, or any other concrete information:
 1. Explicitly state "I don't know" or "I need to check"  

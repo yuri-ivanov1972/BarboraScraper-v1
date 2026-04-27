@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Barbora Grocery Price Tracker — Complete Database Schema
 -- PostgreSQL 16
--- Generated from live database: 2026-03-28
+-- Generated from live database: 2026-04-27
 -- =============================================================================
 
 -- ============================================================
@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS product_price_history (
 
 CREATE INDEX IF NOT EXISTS idx_price_history_product          ON product_price_history (product_id);
 CREATE INDEX IF NOT EXISTS idx_price_history_recorded         ON product_price_history (recorded_at);
-CREATE INDEX IF NOT EXISTS idx_price_history_product_recorded ON product_price_history (product_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_price_history_product_recorded ON product_price_history (product_id, recorded_at DESC);
 
 -- Convenience: get current price with a LATERAL JOIN
 -- SELECT p.product_id, p.name, ph.price, ph.discount_price, ph.is_available
@@ -213,7 +213,7 @@ CREATE TABLE IF NOT EXISTS category_processing_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status   ON category_processing_jobs (status);
 CREATE INDEX IF NOT EXISTS idx_jobs_category ON category_processing_jobs (category_code);
-CREATE INDEX IF NOT EXISTS idx_jobs_priority ON category_processing_jobs (priority, scheduled_for);
+CREATE INDEX IF NOT EXISTS idx_jobs_priority ON category_processing_jobs (priority DESC, scheduled_for);
 CREATE INDEX IF NOT EXISTS idx_jobs_worker   ON category_processing_jobs (current_worker_id);
 
 
