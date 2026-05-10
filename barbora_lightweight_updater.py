@@ -24,9 +24,23 @@ class BarboraLightweightUpdater:
         self.status_callback = status_callback or (lambda x: None)
         self.parser = BarboraParser(status_callback)
         
-    def _get_connection(self):
-        """Get database connection"""
-        return psycopg2.connect(os.environ['DATABASE_URL'], cursor_factory=RealDictCursor)
+    def _get_connection(self, retries: int = 5, delay: int = 10):
+        """Get database connection with retry logic for Neon cold-start wake-up.
+
+        Neon suspends idle databases and the first connection after a long pause
+        can fail with "Control plane request failed" while the instance is waking.
+        Retrying a few times (with a short wait) is all that's needed.
+        """
+        last_err = None
+        for attempt in range(1, retries + 1):
+            try:
+                return psycopg2.connect(os.environ['DATABASE_URL'], cursor_factory=RealDictCursor)
+            except psycopg2.OperationalError as e:
+                last_err = e
+                if attempt < retries:
+                    self._log(f"DB connection attempt {attempt}/{retries} failed — retrying in {delay}s... ({e})")
+                    time.sleep(delay)
+        raise last_err
     
     def _log(self, message: str):
         """Log status message"""
