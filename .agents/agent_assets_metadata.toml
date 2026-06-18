@@ -1,0 +1,20 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "3qsrsTUPLdQjlXw1N6ACu"
+uri = "file://attached_assets/generated_videos/scraping_products_to_database.mp4"
+type = "video"
+title = "Clip 1 — Scraping products into the database"
+
+[[outputs]]
+id = "1OUdI_aoNU7TcymLDaCsS"
+uri = "file://attached_assets/generated_videos/price_history_tracking.mp4"
+type = "video"
+title = "Clip 2 — Price history tracking over time"
+
+[[outputs]]
+id = "sXbPncX6nXDuKu7q_Oxcr"
+uri = "file://attached_assets/generated_videos/nightly_scheduler_2am_latvia.mp4"
+type = "video"
+title = "Clip 3 — Nightly 2am scheduler (Latvia)"
