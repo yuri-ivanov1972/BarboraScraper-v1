@@ -13,31 +13,19 @@ from core_parser import RimiParser
 from update_report import UpdateReport
 
 
-def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None, use_production: bool = False, update_mode: str = 'incremental'):
+def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None, update_mode: str = 'incremental'):
     """
     Queue all level2 categories for processing
     
     Args:
         priority: Job priority (1-10, higher = more urgent)
         skip_recent_days: Skip categories updated within this many days (None = don't skip)
-        use_production: Whether to use production database (default: False)
         update_mode: Update mode - 'full' (complete re-scrape) or 'incremental' (new products + price/availability, default)
     
     Returns:
         Number of jobs created
     """
-    if use_production:
-        db_url = os.environ.get('PROD_DATABASE_URL')
-        if not db_url:
-            raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
-        print("=" * 60)
-        print("🚀 PRODUCTION MODE: Queueing jobs to production database")
-        print("=" * 60)
-    else:
-        db_url = os.environ['DATABASE_URL']
-        print("=" * 60)
-        print("🔧 DEVELOPMENT MODE: Queueing jobs to development database")
-        print("=" * 60)
+    db_url = os.environ['DATABASE_URL']
     conn = None
     jobs_created = 0
     jobs_skipped = 0
@@ -199,16 +187,9 @@ def queue_all_level2_categories(priority: int = 5, skip_recent_days: int = None,
             conn.close()
 
 
-def show_queue_status(use_production: bool = False):
+def show_queue_status():
     """Show current job queue status"""
-    if use_production:
-        db_url = os.environ.get('PROD_DATABASE_URL')
-        if not db_url:
-            raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
-        print("🚀 PRODUCTION MODE: Showing production queue status")
-    else:
-        db_url = os.environ['DATABASE_URL']
-        print("🔧 DEVELOPMENT MODE: Showing development queue status")
+    db_url = os.environ['DATABASE_URL']
     conn = None
     
     try:
@@ -242,13 +223,12 @@ def show_queue_status(use_production: bool = False):
             conn.close()
 
 
-def generate_update_report(hours: int = 24, use_production: bool = False, save: bool = True, exit_on_complete: bool = True):
+def generate_update_report(hours: int = 24, save: bool = True, exit_on_complete: bool = True):
     """
     Generate and display update report for recent period
     
     Args:
         hours: Report time window in hours
-        use_production: Use production database
         save: Save report to database
         exit_on_complete: If True, call sys.exit() on completion (for CLI use).
                          If False, return status code instead (for scheduler use).
@@ -257,17 +237,7 @@ def generate_update_report(hours: int = 24, use_production: bool = False, save: 
         If exit_on_complete=False: returns (success: bool, report: dict or None, message: str)
         If exit_on_complete=True: calls sys.exit() and never returns
     """
-    # Select database
-    db_url = None
-    if use_production:
-        db_url = os.environ.get('PROD_DATABASE_URL')
-        if not db_url:
-            if exit_on_complete:
-                raise ValueError("PROD_DATABASE_URL not set, but --production flag was used")
-            else:
-                return (False, None, "PROD_DATABASE_URL not set")
-    else:
-        db_url = os.environ['DATABASE_URL']
+    db_url = os.environ['DATABASE_URL']
     
     # Generate report
     reporter = UpdateReport(db_url)
@@ -326,16 +296,14 @@ def main():
     parser.add_argument('--report', action='store_true', help='Generate update report')
     parser.add_argument('--report-hours', type=int, default=24, help='Report time window in hours (default: 24)')
     parser.add_argument('--no-save', action='store_true', help='Do not save report to database')
-    parser.add_argument('--production', action='store_true', help='Use production database instead of development')
     
     args = parser.parse_args()
     
     if args.status:
-        show_queue_status(use_production=args.production)
+        show_queue_status()
     elif args.report:
         generate_update_report(
             hours=args.report_hours,
-            use_production=args.production,
             save=not args.no_save
         )
     elif args.queue_all:
@@ -350,7 +318,6 @@ def main():
         jobs_created = queue_all_level2_categories(
             priority=args.priority,
             skip_recent_days=args.skip_recent_days,
-            use_production=args.production,
             update_mode=update_mode
         )
         

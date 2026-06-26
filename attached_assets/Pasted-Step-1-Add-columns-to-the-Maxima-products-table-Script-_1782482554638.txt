@@ -1,0 +1,89 @@
+Step 1 — Add columns to the Maxima products table
+Script: add_nova_columns.py
+
+What it does:
+
+Checks whether nova_score (integer) and nova_source (varchar 30) already exist on the products table
+If not, adds them
+Prints a confirmation with the current count of NULL nova_score products
+python add_nova_columns.py --dry-run   # preview only
+python add_nova_columns.py             # apply
+
+Reads from: MAXIMA_DATABASE_URL env var
+
+Step 2 — Sync Rimi category NOVA scores into the Maxima DB
+Script: sync_rimi_nova_categories.py
+
+Why needed: the NOVA score for each category lives in the Rimi project's DB (normalized_categories.nova_score). The Maxima DB needs a local copy so nova_calculator.py can look it up without a live connection to the Rimi DB.
+
+What it does:
+
+Creates (if not exists) a small table in the Maxima DB:
+CREATE TABLE IF NOT EXISTS rimi_nova_categories (
+    rimi_category_code TEXT PRIMARY KEY,
+    nova_score         INTEGER,
+    synced_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+Reads rimi_category_code + nova_score from the Rimi DB (read-only)
+Upserts all rows into rimi_nova_categories in the Maxima DB
+Reads from: RIMI_DATABASE_URL (read-only) + MAXIMA_DATABASE_URL
+
+When to re-run: whenever you update NOVA scores in the Rimi project via the Categories UI.
+
+python sync_rimi_nova_categories.py --dry-run   # preview counts
+python sync_rimi_nova_categories.py             # apply
+
+Step 3 — Populate NOVA scores for all existing products
+Script: populate_nova.py
+
+What it does (two-pass rule, same as Rimi):
+
+Pass 1 — additive override:
+Products that have at least one ingredient with suspicion_level IN ('avoid', 'limit') in ingredient_analysis (linked via ingredient_product_mapping) → nova_score = 4, nova_source = 'additive_override'
+
+Pass 2 — category fallback:
+Remaining products → look up nova_score from rimi_nova_categories using products.rimi_category_code → nova_source = 'category_inherited'
+
+Skips: any product where nova_source = 'manual_override' (hand-set in the UI)
+
+python populate_nova.py --dry-run   # preview: shows counts per pass
+python populate_nova.py             # apply
+
+Reads from: MAXIMA_DATABASE_URL
+
+Step 4 — nova_calculator.py (automatic scoring for new products)
+A module with one function: assign_nova_score(conn, product_id, sku)
+
+Same two-pass logic as populate_nova.py but for a single product. Called automatically after ingredient processing completes for each newly scraped product.
+
+Wire it into the Maxima equivalent of force_update_ingredients() — the function that runs after new product ingredients are saved and AI-analyzed:
+
+from nova_calculator import assign_nova_score
+result = assign_nova_score(self.conn, product_id, sku)
+
+Rules:
+
+Fires after all ingredient suspicion levels are set (AI analysis complete)
+Skips manual_override products
+Errors are caught and logged — never blocks the scrape pipeline
+Full workflow
+First-time setup (run once):
+
+python add_nova_columns.py
+python sync_rimi_nova_categories.py
+python populate_nova.py
+
+Ongoing — when Rimi NOVA categories change:
+
+python sync_rimi_nova_categories.py
+python populate_nova.py   # re-scores category_inherited products
+
+Ongoing — new products scraped:
+Automatic — nova_calculator.py fires inside the scraper pipeline, no manual step needed.
+
+Env vars the Maxima project needs
+Variable	Used by
+MAXIMA_DATABASE_URL	all scripts + nova_calculator.py
+RIMI_DATABASE_URL	sync_rimi_nova_categories.py only (read-only, only when syncing)
+This plan is self-contained. The agent working in the Maxima project can follow it step by step without touching the Rimi project at all.

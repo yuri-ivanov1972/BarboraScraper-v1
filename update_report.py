@@ -407,22 +407,11 @@ def main():
     
     parser = argparse.ArgumentParser(description='Generate update report')
     parser.add_argument('--hours', type=int, default=24, help='Report time window in hours (default: 24)')
-    parser.add_argument('--production', action='store_true', help='Use production database')
     parser.add_argument('--save', action='store_true', help='Save report to database')
     
     args = parser.parse_args()
     
-    # Select database
-    db_url = None
-    if args.production:
-        db_url = os.environ.get('PROD_DATABASE_URL')
-        if not db_url:
-            print("❌ PROD_DATABASE_URL not set")
-            return
-        print("🚀 Using production database")
-    else:
-        db_url = os.environ['DATABASE_URL']
-        print("🔧 Using development database")
+    db_url = os.environ['DATABASE_URL']
     
     # Generate report
     reporter = UpdateReport(db_url)

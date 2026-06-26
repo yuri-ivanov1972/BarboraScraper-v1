@@ -21,10 +21,6 @@ import threading
 from datetime import datetime
 import pytz
 
-# Set production mode from args before imports
-if '--production' in sys.argv:
-    os.environ['ENVIRONMENT'] = 'production'
-
 from worker import ProcessingWorker
 from auto_update import queue_all_level2_categories, generate_update_report
 
@@ -49,9 +45,8 @@ LATVIA_TZ = pytz.timezone('Europe/Riga')
 class SchedulerThread(threading.Thread):
     """Background thread that runs scheduled tasks"""
     
-    def __init__(self, use_production: bool = False):
+    def __init__(self):
         super().__init__(daemon=True)
-        self.use_production = use_production
         self.running = True
         self.last_queue_date = None
         self.last_report_date = None
@@ -113,7 +108,6 @@ class SchedulerThread(threading.Thread):
         try:
             queue_all_level2_categories(
                 priority=10,
-                use_production=self.use_production,
                 update_mode='incremental'
             )
             logger.info("Successfully queued all categories")
@@ -128,8 +122,7 @@ class SchedulerThread(threading.Thread):
         
         try:
             result = generate_update_report(
-                hours=12, 
-                use_production=self.use_production,
+                hours=12,
                 exit_on_complete=False
             )
             success, report, message = result
@@ -145,27 +138,20 @@ class SchedulerThread(threading.Thread):
 
 def main():
     parser = argparse.ArgumentParser(description='Worker with built-in scheduler for Reserved VM')
-    parser.add_argument('--production', action='store_true', help='Use production database')
     parser.add_argument('--chunk-size', type=int, default=15, help='Products per processing chunk')
     parser.add_argument('--max-workers', type=int, default=3, help='Max concurrent workers per chunk')
     parser.add_argument('--heartbeat-interval', type=int, default=30, help='Heartbeat interval in seconds')
     
     args = parser.parse_args()
     
-    use_production = args.production
-    
     logger.info("=" * 60)
-    logger.info("Rimi Product Scraper - Worker with Scheduler")
+    logger.info("Barbora Product Scraper - Worker with Scheduler")
     logger.info("=" * 60)
-    if use_production:
-        logger.info("MODE: PRODUCTION")
-    else:
-        logger.info("MODE: DEVELOPMENT")
     logger.info(f"Current Latvia time: {datetime.now(LATVIA_TZ).strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("")
     
     # Start scheduler thread
-    scheduler = SchedulerThread(use_production=use_production)
+    scheduler = SchedulerThread()
     scheduler.start()
     logger.info("Scheduler thread started in background")
     
@@ -183,7 +169,6 @@ def main():
         heartbeat_interval=args.heartbeat_interval,
         chunk_size=args.chunk_size,
         max_workers=args.max_workers,
-        use_production=use_production
     )
     
     try:

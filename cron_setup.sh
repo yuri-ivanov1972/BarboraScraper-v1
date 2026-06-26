@@ -40,10 +40,10 @@ CRON_JOBS=$(cat <<'CRONEOF'
 TZ=Europe/Riga
 
 # Daily Update - Queue all categories at 2:00 AM
-0 2 * * * cd PROJECT_DIR && /home/runner/.nix-profile/bin/python3 auto_update.py --production --queue-all --priority 10 >> CRON_LOG_DIR/daily_queue_$(date +\%Y\%m\%d).log 2>&1
+0 2 * * * cd PROJECT_DIR && /home/runner/.nix-profile/bin/python3 auto_update.py --queue-all --priority 10 >> CRON_LOG_DIR/daily_queue_$(date +\%Y\%m\%d).log 2>&1
 
 # Daily Report - Generate report at 6:00 AM (after updates complete)
-0 6 * * * cd PROJECT_DIR && /home/runner/.nix-profile/bin/python3 auto_update.py --production --report --report-hours 12 >> CRON_LOG_DIR/daily_report_$(date +\%Y\%m\%d).log 2>&1
+0 6 * * * cd PROJECT_DIR && /home/runner/.nix-profile/bin/python3 auto_update.py --report --report-hours 12 >> CRON_LOG_DIR/daily_report_$(date +\%Y\%m\%d).log 2>&1
 
 # Weekly cleanup - Remove old logs (keep last 30 days)
 0 3 * * 0 find CRON_LOG_DIR -name "*.log" -mtime +30 -delete >> CRON_LOG_DIR/cleanup.log 2>&1
@@ -106,7 +106,7 @@ echo ""
 echo -e "${YELLOW}Worker Daemon Setup:${NC}"
 echo "To run the worker in daemon mode on Reserved VM, use:"
 echo ""
-echo "  nohup python worker.py --production --daemon --chunk-size 15 --max-workers 3 --heartbeat-interval 30 > logs/worker_daemon.log 2>&1 &"
+echo "  nohup python worker.py --daemon --chunk-size 15 --max-workers 3 --heartbeat-interval 30 > logs/worker_daemon.log 2>&1 &"
 echo ""
 echo "This will:"
 echo "  - Run the worker in background (daemon mode)"
@@ -143,6 +143,6 @@ echo "  crontab -l                                  # View installed cron jobs"
 echo "  crontab -e                                  # Edit cron jobs"
 echo "  tail -f $CRON_LOG_DIR/daily_queue_*.log     # Monitor queue logs"
 echo "  tail -f logs/worker_daemon.log              # Monitor worker logs"
-echo "  python auto_update.py --production --status # Check job queue status"
-echo "  python auto_update.py --production --report # Generate manual report"
+echo "  python auto_update.py --status # Check job queue status"
+echo "  python auto_update.py --report # Generate manual report"
 echo ""
