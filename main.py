@@ -836,13 +836,41 @@ def render_product_detail_view():
             if product.get('nutri_score_points') is not None:
                 st.caption(f"Punkti: {product['nutri_score_points']}")
 
-        # NOVA Score
-        nova_score = product.get('nova_score')
+        # NOVA Score + inline override
+        nova_score  = product.get('nova_score')
+        nova_source = product.get('nova_source')
+        product_id  = product['product_id']
+        sku         = product['sku']
+
         if nova_score is not None:
             st.markdown(render_nova_badge(nova_score), unsafe_allow_html=True)
-            nova_source = product.get('nova_source')
             source_label = _NOVA_SOURCE_LABELS.get(nova_source, nova_source or '')
             st.caption(f"NOVA source: {source_label}")
+
+        with st.expander("✏️ Override NOVA score", expanded=False):
+            new_score = st.selectbox(
+                "Set score",
+                options=[1, 2, 3, 4],
+                index=(nova_score - 1) if nova_score else 3,
+                format_func=lambda s: f"NOVA {s} — {_NOVA_LABELS[s]}",
+                key=f"nova_override_sel_{product_id}",
+            )
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                if st.button("💾 Save", key=f"nova_override_save_{product_id}", use_container_width=True):
+                    db.set_nova_override(product_id, new_score)
+                    st.success(f"NOVA {new_score} saved")
+                    st.rerun()
+            with btn_col2:
+                if nova_source == 'manual_override':
+                    if st.button("↩️ Remove", key=f"nova_override_rm_{product_id}", use_container_width=True):
+                        result = db.remove_nova_override(product_id, sku)
+                        auto = result.get('nova_score')
+                        if auto:
+                            st.info(f"Restored: NOVA {auto} ({result.get('nova_source', '')})")
+                        else:
+                            st.info("Override removed — no automatic score found.")
+                        st.rerun()
 
         # Price
         if product.get('price'):
@@ -2328,7 +2356,7 @@ def section_nova_override():
 def main():
     st.title("🛒 Maxima Product Scraper")
     
-    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -2372,12 +2400,6 @@ def main():
             st.session_state.view_mode = 'ingredient_analysis'
             st.rerun()
     
-    with col8:
-        if st.button("🏷️ NOVA Overrides", use_container_width=True,
-                     type="primary" if st.session_state.view_mode == 'nova_override' else "secondary"):
-            st.session_state.view_mode = 'nova_override'
-            st.rerun()
-    
     st.divider()
     
     if st.session_state.view_mode == 'category_processing':
@@ -2392,8 +2414,6 @@ def main():
         section_lightweight_update()
     elif st.session_state.view_mode == 'ingredient_analysis':
         section_ingredient_analysis()
-    elif st.session_state.view_mode == 'nova_override':
-        section_nova_override()
     else:
         section_nutrition_enrichment()
 
