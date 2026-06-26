@@ -61,6 +61,33 @@ def render_nutri_score_badge(grade: str) -> str:
     return f'<div style="background-color: {color}; color: white; font-weight: bold; padding: 4px 8px; border-radius: 4px; display: inline-block; font-size: 14px;">{grade}</div>'
 
 
+_NOVA_COLORS = {1: '#038141', 2: '#85BB2F', 3: '#EE8100', 4: '#E63E11'}
+_NOVA_LABELS = {
+    1: 'Unprocessed',
+    2: 'Culinary ingredient',
+    3: 'Processed',
+    4: 'Ultra-processed',
+}
+_NOVA_SOURCE_LABELS = {
+    'additive_override': 'from additives',
+    'category_inherited': 'from category',
+    'manual_override': 'manual override',
+}
+
+
+def render_nova_badge(score: int) -> str:
+    """Render NOVA score badge HTML"""
+    if score is None:
+        return ""
+    color = _NOVA_COLORS.get(score, '#999')
+    label = _NOVA_LABELS.get(score, '')
+    return (
+        f'<div style="background-color: {color}; color: white; font-weight: bold; '
+        f'padding: 4px 8px; border-radius: 4px; display: inline-block; font-size: 13px;">'
+        f'NOVA {score} — {label}</div>'
+    )
+
+
 def render_product_card(product: dict) -> None:
     """Render a single product card in grid"""
     
@@ -71,11 +98,17 @@ def render_product_card(product: dict) -> None:
     else:
         st.markdown("<div style='background:#f0f0f0; height:150px; display:flex; align-items:center; justify-content:center;'>No Image</div>", unsafe_allow_html=True)
     
-    # Nutri-Score badge
+    # Score badges row
     nutri_grade = product.get('nutri_score_grade')
+    nova_score = product.get('nova_score')
+    badges = []
     if nutri_grade:
-        st.markdown(render_nutri_score_badge(nutri_grade), unsafe_allow_html=True)
-    
+        badges.append(render_nutri_score_badge(nutri_grade))
+    if nova_score is not None:
+        badges.append(render_nova_badge(nova_score))
+    if badges:
+        st.markdown(" &nbsp; ".join(badges), unsafe_allow_html=True)
+
     # Product name (clickable)
     product_name = product.get('name', 'Unknown Product')
     if st.button(f"**{product_name[:50]}**", key=f"prod_{product['product_id']}", use_container_width=True):
@@ -498,6 +531,44 @@ def section_category_processing():
         """)
 
 
+def _render_nova_summary(db: ProductViewDatabase) -> None:
+    """Render NOVA score distribution summary bar"""
+    try:
+        stats = db.get_nova_summary_stats()
+    except Exception:
+        return
+
+    total = stats['total_products']
+    scored = stats['scored_products']
+    dist = stats['distribution']
+
+    if not scored:
+        return
+
+    nova4 = dist.get(4, {})
+    nova4_pct = nova4.get('pct_of_scored', 0)
+
+    with st.expander(f"📊 NOVA Score Summary — {nova4_pct}% of scored products are ultra-processed (NOVA 4)", expanded=False):
+        st.caption(f"{scored} of {total} products have a NOVA score")
+        cols = st.columns(4)
+        for i, (score, color, label) in enumerate([
+            (1, _NOVA_COLORS[1], _NOVA_LABELS[1]),
+            (2, _NOVA_COLORS[2], _NOVA_LABELS[2]),
+            (3, _NOVA_COLORS[3], _NOVA_LABELS[3]),
+            (4, _NOVA_COLORS[4], _NOVA_LABELS[4]),
+        ]):
+            info = dist.get(score, {'count': 0, 'pct_of_scored': 0.0})
+            with cols[i]:
+                st.markdown(
+                    f'<div style="background:{color};color:white;font-weight:bold;'
+                    f'padding:8px;border-radius:6px;text-align:center;">'
+                    f'NOVA {score}<br>{info["pct_of_scored"]}%<br>'
+                    f'<small>{info["count"]} products</small></div>',
+                    unsafe_allow_html=True
+                )
+                st.caption(label)
+
+
 def section_product_view():
     """Section 2: Product View with hierarchical categories and grid"""
     st.header("🛍️ Product Browser")
@@ -508,7 +579,10 @@ def section_product_view():
         return
     
     db = ProductViewDatabase()
-    
+
+    # NOVA summary stat
+    _render_nova_summary(db)
+
     # Build category tree with product counts
     category_tree = db.build_category_tree()
     product_counts = db.get_category_product_counts()
@@ -761,7 +835,15 @@ def render_product_detail_view():
             st.markdown(render_nutri_score_badge(product['nutri_score_grade']), unsafe_allow_html=True)
             if product.get('nutri_score_points') is not None:
                 st.caption(f"Punkti: {product['nutri_score_points']}")
-        
+
+        # NOVA Score
+        nova_score = product.get('nova_score')
+        if nova_score is not None:
+            st.markdown(render_nova_badge(nova_score), unsafe_allow_html=True)
+            nova_source = product.get('nova_source')
+            source_label = _NOVA_SOURCE_LABELS.get(nova_source, nova_source or '')
+            st.caption(f"NOVA source: {source_label}")
+
         # Price
         if product.get('price'):
             st.metric("Cena", f"€{product['price']:.2f}")

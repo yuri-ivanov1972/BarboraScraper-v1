@@ -142,6 +142,8 @@ class ProductViewDatabase:
             p.quantity_value,
             p.quantity_unit,
             p.barbora_url,
+            p.nova_score,
+            p.nova_source,
             nc.barbora_category_code,
             nc.name_lv as category_name,
             nf.nutri_score_grade,
@@ -226,6 +228,8 @@ class ProductViewDatabase:
             p.quantity_unit,
             p.barbora_url,
             p.country_of_origin,
+            p.nova_score,
+            p.nova_source,
             nc.barbora_category_code,
             nc.name_lv as category_name,
             nf.nutri_score_grade,
@@ -315,6 +319,8 @@ class ProductViewDatabase:
             p.category_id,
             p.quantity_value,
             p.quantity_unit,
+            p.nova_score,
+            p.nova_source,
             nc.barbora_category_code,
             nc.name_lv as category_name,
             nf.nutri_score_grade,
@@ -353,6 +359,49 @@ class ProductViewDatabase:
             
             return products, total
     
+    def get_nova_summary_stats(self) -> Dict:
+        """
+        Get NOVA score distribution across all products
+        Returns counts and percentages per NOVA score (1-4)
+        """
+        self._ensure_connection()
+
+        query = """
+        SELECT
+            nova_score,
+            COUNT(*) as count
+        FROM products
+        WHERE nova_score IS NOT NULL
+        GROUP BY nova_score
+        ORDER BY nova_score
+        """
+
+        total_query = "SELECT COUNT(*) as total FROM products"
+
+        with self.connection.cursor() as cursor:
+            cursor.execute(total_query)
+            total = cursor.fetchone()['total']
+
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+        scored_total = sum(r['count'] for r in rows)
+        distribution = {}
+        for row in rows:
+            score = row['nova_score']
+            count = row['count']
+            distribution[score] = {
+                'count': count,
+                'pct_of_scored': round(100 * count / scored_total, 1) if scored_total else 0,
+                'pct_of_all': round(100 * count / total, 1) if total else 0,
+            }
+
+        return {
+            'total_products': total,
+            'scored_products': scored_total,
+            'distribution': distribution,
+        }
+
     def close(self):
         """Close database connection"""
         if self.connection and not self.connection.closed:
