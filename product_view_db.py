@@ -402,6 +402,64 @@ class ProductViewDatabase:
             'distribution': distribution,
         }
 
+    def search_products_for_nova(self, query: str) -> list:
+        """Search products by SKU or name for NOVA override tool."""
+        self._ensure_connection()
+        with self.connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT product_id, sku, name, nova_score, nova_source, rimi_category_code
+                FROM products
+                WHERE sku ILIKE %s OR name ILIKE %s
+                ORDER BY name
+                LIMIT 30
+                """,
+                (f"%{query}%", f"%{query}%"),
+            )
+            return list(cur.fetchall())
+
+    def get_nova_overrides(self) -> list:
+        """Return all products that have a manual NOVA override."""
+        self._ensure_connection()
+        with self.connection.cursor() as cur:
+            cur.execute(
+                """
+                SELECT product_id, sku, name, nova_score, nova_source
+                FROM products
+                WHERE nova_source = 'manual_override'
+                ORDER BY name
+                """
+            )
+            return list(cur.fetchall())
+
+    def set_nova_override(self, product_id: int, nova_score: int) -> None:
+        """Set a manual NOVA override for a product."""
+        self._ensure_connection()
+        with self.connection.cursor() as cur:
+            cur.execute(
+                "UPDATE products SET nova_score = %s, nova_source = 'manual_override' "
+                "WHERE product_id = %s",
+                (nova_score, product_id),
+            )
+        self.connection.commit()
+
+    def remove_nova_override(self, product_id: int, sku: str) -> dict:
+        """
+        Remove a manual override and re-assign the automatic score.
+        Returns the result dict from nova_calculator.assign_nova_score.
+        """
+        self._ensure_connection()
+        with self.connection.cursor() as cur:
+            cur.execute(
+                "UPDATE products SET nova_score = NULL, nova_source = NULL "
+                "WHERE product_id = %s",
+                (product_id,),
+            )
+        self.connection.commit()
+
+        from nova_calculator import assign_nova_score
+        return assign_nova_score(self.connection, product_id, sku)
+
     def close(self):
         """Close database connection"""
         if self.connection and not self.connection.closed:

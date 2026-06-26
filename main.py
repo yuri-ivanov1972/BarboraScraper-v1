@@ -2219,10 +2219,116 @@ def section_ingredient_analysis():
         st.caption("Cost: ~$0.005-0.02 per batch using Replit AI Integrations (billed to credits)")
 
 
+def section_nova_override():
+    """Manual NOVA score override tool."""
+    st.header("🏷️ NOVA Score Overrides")
+    st.caption(
+        "Correct wrong NOVA scores by setting a manual override. "
+        "Manual overrides survive automatic re-scoring runs. "
+        "Removing an override restores the automatic score."
+    )
+
+    db = ProductViewDatabase()
+
+    tab_set, tab_list = st.tabs(["✏️ Set Override", "📋 Current Overrides"])
+
+    # ── Tab 1: Search & override ──────────────────────────────────────────────
+    with tab_set:
+        st.subheader("Find a product")
+        query = st.text_input(
+            "Search by SKU or product name",
+            placeholder="e.g. 12345 or Maize bread",
+            key="nova_override_search",
+        )
+
+        if query and len(query) >= 2:
+            results = db.search_products_for_nova(query)
+            if not results:
+                st.info("No products found — try a different search term.")
+            else:
+                st.caption(f"{len(results)} product(s) found (max 30 shown)")
+
+                for prod in results:
+                    pid   = prod["product_id"]
+                    sku   = prod["sku"]
+                    name  = prod["name"] or "(no name)"
+                    cur_score  = prod["nova_score"]
+                    cur_source = prod["nova_source"] or "—"
+
+                    with st.expander(f"{name}  |  SKU {sku}", expanded=False):
+                        col_info, col_form = st.columns([1, 1])
+
+                        with col_info:
+                            st.markdown("**Current NOVA score**")
+                            if cur_score:
+                                st.markdown(render_nova_badge(cur_score), unsafe_allow_html=True)
+                                source_label = _NOVA_SOURCE_LABELS.get(cur_source, cur_source)
+                                st.caption(f"Source: {source_label}")
+                            else:
+                                st.write("Not scored yet")
+
+                        with col_form:
+                            new_score = st.selectbox(
+                                "Set NOVA score",
+                                options=[1, 2, 3, 4],
+                                index=(cur_score - 1) if cur_score else 3,
+                                format_func=lambda s: f"NOVA {s} — {_NOVA_LABELS[s]}",
+                                key=f"nova_sel_{pid}",
+                            )
+                            if st.button(
+                                "💾 Save override",
+                                key=f"nova_save_{pid}",
+                                type="primary",
+                            ):
+                                db.set_nova_override(pid, new_score)
+                                st.success(
+                                    f"✓ {name} set to NOVA {new_score} (manual override)"
+                                )
+                                st.rerun()
+        elif query:
+            st.caption("Type at least 2 characters to search.")
+
+    # ── Tab 2: List & remove overrides ───────────────────────────────────────
+    with tab_list:
+        overrides = db.get_nova_overrides()
+
+        if not overrides:
+            st.info("No manual overrides set.")
+        else:
+            st.caption(f"{len(overrides)} manual override(s)")
+
+            for prod in overrides:
+                pid  = prod["product_id"]
+                sku  = prod["sku"]
+                name = prod["name"] or "(no name)"
+                score = prod["nova_score"]
+
+                col_name, col_badge, col_btn = st.columns([3, 1, 1])
+                with col_name:
+                    st.write(f"**{name}**  |  SKU {sku}")
+                with col_badge:
+                    if score:
+                        st.markdown(render_nova_badge(score), unsafe_allow_html=True)
+                with col_btn:
+                    if st.button("🗑️ Remove", key=f"nova_rm_{pid}"):
+                        result = db.remove_nova_override(pid, sku)
+                        auto_score = result.get("nova_score")
+                        if auto_score:
+                            st.success(
+                                f"Override removed — auto-assigned NOVA {auto_score} "
+                                f"({result.get('nova_source', '')})"
+                            )
+                        else:
+                            st.info("Override removed — no automatic score found for this product.")
+                        st.rerun()
+
+    db.close()
+
+
 def main():
     st.title("🛒 Maxima Product Scraper")
     
-    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -2266,6 +2372,12 @@ def main():
             st.session_state.view_mode = 'ingredient_analysis'
             st.rerun()
     
+    with col8:
+        if st.button("🏷️ NOVA Overrides", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'nova_override' else "secondary"):
+            st.session_state.view_mode = 'nova_override'
+            st.rerun()
+    
     st.divider()
     
     if st.session_state.view_mode == 'category_processing':
@@ -2280,6 +2392,8 @@ def main():
         section_lightweight_update()
     elif st.session_state.view_mode == 'ingredient_analysis':
         section_ingredient_analysis()
+    elif st.session_state.view_mode == 'nova_override':
+        section_nova_override()
     else:
         section_nutrition_enrichment()
 
