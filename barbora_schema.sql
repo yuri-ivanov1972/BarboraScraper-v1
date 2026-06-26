@@ -58,13 +58,28 @@ CREATE TABLE IF NOT EXISTS products (
     description         TEXT,
     -- legacy / cross-system reference
     rimi_category_code  INTEGER,
-    has_confirmed_match BOOLEAN         DEFAULT FALSE
+    has_confirmed_match BOOLEAN         DEFAULT FALSE,
+    -- NOVA food-processing score (1=unprocessed … 4=ultra-processed)
+    nova_score          INTEGER,
+    nova_source         VARCHAR(30)     -- 'additive_override'|'category_inherited'|'manual_override'
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_sku              ON products (sku);
 CREATE INDEX IF NOT EXISTS idx_products_category         ON products (category_id);
 CREATE INDEX IF NOT EXISTS idx_products_name_norm        ON products (name_norm);
 CREATE INDEX IF NOT EXISTS idx_products_needs_enrichment ON products (needs_enrichment);
+
+
+-- ============================================================
+-- 2b. RIMI_NOVA_CATEGORIES
+--     Local cache of NOVA scores per Rimi category (synced from Rimi DB).
+--     Populated by sync_rimi_nova_categories.py; used by nova_calculator.py.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS rimi_nova_categories (
+    rimi_category_code  INTEGER     PRIMARY KEY,  -- matches products.rimi_category_code
+    nova_score          INTEGER,
+    synced_at           TIMESTAMPTZ DEFAULT NOW()
+);
 
 
 -- ============================================================

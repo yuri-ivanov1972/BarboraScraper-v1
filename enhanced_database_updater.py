@@ -520,6 +520,7 @@ class EnhancedDatabaseUpdater:
             # Process ingredients using the ingredient processor
             if not ingredients_text or ingredients_text.strip() == '':
                 self.status_callback(f"No ingredients found for SKU {sku} - this is normal for basic single-ingredient products")
+                self._assign_nova_score(product_id, sku)
                 return True  # Return success - not having ingredients is not an error
             
             try:
@@ -531,9 +532,11 @@ class EnhancedDatabaseUpdater:
                 # Check if any ingredients were processed (the correct key is 'processed', not 'success')
                 if result.get('processed', 0) > 0:
                     self.status_callback(f"Successfully processed {result.get('processed', 0)} ingredients")
+                    self._assign_nova_score(product_id, sku)
                     return True
                 else:
                     self.status_callback(f"No ingredients could be processed from text: '{ingredients_text[:50]}...' - this may be normal for basic products")
+                    self._assign_nova_score(product_id, sku)
                     return True  # Still return success - extraction worked, just no valid ingredients
                     
             except ImportError:
@@ -543,6 +546,18 @@ class EnhancedDatabaseUpdater:
         except Exception as e:
             self.status_callback(f"Error force-updating ingredients: {str(e)}")
             return False
+
+    def _assign_nova_score(self, product_id: int, sku: str) -> None:
+        """Assign NOVA score after ingredient processing. Never raises."""
+        try:
+            from nova_calculator import assign_nova_score
+            result = assign_nova_score(self.conn, product_id, sku)
+            if result.get('updated'):
+                self.status_callback(
+                    f"NOVA score assigned: {result['nova_score']} ({result['nova_source']})"
+                )
+        except Exception as e:
+            self.status_callback(f"NOVA score assignment skipped: {e}")
     
     def add_product_photos(self, product_id: int, photo_urls: List[str]) -> bool:
         """
