@@ -1,10 +1,15 @@
-# Database Migration Guide: Development → Production
+# Database Migration Guide
 
-This guide explains how to migrate all data from your development database to your production database on the Reserved VM deployment.
+This guide explains how to copy data between your development database (heliumdb) and your production database (Neon) in either direction.
 
 ## Overview
 
-The `migrate_to_production.py` script copies all 12 tables from development to production in the correct order to respect foreign key constraints.
+The `migrate_to_production.py` script copies all 12 tables between databases in the correct order to respect foreign key constraints. Direction is controlled by a required `--direction` flag:
+
+| Flag | What it does |
+|------|-------------|
+| `--direction prod-to-dev` | Copy production → development (refresh dev with live data) |
+| `--direction dev-to-prod` | Copy development → production (**destructive** — wipes prod tables) |
 
 ### Tables Migrated (in dependency order)
 
@@ -51,21 +56,19 @@ You need the production database connection URL from Replit:
 
 Two connection strings are needed:
 
-| Variable | Role | How to provide |
-|----------|------|----------------|
-| `DATABASE_URL` | **Destination** (production) | Replit injects this automatically — no action needed |
-| `SOURCE_DATABASE_URL` | **Source** (development) | Set this to your dev database URL, or leave it unset and the script will prompt you interactively |
+| Variable | Always points to | How to provide |
+|----------|-----------------|----------------|
+| `DATABASE_URL` | Development DB (heliumdb) | Replit injects this automatically — no action needed |
+| `OTHER_DATABASE_URL` | Production DB (Neon) | Set this to your production Neon connection string, or leave it unset and the script will prompt you interactively |
 
-Replit injects `DATABASE_URL` automatically for whichever deployment environment runs the script — you do **not** need a separate `PROD_DATABASE_URL` secret. When you run `migrate_to_production.py` from your **production** deployment, `DATABASE_URL` already points to the production database.
-
-To set the source URL in advance:
+To set the production URL in advance:
 
 ```bash
-export SOURCE_DATABASE_URL='your_dev_connection_string'
-python migrate_to_production.py
+export OTHER_DATABASE_URL='your_production_neon_connection_string'
+python migrate_to_production.py --direction prod-to-dev
 ```
 
-Or simply run `python migrate_to_production.py` and enter the source URL when prompted.
+Or simply run the script without setting it and paste the URL when prompted.
 
 ## Running the Migration
 
@@ -88,13 +91,23 @@ conn.close()
 "
 ```
 
-### Step 2: Run Migration Script
+### Step 2: Run the Script
 
-Execute the migration:
+**To refresh dev with production data (most common):**
 
 ```bash
-python migrate_to_production.py
+export OTHER_DATABASE_URL='your_production_neon_connection_string'
+python migrate_to_production.py --direction prod-to-dev
 ```
+
+**To push dev data up to production:**
+
+```bash
+export OTHER_DATABASE_URL='your_production_neon_connection_string'
+python migrate_to_production.py --direction dev-to-prod
+```
+
+The `dev-to-prod` direction requires two confirmations before proceeding.
 
 ### Step 3: Review Output
 
@@ -105,59 +118,55 @@ The script will:
 - ✅ Verify all data was copied correctly
 - ✅ Reset auto-increment sequences
 
-**Example output:**
+**Example output (prod-to-dev):**
 
 ```
 ==============================================================
-            DATABASE MIGRATION: DEV → PROD
+        DATABASE COPY: PRODUCTION → DEVELOPMENT
 ==============================================================
 
-ℹ Connecting to development database...
-✓ Connected to development database
-ℹ Connecting to production database...
-✓ Connected to production database
+ℹ This will REPLACE all data in your dev (heliumdb) database
+ℹ with a fresh copy from production.
+
+Type YES to continue: YES
+
+ℹ Connecting to production (Neon) ...
+✓ Connected to production (Neon)
+ℹ Connecting to development (heliumdb) ...
+✓ Connected to development (heliumdb)
 
 ==============================================================
-                    STARTING MIGRATION
+                      STARTING COPY
 ==============================================================
 
 ℹ Migrating table: normalized_categories
 ℹ   Source records: 75
 ℹ   Truncating destination table...
 ℹ   Inserted 75/75 records...
-✓   ✓ Migration complete: 75 records
+✓   Done: 75 records
 
 ℹ Migrating table: products
-ℹ   Source records: 8205
+ℹ   Source records: 9034
 ℹ   Truncating destination table...
-ℹ   Inserted 1000/8205 records...
-ℹ   Inserted 2000/8205 records...
+ℹ   Inserted 1000/9034 records...
 ...
-✓   ✓ Migration complete: 8205 records
+✓   Done: 9034 records
 
 ...
 
 ==============================================================
-                    MIGRATION SUMMARY
+                        SUMMARY
 ==============================================================
 
 ✓ normalized_categories                  75 →       75
 ✓ ingredient_analysis                   450 →      450
-✓ products                             8205 →     8205
-✓ processing_workers                      3 →        3
-✓ category_processing_jobs              190 →      190
-✓ nutritionfacts                       7821 →     7821
-✓ productphotos                       16410 →    16410
-✓ product_price_history                8205 →     8205
-✓ job_events                            856 →      856
-✓ product_processing_log               8205 →     8205
-✓ update_statistics                     190 →      190
-✓ ingredient_product_mapping          12450 →    12450
+✓ products                             9034 →     9034
+...
 
-ℹ Total records migrated: 63060
-ℹ Total tables migrated: 12
-ℹ Migration completed in 45.32 seconds
-✓ All tables migrated successfully!
+ℹ Total records copied:   63060
+ℹ Total tables processed: 12
+ℹ Completed in 45.32 seconds
+✓ All tables copied successfully!
 ```
 
 ## Important Notes
@@ -236,21 +245,21 @@ The worker will:
 
 ### Problem: "DATABASE_URL not set"
 
-**Solution**: Replit injects `DATABASE_URL` automatically. Make sure you are running the script from within your Replit deployment environment, not a local terminal. If running locally for testing, export the connection string manually:
+**Solution**: Replit injects `DATABASE_URL` automatically in the dev environment. If running locally for testing, export it manually:
 
 ```bash
-export DATABASE_URL='your_production_connection_string'
-export SOURCE_DATABASE_URL='your_dev_connection_string'
-python migrate_to_production.py
+export DATABASE_URL='your_dev_connection_string'
+export OTHER_DATABASE_URL='your_production_neon_connection_string'
+python migrate_to_production.py --direction prod-to-dev
 ```
 
-### Problem: Script prompts for source database URL
+### Problem: Script prompts for the production URL
 
-**Solution**: Set `SOURCE_DATABASE_URL` before running to skip the interactive prompt:
+**Solution**: Set `OTHER_DATABASE_URL` before running to skip the interactive prompt:
 
 ```bash
-export SOURCE_DATABASE_URL='your_dev_connection_string'
-python migrate_to_production.py
+export OTHER_DATABASE_URL='your_production_neon_connection_string'
+python migrate_to_production.py --direction prod-to-dev
 ```
 
 ### Problem: "Permission denied on table"

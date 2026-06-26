@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 """
-Database Migration Script: Development → Production
+Database Migration Script
 
-Copies all tables from a source (dev) database to the destination (production)
-database identified by DATABASE_URL.
+Copies all tables between the development database (heliumdb, DATABASE_URL)
+and the production database (Neon, OTHER_DATABASE_URL).
+
+Direction is controlled by --direction:
+  prod-to-dev  Copy production → development  (refresh dev with live data)
+  dev-to-prod  Copy development → production  (push dev changes to live)
 
 Usage:
-    python migrate_to_production.py
+    python migrate_to_production.py --direction prod-to-dev
+    python migrate_to_production.py --direction dev-to-prod
 
 Environment variables:
-    DATABASE_URL        Destination (production) DB — Replit injects this automatically.
-    SOURCE_DATABASE_URL Source (development) DB connection string.
+    DATABASE_URL        Development DB — Replit injects this automatically.
+    OTHER_DATABASE_URL  The other database (production Neon connection string).
                         If not set, the script will prompt for it interactively.
 """
 
+import argparse
 import os
 import sys
 import time
@@ -41,18 +47,22 @@ TABLES_IN_ORDER = [
 
 BATCH_SIZE = 1000
 
+
 # ---------------------------------------------------------------------------
 # Console helpers
 # ---------------------------------------------------------------------------
 
 def info(msg):
-    print(f"\u2139 {msg}")
+    print(f"ℹ {msg}")
 
 def ok(msg):
-    print(f"\u2713 {msg}")
+    print(f"✓ {msg}")
 
 def err(msg):
-    print(f"\u2717 {msg}", file=sys.stderr)
+    print(f"✗ {msg}", file=sys.stderr)
+
+def warn(msg):
+    print(f"⚠ {msg}")
 
 def header(title):
     line = "=" * 62
@@ -66,14 +76,14 @@ def header(title):
 # ---------------------------------------------------------------------------
 
 def get_connection(url: str, label: str):
-    info(f"Connecting to {label} database...")
+    info(f"Connecting to {label} ...")
     try:
         conn = psycopg2.connect(url)
         conn.autocommit = False
-        ok(f"Connected to {label} database")
+        ok(f"Connected to {label}")
         return conn
     except Exception as exc:
-        err(f"Failed to connect to {label} database: {exc}")
+        err(f"Failed to connect to {label}: {exc}")
         sys.exit(1)
 
 
@@ -153,7 +163,7 @@ def migrate_table(src_conn, dst_conn, table_name: str) -> dict:
 
         dst_conn.commit()
         final_count = get_row_count(dst_conn, table_name)
-        ok(f"  Migration complete: {final_count} records")
+        ok(f"  Done: {final_count} records")
         return {"table": table_name, "status": "ok", "src": src_count, "dst": final_count}
 
     except Exception as exc:
@@ -200,38 +210,103 @@ def enable_triggers(conn):
 
 
 # ---------------------------------------------------------------------------
+# URL resolution helpers
+# ---------------------------------------------------------------------------
+
+def resolve_dev_url() -> str:
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        err(
+            "DATABASE_URL is not set. Replit injects this automatically in the "
+            "dev environment. If running locally, export it:\n"
+            "  export DATABASE_URL='your_dev_connection_string'"
+        )
+        sys.exit(1)
+    return url
+
+
+def resolve_other_url(label: str) -> str:
+    """Get the non-DATABASE_URL database URL, prompting if needed."""
+    url = os.environ.get("OTHER_DATABASE_URL")
+    if not url:
+        print(
+            f"OTHER_DATABASE_URL is not set.\n"
+            f"Enter the {label} database connection string:"
+        )
+        url = input("  URL: ").strip()
+        if not url:
+            err("No URL provided. Aborting.")
+            sys.exit(1)
+    return url
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main():
-    header("DATABASE MIGRATION: DEV → PROD")
+    parser = argparse.ArgumentParser(
+        description="Migrate data between development and production databases.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "examples:\n"
+            "  python migrate_to_production.py --direction prod-to-dev\n"
+            "      Refresh dev with a copy of production data.\n\n"
+            "  python migrate_to_production.py --direction dev-to-prod\n"
+            "      Push dev data up to production (DESTRUCTIVE — wipes prod tables)."
+        ),
+    )
+    parser.add_argument(
+        "--direction",
+        choices=["prod-to-dev", "dev-to-prod"],
+        required=True,
+        help=(
+            "prod-to-dev: copy production → development (refresh dev). "
+            "dev-to-prod: copy development → production (push to live)."
+        ),
+    )
+    args = parser.parse_args()
 
-    # Destination: production — Replit injects DATABASE_URL automatically
-    dst_url = os.environ.get("DATABASE_URL")
-    if not dst_url:
-        err(
-            "DATABASE_URL is not set. Replit injects this automatically when "
-            "running inside a deployment. If running locally, export it:\n"
-            "  export DATABASE_URL='your_production_connection_string'"
-        )
-        sys.exit(1)
+    if args.direction == "prod-to-dev":
+        header("DATABASE COPY: PRODUCTION → DEVELOPMENT")
+        info("This will REPLACE all data in your dev (heliumdb) database")
+        info("with a fresh copy from production.")
+        print()
+        confirm = input("Type YES to continue: ").strip()
+        if confirm != "YES":
+            info("Aborted.")
+            sys.exit(0)
 
-    # Source: development database
-    src_url = os.environ.get("SOURCE_DATABASE_URL")
-    if not src_url:
-        print(
-            "SOURCE_DATABASE_URL is not set.\n"
-            "Enter the source (development) database connection string:"
-        )
-        src_url = input("  Source DB URL: ").strip()
-        if not src_url:
-            err("No source database URL provided. Aborting.")
-            sys.exit(1)
+        src_label = "production (Neon)"
+        dst_label = "development (heliumdb)"
+        src_url = resolve_other_url("production")
+        dst_url = resolve_dev_url()
 
-    src_conn = get_connection(src_url, "source (dev)")
-    dst_conn = get_connection(dst_url, "destination (prod)")
+    else:  # dev-to-prod
+        header("DATABASE COPY: DEVELOPMENT → PRODUCTION")
+        warn("WARNING: This will REPLACE all data in your LIVE production database.")
+        warn("This affects real users. Make sure you know what you are doing.")
+        print()
+        confirm = input("Type YES to continue: ").strip()
+        if confirm != "YES":
+            info("Aborted.")
+            sys.exit(0)
+        print()
+        warn("Last chance — type PUSH TO PRODUCTION to proceed:")
+        confirm2 = input("  ").strip()
+        if confirm2 != "PUSH TO PRODUCTION":
+            info("Aborted.")
+            sys.exit(0)
 
-    header("STARTING MIGRATION")
+        src_label = "development (heliumdb)"
+        dst_label = "production (Neon)"
+        src_url = resolve_dev_url()
+        dst_url = resolve_other_url("production")
+
+    src_conn = get_connection(src_url, src_label)
+    dst_conn = get_connection(dst_url, dst_label)
+
+    header("STARTING COPY")
 
     start_time = time.time()
     results = []
@@ -252,28 +327,28 @@ def main():
 
     elapsed = time.time() - start_time
 
-    header("MIGRATION SUMMARY")
+    header("SUMMARY")
 
     total_rows = 0
     all_ok = True
     for r in results:
         if r["status"] == "ok":
-            label = f"\u2713 {r['table']:<40} {r['src']:>8} \u2192 {r['dst']:>8}"
+            label = f"✓ {r['table']:<40} {r['src']:>8} → {r['dst']:>8}"
             total_rows += r["dst"]
         elif r["status"] == "skipped":
             label = f"- {r['table']:<40} (skipped — table not found)"
         else:
-            label = f"\u2717 {r['table']:<40} ERROR: {r.get('error', 'unknown')}"
+            label = f"✗ {r['table']:<40} ERROR: {r.get('error', 'unknown')}"
             all_ok = False
         print(label)
 
     print()
-    info(f"Total records migrated: {total_rows}")
+    info(f"Total records copied:   {total_rows}")
     info(f"Total tables processed: {len(results)}")
-    info(f"Migration completed in {elapsed:.2f} seconds")
+    info(f"Completed in {elapsed:.2f} seconds")
 
     if all_ok:
-        ok("All tables migrated successfully!")
+        ok("All tables copied successfully!")
     else:
         err("Some tables had errors — check the output above.")
         sys.exit(1)
