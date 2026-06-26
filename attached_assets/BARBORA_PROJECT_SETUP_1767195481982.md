@@ -16,7 +16,7 @@ After remixing the project, create the following secrets in the Replit Secrets t
 | `PGPORT` | Database port | Auto-created with PostgreSQL |
 | `PGUSER` | Database user | Auto-created with PostgreSQL |
 | `PGPASSWORD` | Database password | Auto-created with PostgreSQL |
-| `PROD_DATABASE_URL` | Production PostgreSQL connection string | Create production database and copy connection string |
+| ~~`PROD_DATABASE_URL`~~ | ~~Production PostgreSQL connection string~~ | **Outdated** — Replit automatically injects `DATABASE_URL` for each deployment environment; no separate `PROD_DATABASE_URL` secret is needed |
 
 ### Optional Secrets
 

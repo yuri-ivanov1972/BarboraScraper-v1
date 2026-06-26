@@ -26,11 +26,10 @@ The Rimi product scraper now features a fully automated daily update system that
 ### 1. Start Worker Daemon (24/7 Background Processing)
 
 ```bash
-python worker.py --production --daemon --heartbeat-interval 30 --chunk-size 15 --max-workers 3
+python worker.py --daemon --heartbeat-interval 30 --chunk-size 15 --max-workers 3
 ```
 
 **Parameters:**
-- `--production` - Use production database
 - `--daemon` - Keep running 24/7, polling for jobs
 - `--heartbeat-interval 30` - Send heartbeat every 30 seconds
 - `--chunk-size 15` - Process 15 products per chunk
@@ -46,7 +45,7 @@ python worker.py --production --daemon --heartbeat-interval 30 --chunk-size 15 -
 ### 2. Queue Daily Update Jobs
 
 ```bash
-python auto_update.py --production --queue-all
+python auto_update.py --queue-all
 ```
 
 **What it does:**
@@ -58,7 +57,7 @@ python auto_update.py --production --queue-all
 ### 3. Generate Daily Report
 
 ```bash
-python auto_update.py --production --report
+python auto_update.py --report
 ```
 
 **Report includes:**
@@ -93,7 +92,7 @@ bash cron_setup.sh
 Add to crontab:
 ```cron
 TZ=Europe/Riga
-0 2 * * * cd /path/to/project && python auto_update.py --production --queue-all --wait && python auto_update.py --production --report >> /var/log/rimi_daily_update.log 2>&1
+0 2 * * * cd /path/to/project && python auto_update.py --queue-all --wait && python auto_update.py --report >> /var/log/rimi_daily_update.log 2>&1
 ```
 
 ## Monitoring
@@ -115,10 +114,10 @@ psql $DATABASE_URL -c "SELECT * FROM job_events ORDER BY created_at DESC LIMIT 5
 
 ```bash
 # Last 24 hours
-python auto_update.py --production --report --report-hours 24
+python auto_update.py --report --report-hours 24
 
 # Last 7 days
-python auto_update.py --production --report --report-hours 168
+python auto_update.py --report --report-hours 168
 
 # View all historical reports
 psql $DATABASE_URL -c "SELECT * FROM daily_update_logs ORDER BY created_at DESC;"
@@ -196,17 +195,17 @@ tail -f /var/log/rimi_daily_update.log
 ### Worker not processing jobs
 ```bash
 # Check worker status
-python worker.py --production --status
+python worker.py --status
 
 # Restart worker daemon
 pkill -f "worker.py"
-python worker.py --production --daemon --heartbeat-interval 30 --chunk-size 15 --max-workers 3 &
+python worker.py --daemon --heartbeat-interval 30 --chunk-size 15 --max-workers 3 &
 ```
 
 ### Jobs stuck in queue
 ```bash
 # Check for stuck jobs
-python auto_update.py --production --report
+python auto_update.py --report
 
 # Reset stuck jobs
 psql $DATABASE_URL -c "UPDATE category_processing_jobs SET status = 'pending', worker_id = NULL WHERE status = 'in_progress' AND last_updated < NOW() - INTERVAL '2 hours';"
@@ -225,9 +224,9 @@ psql $DATABASE_URL -c "SELECT * FROM pg_stat_activity WHERE datname = current_da
 
 Before enabling daily cron job:
 
-- [ ] Worker daemon running: `python worker.py --production --daemon`
-- [ ] Test single category: `python auto_update.py --production --category piens-olas`
-- [ ] Verify report generation: `python auto_update.py --production --report`
+- [ ] Worker daemon running: `python worker.py --daemon`
+- [ ] Test single category: `python auto_update.py --category piens-olas`
+- [ ] Verify report generation: `python auto_update.py --report`
 - [ ] Check cron logs: `tail -f /var/log/rimi_daily_update.log`
 - [ ] Monitor first full run (queue all categories and watch worker)
 - [ ] Verify stuck job detection doesn't produce false positives

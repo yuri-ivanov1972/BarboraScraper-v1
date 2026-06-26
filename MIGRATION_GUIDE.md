@@ -47,15 +47,11 @@ You need the production database connection URL from Replit:
 3. Click on **"Production"** tab
 4. Copy the connection string (format: `postgresql://user:password@host:port/database`)
 
-### 2. Set Environment Variable
+### 2. Database URL
 
-Set the production database URL as an environment variable:
+Replit automatically injects `DATABASE_URL` into the environment for whichever deployment (dev or production) is running the script — you do **not** need to set `PROD_DATABASE_URL` manually.
 
-```bash
-export PROD_DATABASE_URL='postgresql://user:password@host:port/database'
-```
-
-**Important**: Replace the connection string with your actual production database URL.
+When you run `migrate_to_production.py` from your **production** deployment, `DATABASE_URL` already points to the production database. The script reads both `DATABASE_URL` (destination) and the source database URL configured in the script.
 
 ## Running the Migration
 
@@ -174,7 +170,7 @@ The script will:
 If migration fails:
 
 1. **Check error message** - The script shows detailed error information
-2. **Verify connection strings** - Ensure both DATABASE_URL and PROD_DATABASE_URL are correct
+2. **Verify connection strings** - Ensure DATABASE_URL is set correctly for both source and destination
 3. **Check permissions** - Production database user must have CREATE, INSERT, DELETE permissions
 4. **Review logs** - Look for network issues or timeout errors
 
@@ -182,17 +178,14 @@ The script is **safe to re-run** - it will truncate and re-migrate all data.
 
 ## Post-Migration Verification
 
-After migration completes, verify your production database:
+After migration completes, verify your production database by running this from your **production** deployment (where `DATABASE_URL` already points to production):
 
 ```bash
-# Connect to production database
-export DATABASE_URL="$PROD_DATABASE_URL"
-
 # Check record counts
 python -c "
 import os
 import psycopg2
-conn = psycopg2.connect(os.environ['PROD_DATABASE_URL'])
+conn = psycopg2.connect(os.environ['DATABASE_URL'])
 cursor = conn.cursor()
 
 tables = [
@@ -227,12 +220,12 @@ The worker will:
 
 ## Troubleshooting
 
-### Problem: "PROD_DATABASE_URL not set"
+### Problem: "DATABASE_URL not set"
 
-**Solution**: Export the environment variable before running:
+**Solution**: Replit injects `DATABASE_URL` automatically. Make sure you are running the script from within your Replit deployment environment, not a local terminal. If running locally for testing, export the connection string manually:
 
 ```bash
-export PROD_DATABASE_URL='your_production_connection_string'
+export DATABASE_URL='your_production_connection_string'
 python migrate_to_production.py
 ```
 
