@@ -47,11 +47,25 @@ You need the production database connection URL from Replit:
 3. Click on **"Production"** tab
 4. Copy the connection string (format: `postgresql://user:password@host:port/database`)
 
-### 2. Database URL
+### 2. Database URLs
 
-Replit automatically injects `DATABASE_URL` into the environment for whichever deployment (dev or production) is running the script — you do **not** need to set `PROD_DATABASE_URL` manually.
+Two connection strings are needed:
 
-When you run `migrate_to_production.py` from your **production** deployment, `DATABASE_URL` already points to the production database. The script reads both `DATABASE_URL` (destination) and the source database URL configured in the script.
+| Variable | Role | How to provide |
+|----------|------|----------------|
+| `DATABASE_URL` | **Destination** (production) | Replit injects this automatically — no action needed |
+| `SOURCE_DATABASE_URL` | **Source** (development) | Set this to your dev database URL, or leave it unset and the script will prompt you interactively |
+
+Replit injects `DATABASE_URL` automatically for whichever deployment environment runs the script — you do **not** need a separate `PROD_DATABASE_URL` secret. When you run `migrate_to_production.py` from your **production** deployment, `DATABASE_URL` already points to the production database.
+
+To set the source URL in advance:
+
+```bash
+export SOURCE_DATABASE_URL='your_dev_connection_string'
+python migrate_to_production.py
+```
+
+Or simply run `python migrate_to_production.py` and enter the source URL when prompted.
 
 ## Running the Migration
 
@@ -226,6 +240,16 @@ The worker will:
 
 ```bash
 export DATABASE_URL='your_production_connection_string'
+export SOURCE_DATABASE_URL='your_dev_connection_string'
+python migrate_to_production.py
+```
+
+### Problem: Script prompts for source database URL
+
+**Solution**: Set `SOURCE_DATABASE_URL` before running to skip the interactive prompt:
+
+```bash
+export SOURCE_DATABASE_URL='your_dev_connection_string'
 python migrate_to_production.py
 ```
 
