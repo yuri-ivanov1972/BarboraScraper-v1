@@ -5,6 +5,7 @@ Barbora Worker - Processes jobs from category_processing_jobs queue
 import os
 import sys
 import time
+import random
 import logging
 import argparse
 import signal
@@ -19,6 +20,7 @@ from barbora_parser import BarboraParser
 from nutriscore_calculator import NutriscoreCalculator
 from ingredient_processor import IngredientProcessor
 from fiber_estimator import FiberEstimator
+from fix_broken_photos import _scrape_photos, _save_photos, _make_session as _make_photo_session
 
 
 def normalize_latvian_text(text: str) -> str:
@@ -238,6 +240,7 @@ class BarboraWorker:
         
         processed = 0
         errors = 0
+        saved_product_ids = []
         
         for product_record in pending_products:
             if not self.running:
@@ -257,6 +260,8 @@ class BarboraWorker:
                 
                 if product_data:
                     product_id = self.save_product(product_data, category_id, product_url)
+                    if product_id:
+                        saved_product_ids.append(product_id)
                     if product_id and product_record.get('price') is not None:
                         self.save_price_history_from_listing(product_id, product_record)
                     if product_id:
@@ -284,6 +289,13 @@ class BarboraWorker:
             
             time.sleep(0.5)
         
+        # Post-scrape photo fix: fill in any missing photos for products saved in this job
+        if saved_product_ids:
+            try:
+                self.fix_missing_photos_for_products(saved_product_ids)
+            except Exception as photo_err:
+                logger.warning(f"Post-job photo fix failed (non-fatal): {photo_err}")
+
         final_status = 'completed' if errors == 0 else 'completed_with_errors'
         self.complete_job(job_id, final_status, f"Processed {processed} products, {errors} errors" if errors else None)
         logger.info(f"Job #{job_id} completed: {processed} processed, {errors} errors")
@@ -806,7 +818,7 @@ class BarboraWorker:
             if close_conn:
                 conn.close()
     
-    def run(self, single_run: bool = False, exit_when_empty: bool = False):
+    def run(self, single_run: bool = False, exit_when_empty: bool = False, fix_photos: bool = False):
         """Main worker loop"""
         logger.info(f"Worker {self.worker_id} starting...")
         processed_any = False
@@ -836,7 +848,19 @@ class BarboraWorker:
                     time.sleep(30)
         finally:
             self._cleanup()
-        
+
+        # --fix-photos: after queue drains, run a full pass over all no-photo products
+        if fix_photos:
+            logger.info("--fix-photos: running full photo-fix pass over all no-photo products…")
+            try:
+                result = self.fix_missing_photos_for_products(product_ids=None)
+                logger.info(
+                    f"--fix-photos done: attempted={result['attempted']}, "
+                    f"fixed={result['fixed']}, failed={result['failed']}"
+                )
+            except Exception as e:
+                logger.error(f"--fix-photos pass failed: {e}")
+
         logger.info("Worker stopped")
     
     def _cleanup(self):
@@ -848,6 +872,88 @@ class BarboraWorker:
         except Exception as e:
             logger.warning(f"Error closing IngredientProcessor: {e}")
     
+    def fix_missing_photos_for_products(self, product_ids: list) -> dict:
+        """
+        Scrape and save photos for any product_ids that currently have no photo rows.
+
+        Called automatically after each job (post-scrape hook) and optionally at the
+        end of a full worker run via --fix-photos.
+
+        Args:
+            product_ids: List of product_ids to check. Pass None or empty list to
+                         scan ALL products with no photo (full-pass mode).
+
+        Returns dict with keys: attempted, fixed, failed.
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            if product_ids:
+                cur.execute(
+                    """
+                    SELECT p.product_id, p.barbora_url
+                    FROM products p
+                    WHERE p.product_id = ANY(%s)
+                      AND p.barbora_url IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM productphotos ph WHERE ph.product_id = p.product_id
+                      )
+                    ORDER BY p.product_id
+                    """,
+                    (product_ids,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT p.product_id, p.barbora_url
+                    FROM products p
+                    WHERE p.barbora_url IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM productphotos ph WHERE ph.product_id = p.product_id
+                      )
+                    ORDER BY p.product_id
+                    """
+                )
+            no_photo_rows = list(cur.fetchall())
+        finally:
+            conn.close()
+
+        if not no_photo_rows:
+            logger.info("Photo fix: all products have photos — nothing to do")
+            return {"attempted": 0, "fixed": 0, "failed": 0}
+
+        logger.info(
+            f"Photo fix: {len(no_photo_rows)} product(s) without photos — scraping now…"
+        )
+
+        session = _make_photo_session()
+        fixed = 0
+        failed = 0
+
+        for row in no_photo_rows:
+            pid = row["product_id"]
+            burl = row["barbora_url"]
+            time.sleep(random.uniform(0.6, 1.3))
+            new_urls = _scrape_photos(burl, session)
+            if new_urls:
+                conn = self._get_connection()
+                try:
+                    _save_photos(conn, pid, new_urls, dry_run=False)
+                    fixed += 1
+                    logger.info(
+                        f"Photo fix: saved {len(new_urls)} photo(s) for product_id={pid}"
+                    )
+                finally:
+                    conn.close()
+            else:
+                failed += 1
+                logger.warning(
+                    f"Photo fix: no photos found for product_id={pid} ({burl})"
+                )
+
+        logger.info(f"Photo fix done: {fixed} fixed, {failed} could not be resolved")
+        return {"attempted": len(no_photo_rows), "fixed": fixed, "failed": failed}
+
     def refresh_product_ingredient_cards(self):
         """Refresh the materialized view for product card data sharing"""
         conn = None
@@ -876,10 +982,18 @@ def main():
     parser.add_argument('--worker-id', help='Worker ID (auto-generated if not provided)')
     parser.add_argument('--single-run', action='store_true', help='Process one job and exit')
     parser.add_argument('--exit-when-empty', action='store_true', help='Exit when queue is empty (instead of waiting)')
+    parser.add_argument(
+        '--fix-photos', action='store_true',
+        help='After queue drains, run a full photo-fix pass over all products with no photo'
+    )
     args = parser.parse_args()
     
     worker = BarboraWorker(worker_id=args.worker_id)
-    worker.run(single_run=args.single_run, exit_when_empty=args.exit_when_empty)
+    worker.run(
+        single_run=args.single_run,
+        exit_when_empty=args.exit_when_empty,
+        fix_photos=args.fix_photos,
+    )
 
 
 if __name__ == '__main__':
