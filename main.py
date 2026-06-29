@@ -1652,14 +1652,136 @@ def section_quantity_backfill():
             st.text("\n".join(log_lines))
 
 
+def section_fix_photos():
+    """Section: Fix broken / missing product photos."""
+    st.subheader("🖼️ Fix Broken Photos")
+
+    st.info(
+        "Checks every stored photo URL with a HEAD request, then re-scrapes the "
+        "Barbora product page for any that are broken (non-200 or placeholder redirect). "
+        "Products that have no photo at all are also scraped. "
+        "If a re-scrape finds nothing, the existing rows are left untouched."
+    )
+
+    database_url = os.environ.get("DATABASE_URL")
+    if not database_url:
+        st.error("DATABASE_URL not configured")
+        return
+
+    conn = psycopg2.connect(database_url, cursor_factory=RealDictCursor)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS n FROM productphotos")
+            total_photos = cur.fetchone()["n"]
+            cur.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM products p
+                WHERE p.barbora_url IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM productphotos ph WHERE ph.product_id = p.product_id
+                  )
+                """
+            )
+            no_photo_count = cur.fetchone()["n"]
+    finally:
+        conn.close()
+
+    c1, c2 = st.columns(2)
+    c1.metric("Stored photo URLs", f"{total_photos:,}")
+    c2.metric("Products with no photo", f"{no_photo_count:,}")
+
+    st.divider()
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        dry_run = st.checkbox("Dry-run (preview only, no DB writes)", value=False)
+    with col_b:
+        concurrency = st.slider("HEAD request threads", min_value=1, max_value=30, value=10)
+
+    limit_enabled = st.checkbox("Limit scope (useful for testing)")
+    limit_val = None
+    if limit_enabled:
+        limit_val = st.number_input(
+            "Check only the first N photo rows",
+            min_value=10, max_value=total_photos, value=min(500, total_photos), step=50
+        )
+
+    if not st.button("▶ Start Photo Fix", type="primary", use_container_width=True):
+        return
+
+    st.divider()
+
+    phase1_label = st.empty()
+    phase1_bar = st.progress(0.0)
+    phase2_label = st.empty()
+    phase2_bar = st.progress(0.0)
+    log_box = st.empty()
+    log_lines: list = []
+
+    def log(msg: str):
+        log_lines.append(msg)
+        log_box.text("\n".join(log_lines[-20:]))
+
+    phase1_total = [1]
+    phase2_total = [1]
+
+    def on_progress(done: int, total: int, phase: int = 1):
+        if phase == 1:
+            phase1_total[0] = max(total, 1)
+            phase1_label.text(f"Phase 1 — verifying URLs: {done}/{total}")
+            phase1_bar.progress(min(done / phase1_total[0], 1.0))
+        else:
+            phase2_total[0] = max(total, 1)
+            phase2_label.text(f"Phase 2 — re-scraping: {done}/{total}")
+            phase2_bar.progress(min(done / phase2_total[0], 1.0))
+
+    from fix_broken_photos import run as run_photo_fix
+
+    with st.spinner("Running photo fix…"):
+        result = run_photo_fix(
+            dry_run=dry_run,
+            limit=int(limit_val) if limit_val else None,
+            concurrency=concurrency,
+            log=log,
+            progress_callback=on_progress,
+        )
+
+    phase1_bar.progress(1.0)
+    phase2_bar.progress(1.0)
+    phase1_label.text("Phase 1 — done")
+    phase2_label.text("Phase 2 — done")
+
+    prefix = "🔍 DRY-RUN — " if dry_run else ""
+    st.success(f"{prefix}Photo fix complete!")
+
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Photos checked", f"{result['total_checked']:,}")
+    r2.metric("Broken found", f"{result['broken_found']:,}")
+    r3.metric("Fixed", f"{result['fixed']:,}")
+    r4.metric("Unresolvable", f"{result['unresolvable']:,}")
+
+    r5, r6 = st.columns(2)
+    r5.metric("Products had no photo", f"{result['no_photo_products']:,}")
+    r6.metric("Missing now filled", f"{result['missing_scraped']:,}")
+
+    with st.expander("Full log", expanded=False):
+        st.text("\n".join(log_lines))
+
+
 def section_nutriscore_recalculation():
     """Section: Nutri-Score Tools"""
     st.header("📊 Nutri-Score Tools")
-    
+
     tool = st.radio(
         "Tool:",
-        ["🔄 Recalculate Nutri-Score", "🌾 Fiber Estimation", "📦 Quantity Backfill"],
-        horizontal=True
+        [
+            "🔄 Recalculate Nutri-Score",
+            "🌾 Fiber Estimation",
+            "📦 Quantity Backfill",
+            "🖼️ Fix Broken Photos",
+        ],
+        horizontal=True,
     )
 
     if tool == "🌾 Fiber Estimation":
@@ -1668,6 +1790,10 @@ def section_nutriscore_recalculation():
 
     if tool == "📦 Quantity Backfill":
         section_quantity_backfill()
+        return
+
+    if tool == "🖼️ Fix Broken Photos":
+        section_fix_photos()
         return
     
     st.subheader("🔄 Recalculate Nutri-Score")
