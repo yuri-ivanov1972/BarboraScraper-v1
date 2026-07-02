@@ -495,6 +495,7 @@ class BarboraWorker:
                         salt=n.salt if n.salt is not None else 0,
                         protein=n.protein if n.protein is not None else 0,
                         fiber=n.fiber if n.fiber is not None else 0,
+                        total_fat=n.fat if n.fat is not None else None,
                         category_id=category_id
                     )
                     if result.get('success'):
@@ -567,8 +568,8 @@ class BarboraWorker:
             
             cur.execute("""
                 SELECT p.product_id, p.name, p.rimi_category_code, p.category_id,
-                       nf.fiber, nf.energy_kj, nf.fat_saturated, nf.carbs_sugars,
-                       nf.salt, nf.protein
+                       nf.fiber, nf.energy_kj, nf.fat_saturated, nf.fat_total,
+                       nf.carbs_sugars, nf.salt, nf.protein
                 FROM products p
                 JOIN nutritionfacts nf ON p.product_id = nf.product_id
                 WHERE p.product_id = %s
@@ -610,6 +611,7 @@ class BarboraWorker:
                     salt=float(product['salt']) if product['salt'] else 0,
                     protein=float(product['protein']) if product['protein'] else 0,
                     fiber=float(fiber_value),
+                    total_fat=float(product['fat_total']) if product.get('fat_total') else None,
                     category_id=product['category_id']
                 )
                 
