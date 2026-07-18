@@ -126,6 +126,7 @@ HALF_FVN_UUIDS = {
     "fffd12c7-05e9-47a5-aa81-b5b58fd473aa",  # Konservēti ēdieni un zupas
     "23ac3164-1fc2-4b11-af27-482953fe7862",  # Melnās un citas olīvas
     "9900fc65-c0c3-4dc5-b4d3-1e728d280dfd",  # Zaļās olīvas
+    "033b6d35-27a7-404d-8d66-2076b0967eea",  # Tomātu mērces un pastas
 }
 
 BEVERAGE_UUIDS = {
