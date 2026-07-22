@@ -767,7 +767,7 @@ def save_nutrition_edits(product_id: int, category_id: int, ingredients_text: st
         )
         
         new_grade = result.get('grade', 'U')
-        new_points = result.get('final_score', 0)
+        new_points = result.get('score', 0)
         
         # Update nutritionfacts table
         with db.connection.cursor() as cur:

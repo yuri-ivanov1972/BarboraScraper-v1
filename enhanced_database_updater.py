@@ -464,7 +464,7 @@ class EnhancedDatabaseUpdater:
                 # Handle dictionary format from calculate_single_product
                 if nutri_result and isinstance(nutri_result, dict) and 'grade' in nutri_result:
                     grade = nutri_result['grade']
-                    points = nutri_result.get('final_score', 0)
+                    points = nutri_result.get('score', 0)
                     
                     # Log sweetener detection for beverages
                     if nutri_result.get('classification', {}).get('is_beverage'):
