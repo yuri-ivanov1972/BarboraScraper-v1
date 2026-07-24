@@ -2080,11 +2080,11 @@ def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: di
         total_fat_float = float(total_fat_value) if total_fat_value is not None else None
         
         result = calculator.calculate_single_product(
-            energy_kj=float(product['energy_kj']),
-            sugars=float(product['sugars']),
-            saturated_fat=float(product['saturated_fat']),
-            salt=float(product['salt']),
-            protein=float(product['protein']),
+            energy_kj=float(product['energy_kj']) if product.get('energy_kj') is not None else 0.0,
+            sugars=float(product['sugars']) if product.get('sugars') is not None else 0.0,
+            saturated_fat=float(product['saturated_fat']) if product.get('saturated_fat') is not None else 0.0,
+            salt=float(product['salt']) if product.get('salt') is not None else 0.0,
+            protein=float(product['protein']) if product.get('protein') is not None else 0.0,
             fiber=fiber_float,
             total_fat=total_fat_float,
             category_id=product.get('category_id'),
