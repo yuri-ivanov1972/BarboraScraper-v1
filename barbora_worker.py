@@ -487,7 +487,8 @@ class BarboraWorker:
                 nutri_score_grade = None
                 
                 n = product.nutrition
-                if n.energy_kj is not None:
+                is_bev = self.nutriscore_calculator.is_beverage_category(category_id)
+                if n.energy_kj is not None or is_bev:
                     result = self.nutriscore_calculator.calculate_single_product(
                         energy_kj=n.energy_kj,
                         sugars=n.sugars if n.sugars is not None else 0,

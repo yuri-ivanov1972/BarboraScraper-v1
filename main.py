@@ -2042,14 +2042,17 @@ def recalculate_nutriscore_for_product(db: ProductViewDatabase, sku: str):
 def recalculate_nutriscore_for_product_data(db: ProductViewDatabase, product: dict):
     """Recalculate Nutri-Score for a product using its data."""
     from nutriscore_calculator import NutriscoreCalculator
-    
-    required_fields = ['energy_kj', 'sugars', 'saturated_fat', 'salt', 'protein']
-    for field in required_fields:
-        if product.get(field) is None:
-            return {'success': False, 'skipped': True, 'message': f'Missing required field: {field}'}
-    
+
     db._ensure_connection()
     calculator = NutriscoreCalculator(db.connection)
+
+    # Beverage/ice categories (water, ice) legitimately have all-zero nutrition — allow them through.
+    # All other categories require the five core fields to be present.
+    if not calculator.is_beverage_category(product.get('category_id')):
+        required_fields = ['energy_kj', 'sugars', 'saturated_fat', 'salt', 'protein']
+        for field in required_fields:
+            if product.get(field) is None:
+                return {'success': False, 'skipped': True, 'message': f'Missing required field: {field}'}
     
     try:
         fiber_value = product.get('fiber')

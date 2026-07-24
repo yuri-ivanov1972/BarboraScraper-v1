@@ -129,6 +129,11 @@ HALF_FVN_UUIDS = {
     "033b6d35-27a7-404d-8d66-2076b0967eea",  # Tomātu mērces un pastas
 }
 
+# Ice — no nutritional content, scored like plain water (grade A)
+ICE_UUIDS = {
+    "7b37fd7c-e4fe-4826-8c19-bbb2742e06f2",  # Ledus
+}
+
 BEVERAGE_UUIDS = {
     "fa93b0ae-32b7-4f29-975d-b7642a4bbbd0",  # Bezalkoholiskais alus un sidrs
     "b8609cdf-1a72-48c0-9603-15ec908b3303",  # Bezalkoholiskais vīns
@@ -373,7 +378,7 @@ def load_category_ids(conn) -> Dict[str, Set[int]]:
     Raises:
         ValueError: If any expected UUIDs are missing from the database
     """
-    all_uuids = FATS_OILS_NUTS_UUIDS | CHEESE_UUIDS | RED_MEAT_UUIDS | FULL_FVN_UUIDS | HALF_FVN_UUIDS | BEVERAGE_UUIDS
+    all_uuids = FATS_OILS_NUTS_UUIDS | CHEESE_UUIDS | RED_MEAT_UUIDS | FULL_FVN_UUIDS | HALF_FVN_UUIDS | BEVERAGE_UUIDS | ICE_UUIDS
     
     cur = conn.cursor()
     try:
@@ -404,7 +409,7 @@ def load_category_ids(conn) -> Dict[str, Set[int]]:
         'red_meat': {uuid_to_id[u] for u in RED_MEAT_UUIDS if u in uuid_to_id},
         'full_fvn': {uuid_to_id[u] for u in FULL_FVN_UUIDS if u in uuid_to_id},
         'half_fvn': {uuid_to_id[u] for u in HALF_FVN_UUIDS if u in uuid_to_id},
-        'beverage': {uuid_to_id[u] for u in BEVERAGE_UUIDS if u in uuid_to_id},
+        'beverage': {uuid_to_id[u] for u in (BEVERAGE_UUIDS | ICE_UUIDS) if u in uuid_to_id},
     }
 
 
@@ -481,6 +486,10 @@ class NutriscoreCalculator:
         
         return 'general'
     
+    def is_beverage_category(self, category_id: Optional[int]) -> bool:
+        """Return True if this category uses beverage scoring (includes ice/water)."""
+        return bool(category_id and category_id in self.beverage_categories)
+
     def _get_fvl_percentage(self, category_id: Optional[int]) -> float:
         """Get fruits/vegetables/legumes percentage based on category."""
         if not category_id:
