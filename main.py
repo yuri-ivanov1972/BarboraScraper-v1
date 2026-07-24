@@ -1958,6 +1958,15 @@ def section_nutriscore_recalculation():
 
 def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: str = None):
     """Get products with nutrition data for recalculation."""
+    from nutriscore_calculator import NutriscoreCalculator
+
+    db._ensure_connection()
+
+    # Beverage categories (incl. ice/water) can score A with all-zero/null nutrition.
+    # Fetch their IDs so we can include them even when the nutrition row is all-NULL.
+    calculator = NutriscoreCalculator(db.connection)
+    beverage_ids = list(calculator.beverage_categories) if calculator.beverage_categories else []
+
     query = """
         SELECT 
             p.product_id,
@@ -1978,28 +1987,37 @@ def get_products_for_nutriscore_recalc(db: ProductViewDatabase, category_code: s
         FROM products p
         JOIN nutritionfacts nf ON p.product_id = nf.product_id
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
-        WHERE nf.energy_kj IS NOT NULL
-          AND nf.carbs_sugars IS NOT NULL
-          AND nf.fat_saturated IS NOT NULL
-          AND nf.salt IS NOT NULL
-          AND nf.protein IS NOT NULL
+        WHERE (
+            nf.energy_kj IS NOT NULL
+            AND nf.carbs_sugars IS NOT NULL
+            AND nf.fat_saturated IS NOT NULL
+            AND nf.salt IS NOT NULL
+            AND nf.protein IS NOT NULL
+        )
     """
-    
+
     params = []
+    if beverage_ids:
+        query += " OR p.category_id = ANY(%s)"
+        params.append(beverage_ids)
+
     if category_code:
-        query += """ AND (nc.barbora_category_code = %s 
-            OR nc.category_id IN (
-                SELECT c2.category_id FROM normalized_categories c2
-                WHERE c2.parent_category_id = (
-                    SELECT c3.category_id FROM normalized_categories c3
-                    WHERE c3.barbora_category_code = %s
-                )
-            ))"""
+        # Wrap everything so the category filter applies to both branches
+        query = f"""
+            SELECT * FROM ({query}) sub
+            WHERE sub.category_code = %s
+               OR sub.category_id IN (
+                   SELECT c2.category_id FROM normalized_categories c2
+                   WHERE c2.parent_category_id = (
+                       SELECT c3.category_id FROM normalized_categories c3
+                       WHERE c3.barbora_category_code = %s
+                   )
+               )
+        """
         params.extend([category_code, category_code])
-    
-    query += " ORDER BY p.sku"
-    
-    db._ensure_connection()
+
+    query += " ORDER BY sku"
+
     with db.connection.cursor() as cur:
         cur.execute(query, params if params else None)
         return [dict(row) for row in cur.fetchall()]
