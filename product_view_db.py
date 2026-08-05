@@ -244,7 +244,8 @@ class ProductViewDatabase:
             nf.salt,
             nf.fiber,
             nf.ingredients_text,
-            nf.nutrition_manual_edit
+            nf.nutrition_manual_edit,
+            p.name_manual_edit
         FROM products p
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id

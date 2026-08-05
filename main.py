@@ -738,6 +738,82 @@ def section_product_view():
     db.close()
 
 
+def save_name_ingredients_edits(product_id: int, category_id: int,
+                                new_name: str, new_ingredients: str,
+                                mark_manual: bool):
+    """Save manually edited product name and ingredients, recalculate Nutri-Score."""
+    from nutriscore_calculator import NutriscoreCalculator
+
+    db = ProductViewDatabase()
+    db._ensure_connection()
+
+    try:
+        # Recalculate Nutri-Score with the new ingredients text (affects sweetener detection)
+        calculator = NutriscoreCalculator(db.connection)
+
+        with db.connection.cursor() as cur:
+            # Fetch current nutrition values needed for recalculation
+            cur.execute("""
+                SELECT energy_kj, energy_kcal, fat_total, fat_saturated,
+                       carbs_total, carbs_sugars, fiber, protein, salt
+                FROM nutritionfacts WHERE product_id = %s
+            """, (product_id,))
+            row = cur.fetchone()
+
+        if row:
+            result = calculator.calculate_single_product(
+                energy_kj=float(row[0] or 0),
+                sugars=float(row[5] or 0),
+                salt=float(row[8] or 0),
+                saturated_fat=float(row[3] or 0),
+                protein=float(row[7] or 0),
+                fiber=float(row[6] or 0),
+                total_fat=float(row[2] or 0),
+                fruits_veg_nuts=0,
+                category_id=category_id,
+                product_name=new_name,
+                ingredients_text=new_ingredients
+            )
+            new_grade = result.get('grade', 'U')
+            new_points = result.get('score', 0)
+        else:
+            new_grade = None
+            new_points = None
+
+        with db.connection.cursor() as cur:
+            # Update product name
+            cur.execute("""
+                UPDATE products SET
+                    name = %s,
+                    name_manual_edit = %s
+                WHERE product_id = %s
+            """, (new_name, mark_manual, product_id))
+
+            # Update ingredients and Nutri-Score in nutritionfacts
+            if row:
+                cur.execute("""
+                    UPDATE nutritionfacts SET
+                        ingredients_text = %s,
+                        nutri_score_grade = %s,
+                        nutri_score_points = %s
+                    WHERE product_id = %s
+                """, (new_ingredients, new_grade, new_points, product_id))
+            else:
+                # No nutritionfacts row yet — insert minimal row with just ingredients
+                cur.execute("""
+                    INSERT INTO nutritionfacts (product_id, ingredients_text)
+                    VALUES (%s, %s)
+                    ON CONFLICT (product_id) DO UPDATE SET ingredients_text = EXCLUDED.ingredients_text
+                """, (product_id, new_ingredients))
+
+            db.connection.commit()
+    except Exception as e:
+        db.connection.rollback()
+        raise e
+    finally:
+        db.close()
+
+
 def save_nutrition_edits(product_id: int, category_id: int, ingredients_text: str,
                          energy_kj: float, energy_kcal: float, fat_total: float,
                          fat_saturated: float, carbs_total: float, carbs_sugars: float,
@@ -923,9 +999,11 @@ def render_product_detail_view():
         if product.get('fiber') is not None:
             st.metric("Šķiedrvielas", f"{product['fiber']}g")
     
-    # Manual edit indicator
+    # Manual edit indicators
     if product.get('nutrition_manual_edit'):
-        st.info("✏️ Šis produkts ir manuāli rediģēts (aizsargāts no automātiskās pārrakstīšanas)")
+        st.info("✏️ Uzturvielas manuāli rediģētas (aizsargātas no automātiskās pārrakstīšanas)")
+    if product.get('name_manual_edit'):
+        st.info("✏️ Nosaukums/sastāvdaļas manuāli rediģētas (aizsargātas no automātiskās pārrakstīšanas)")
     
     # Nutrition editing expander
     with st.expander("✏️ Rediģēt uzturvielu informāciju"):
@@ -1029,7 +1107,40 @@ def render_product_detail_view():
             )
             st.success("✅ Uzturvielu dati saglabāti un Nutri-Score pārrēķināts!")
             st.rerun()
-    
+
+    # Name & ingredients editing expander
+    edit_ni_prefix = f"edit_ni_{product['product_id']}_"
+    with st.expander("✏️ Rediģēt nosaukumu un sastāvdaļas"):
+        new_name = st.text_input(
+            "Produkta nosaukums",
+            value=product.get('name') or '',
+            key=f"{edit_ni_prefix}name"
+        )
+        new_ingredients = st.text_area(
+            "Sastāvdaļas",
+            value=product.get('ingredients_text') or '',
+            height=150,
+            key=f"{edit_ni_prefix}ingredients"
+        )
+        mark_manual_ni = st.checkbox(
+            "Atzīmēt kā manuāli rediģētu (novērsis automātisko pārrakstīšanu)",
+            value=True,
+            key=f"{edit_ni_prefix}mark_manual"
+        )
+        if st.button("💾 Saglabāt nosaukumu un sastāvdaļas", type="primary", key=f"{edit_ni_prefix}save"):
+            try:
+                save_name_ingredients_edits(
+                    product_id=product['product_id'],
+                    category_id=product.get('category_id'),
+                    new_name=new_name,
+                    new_ingredients=new_ingredients,
+                    mark_manual=mark_manual_ni
+                )
+                st.success("✅ Nosaukums un sastāvdaļas saglabātas!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Kļūda saglabājot: {e}")
+
     # Ingredients
     if product.get('ingredients_text'):
         st.subheader("📝 Sastāvdaļas")
