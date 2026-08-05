@@ -463,8 +463,8 @@ class BarboraWorker:
                                       created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (sku) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    name_norm = EXCLUDED.name_norm,
+                    name = CASE WHEN products.name_manual_edit THEN products.name ELSE EXCLUDED.name END,
+                    name_norm = CASE WHEN products.name_manual_edit THEN products.name_norm ELSE EXCLUDED.name_norm END,
                     barbora_url = EXCLUDED.barbora_url,
                     category_id = EXCLUDED.category_id,
                     country_of_origin = EXCLUDED.country_of_origin,
@@ -479,7 +479,8 @@ class BarboraWorker:
             
             if product.ingredients:
                 cur.execute("""
-                    UPDATE products SET ingredients = %s WHERE product_id = %s
+                    UPDATE products SET ingredients = %s
+                    WHERE product_id = %s AND NOT COALESCE(name_manual_edit, FALSE)
                 """, (product.ingredients, product_id))
             
             if product.nutrition:
@@ -529,7 +530,9 @@ class BarboraWorker:
                         protein = EXCLUDED.protein,
                         salt = EXCLUDED.salt,
                         fiber = EXCLUDED.fiber,
-                        ingredients_text = EXCLUDED.ingredients_text,
+                        ingredients_text = CASE WHEN (SELECT name_manual_edit FROM products WHERE product_id = nutritionfacts.product_id)
+                                               THEN nutritionfacts.ingredients_text
+                                               ELSE EXCLUDED.ingredients_text END,
                         nutri_score_points = EXCLUDED.nutri_score_points,
                         nutri_score_grade = EXCLUDED.nutri_score_grade
                 """, (product_id, 
