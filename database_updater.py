@@ -128,7 +128,7 @@ class DatabaseUpdater:
                 INSERT INTO products (sku, name, rimi_url, category_id, quantity_value, quantity_unit)
                 VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (sku) DO UPDATE SET
-                    name = CASE WHEN products.name_manual_edit THEN products.name ELSE COALESCE(EXCLUDED.name, products.name) END,
+                    name = COALESCE(EXCLUDED.name, products.name),
                     category_id = COALESCE(EXCLUDED.category_id, products.category_id),
                     rimi_url = COALESCE(EXCLUDED.rimi_url, products.rimi_url),
                     quantity_value = COALESCE(EXCLUDED.quantity_value, products.quantity_value),
@@ -267,9 +267,7 @@ class DatabaseUpdater:
                  data_source_date)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (product_id) DO UPDATE SET
-                    ingredients_text = CASE WHEN (SELECT name_manual_edit FROM products WHERE product_id = nutritionfacts.product_id)
-                                           THEN nutritionfacts.ingredients_text
-                                           ELSE EXCLUDED.ingredients_text END,
+                    ingredients_text = EXCLUDED.ingredients_text,
                     energy_kcal = EXCLUDED.energy_kcal,
                     energy_kj = EXCLUDED.energy_kj,
                     fat_total = EXCLUDED.fat_total,
