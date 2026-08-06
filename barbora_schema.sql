@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS products (
     -- NOVA food-processing score (1=unprocessed … 4=ultra-processed)
     nova_score          INTEGER,
     nova_source         VARCHAR(30),    -- 'additive_override'|'category_inherited'|'manual_override'
-    name_manual_edit    BOOLEAN         DEFAULT FALSE  -- protected from scraper overwrites when TRUE
+    name_manual_edit    BOOLEAN         DEFAULT FALSE,  -- protected from scraper overwrites when TRUE
+    is_hidden           BOOLEAN         DEFAULT FALSE   -- hidden from the browser UI (still scraped/stored)
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_sku              ON products (sku);

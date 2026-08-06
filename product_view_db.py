@@ -16,6 +16,17 @@ class ProductViewDatabase:
         self.connection = None
         self._connect()
     
+    def _run_migrations(self):
+        """Apply idempotent schema migrations for columns added after initial deployment."""
+        migrations = [
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS name_manual_edit BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT FALSE",
+        ]
+        with self.connection.cursor() as cur:
+            for sql in migrations:
+                cur.execute(sql)
+        self.connection.commit()
+
     def _connect(self):
         """Establish database connection"""
         try:
@@ -25,6 +36,7 @@ class ProductViewDatabase:
             )
         except Exception as e:
             raise Exception(f"Database connection failed: {str(e)}")
+        self._run_migrations()
     
     def _ensure_connection(self):
         """Ensure database connection is active"""
@@ -81,29 +93,56 @@ class ProductViewDatabase:
         
         return root_categories
     
-    def get_category_product_counts(self) -> Dict[int, int]:
-        """Get product count for each category"""
+    def get_category_product_counts(self, show_hidden: bool = False) -> Dict[int, int]:
+        """Get visible product count for each category"""
         self._ensure_connection()
-        
-        query = """
-        SELECT 
+
+        hidden_filter = "" if show_hidden else "WHERE NOT COALESCE(is_hidden, FALSE)"
+        query = f"""
+        SELECT
             category_id,
             COUNT(*) as product_count
         FROM products
+        {hidden_filter}
         GROUP BY category_id
         """
-        
+
         with self.connection.cursor() as cursor:
             cursor.execute(query)
             results = cursor.fetchall()
             return {row['category_id']: row['product_count'] for row in results}
+
+    def get_hidden_product_counts(self) -> Dict[int, int]:
+        """Get count of hidden products per category."""
+        self._ensure_connection()
+        query = """
+        SELECT category_id, COUNT(*) as hidden_count
+        FROM products
+        WHERE is_hidden = TRUE
+        GROUP BY category_id
+        """
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            results = cursor.fetchall()
+            return {row['category_id']: row['hidden_count'] for row in results}
+
+    def set_product_hidden(self, product_id: int, is_hidden: bool) -> None:
+        """Set or clear the is_hidden flag for a product."""
+        self._ensure_connection()
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE products SET is_hidden = %s WHERE product_id = %s",
+                (is_hidden, product_id)
+            )
+            self.connection.commit()
     
     def get_products_by_category(
-        self, 
+        self,
         category_id: Optional[int] = None,
         page: int = 1,
         page_size: int = 20,
-        include_subcategories: bool = True
+        include_subcategories: bool = True,
+        show_hidden: bool = False
     ) -> Tuple[List[Dict], int]:
         """
         Get products for a category with pagination
@@ -152,7 +191,8 @@ class ProductViewDatabase:
             nf.protein,
             nf.salt,
             nf.energy_kj,
-            pp.photo_url
+            pp.photo_url,
+            p.is_hidden
         FROM products p
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
@@ -164,15 +204,17 @@ class ProductViewDatabase:
             LIMIT 1
         ) pp ON true
         WHERE {category_filter}
-        ORDER BY p.name
+        {'AND NOT COALESCE(p.is_hidden, FALSE)' if not show_hidden else '-- show all'}
+        ORDER BY p.is_hidden, p.name
         LIMIT %s OFFSET %s
         """
-        
+
         # Count query
         count_query = f"""
         SELECT COUNT(*) as total
         FROM products p
         WHERE {category_filter}
+        {'AND NOT COALESCE(p.is_hidden, FALSE)' if not show_hidden else '-- show all'}
         """
         
         with self.connection.cursor() as cursor:
@@ -245,7 +287,8 @@ class ProductViewDatabase:
             nf.fiber,
             nf.ingredients_text,
             nf.nutrition_manual_edit,
-            p.name_manual_edit
+            p.name_manual_edit,
+            p.is_hidden
         FROM products p
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id

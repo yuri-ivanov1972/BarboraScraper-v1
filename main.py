@@ -111,7 +111,8 @@ def render_product_card(product: dict) -> None:
 
     # Product name (clickable)
     product_name = product.get('name', 'Unknown Product')
-    if st.button(f"**{product_name[:50]}**", key=f"prod_{product['product_id']}", use_container_width=True):
+    hidden_prefix = "🚫 " if product.get('is_hidden') else ""
+    if st.button(f"{hidden_prefix}**{product_name[:50]}**", key=f"prod_{product['product_id']}", use_container_width=True):
         st.session_state.selected_product_id = product['product_id']
         st.rerun()
     
@@ -583,33 +584,56 @@ def section_product_view():
     # NOVA summary stat
     _render_nova_summary(db)
 
+    # "Show hidden" toggle (persisted in session state)
+    if 'show_hidden_products' not in st.session_state:
+        st.session_state.show_hidden_products = False
+
     # Build category tree with product counts
     category_tree = db.build_category_tree()
-    product_counts = db.get_category_product_counts()
-    
+    show_hidden = st.session_state.show_hidden_products
+    product_counts = db.get_category_product_counts(show_hidden=show_hidden)
+    hidden_counts = db.get_hidden_product_counts()
+
     # Add product counts to tree
     def add_counts(categories):
         for cat in categories:
             cat['product_count'] = product_counts.get(cat['category_id'], 0)
+            cat['hidden_count'] = hidden_counts.get(cat['category_id'], 0)
             if cat['children']:
                 add_counts(cat['children'])
-    
+
     add_counts(category_tree)
-    
+
     # Layout: Sidebar (categories) + Main (products)
     col_sidebar, col_main = st.columns([1, 3])
-    
+
     with col_sidebar:
         st.subheader("📂 Kategorijas")
-        
+
+        # Show-hidden checkbox
+        new_show_hidden = st.checkbox(
+            "🚫 Rādīt slēptos produktus",
+            value=show_hidden,
+            key="show_hidden_checkbox"
+        )
+        if new_show_hidden != show_hidden:
+            st.session_state.show_hidden_products = new_show_hidden
+            st.session_state.current_page = 1
+            st.rerun()
+
+        # Total hidden count across all categories
+        total_hidden = sum(hidden_counts.values())
+        if total_hidden > 0 and not show_hidden:
+            st.caption(f"🚫 {total_hidden} slēpti produkti")
+
         # "All Products" button
         if st.button("📋 Visi produkti", use_container_width=True):
             st.session_state.selected_category_id = None
             st.session_state.current_page = 1
             st.rerun()
-        
+
         st.divider()
-        
+
         # Render category tree
         for root_category in category_tree:
             render_category_tree_node(root_category, db, level=0)
@@ -621,19 +645,23 @@ def section_product_view():
         if search_query.strip():
             # Search mode
             search_term = search_query.strip()
-            search_sql = """
+            _show_hidden_search = st.session_state.get('show_hidden_products', False)
+            _hidden_filter = "" if _show_hidden_search else "AND NOT COALESCE(p.is_hidden, FALSE)"
+            search_sql = f"""
             SELECT p.product_id, p.sku, p.name, p.name_norm,
                    nc.name_lv as category_name,
                    (SELECT pp.photo_url FROM productphotos pp WHERE pp.product_id = p.product_id ORDER BY pp.is_primary DESC LIMIT 1) as photo_url,
-                   latest_price.price, latest_price.is_available
+                   latest_price.price, latest_price.is_available,
+                   p.is_hidden
             FROM products p
             LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
             LEFT JOIN LATERAL (
-                SELECT price, is_available FROM product_price_history 
-                WHERE product_id = p.product_id 
+                SELECT price, is_available FROM product_price_history
+                WHERE product_id = p.product_id
                 ORDER BY recorded_at DESC LIMIT 1
             ) latest_price ON true
-            WHERE p.product_id::text = %s OR p.sku = %s
+            WHERE (p.product_id::text = %s OR p.sku = %s)
+            {_hidden_filter}
             LIMIT 10
             """
             db._ensure_connection()
@@ -651,13 +679,15 @@ def section_product_view():
                         else:
                             st.write("📷")
                     with col_info:
-                        if st.button(f"**{prod['name']}**", key=f"search_{prod['product_id']}"):
+                        hidden_pfx = "🚫 " if prod.get('is_hidden') else ""
+                        if st.button(f"{hidden_pfx}**{prod['name']}**", key=f"search_{prod['product_id']}"):
                             st.session_state.selected_product_id = prod['product_id']
                             st.rerun()
                         st.caption(f"ID: {prod['product_id']} | SKU: {prod['sku']} | {prod['category_name'] or 'Nav kategorijas'}")
                         price_str = f"€{prod['price']:.2f}" if prod['price'] else "Nav cenas"
                         avail_str = "✅ Pieejams" if prod['is_available'] else "❌ Nav pieejams"
-                        st.caption(f"{price_str} | {avail_str}")
+                        hidden_str = " | 🚫 Slēpts" if prod.get('is_hidden') else ""
+                        st.caption(f"{price_str} | {avail_str}{hidden_str}")
                     st.divider()
             else:
                 st.warning(f"Produkti ar ID vai SKU '{search_term}' nav atrasti")
@@ -668,7 +698,8 @@ def section_product_view():
             category_id=st.session_state.selected_category_id,
             page=st.session_state.current_page,
             page_size=20,
-            include_subcategories=True
+            include_subcategories=True,
+            show_hidden=st.session_state.get('show_hidden_products', False)
         )
         
         # Display category name
@@ -895,15 +926,31 @@ def render_product_detail_view():
         st.rerun()
     
     st.divider()
-    
+
+    product_id = product['product_id']
+    sku        = product['sku']
+
     # Product header
     col1, col2 = st.columns([2, 1])
-    
+
     with col1:
+        if product.get('is_hidden'):
+            st.error("🚫 Slēpts — nerādīts produktu pārlūkā")
         st.title(product['name'])
         st.caption(f"SKU: {product['sku']}")
         if product.get('quantity_value'):
             st.caption(f"Daudzums: {product['quantity_value']}{product.get('quantity_unit', '')}")
+        # Hide / unhide toggle
+        if product.get('is_hidden'):
+            if st.button("👁️ Atcelt slēpšanu", key=f"unhide_{product_id}", type="secondary"):
+                db.set_product_hidden(product_id, False)
+                st.success("Produkts atkal redzams pārlūkā")
+                st.rerun()
+        else:
+            if st.button("🚫 Slēpt produktu", key=f"hide_{product_id}", type="secondary"):
+                db.set_product_hidden(product_id, True)
+                st.warning("Produkts paslēpts no pārlūka")
+                st.rerun()
     
     with col2:
         # Nutri-Score
@@ -915,8 +962,6 @@ def render_product_detail_view():
         # NOVA Score + inline override
         nova_score  = product.get('nova_score')
         nova_source = product.get('nova_source')
-        product_id  = product['product_id']
-        sku         = product['sku']
 
         if nova_score is not None:
             st.markdown(render_nova_badge(nova_score), unsafe_allow_html=True)
