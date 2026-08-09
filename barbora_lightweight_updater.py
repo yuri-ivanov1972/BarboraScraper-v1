@@ -277,6 +277,53 @@ class BarboraLightweightUpdater:
         
         return stats
     
+    def apply_hidden_overrides(self) -> int:
+        """
+        After each nightly run, insert an is_available=false history row for every
+        product that is manually hidden (is_hidden=true) but whose latest price-history
+        row still shows is_available=true.  Idempotent: skipped when the latest row
+        already records unavailability.
+
+        Returns the number of rows inserted.
+        """
+        conn = self._get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO product_price_history (
+                    product_id, price, is_available, data_source, recorded_at,
+                    price_per_unit, price_per_unit_type, discount_price
+                )
+                SELECT
+                    p.product_id,
+                    latest.price,
+                    FALSE,
+                    'hidden_override',
+                    CURRENT_TIMESTAMP,
+                    latest.price_per_unit,
+                    latest.price_per_unit_type,
+                    latest.discount_price
+                FROM products p
+                JOIN LATERAL (
+                    SELECT price, price_per_unit, price_per_unit_type, discount_price, is_available
+                    FROM product_price_history
+                    WHERE product_id = p.product_id
+                    ORDER BY recorded_at DESC
+                    LIMIT 1
+                ) latest ON true
+                WHERE p.is_hidden = TRUE
+                  AND latest.is_available = TRUE
+            """)
+            count = cur.rowcount
+            conn.commit()
+            return count
+        except Exception as e:
+            conn.rollback()
+            self._log(f"Hidden override error: {e}")
+            return 0
+        finally:
+            conn.close()
+
     def run_full_update(self, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Dict:
         """
         Run lightweight update on all level 3 categories.
@@ -338,9 +385,13 @@ class BarboraLightweightUpdater:
         
         summary['end_time'] = datetime.now().isoformat()
         summary['duration_seconds'] = (datetime.now() - start_time).total_seconds()
-        
+
+        hidden_overrides = self.apply_hidden_overrides()
+        summary['hidden_overrides'] = hidden_overrides
+
         self._log(f"Completed: {summary['products_updated']} updated, {summary['new_products_found']} new, {summary['price_changes']} price changes")
-        
+        self._log(f"Hidden override: {hidden_overrides} products forced unavailable")
+
         return summary
     
     def save_run_history(self, summary: Dict) -> int:
