@@ -2,6 +2,7 @@ import unittest
 
 from nutrition_validation import (
     extract_ingredient_evidence,
+    is_safe_barbora_url,
     validate_product,
 )
 
@@ -52,6 +53,18 @@ class IngredientNormalizationTests(unittest.TestCase):
     def test_token_boundaries_prevent_substring_matches(self):
         evidence = extract_ingredient_evidence("saltedcaramelword")
         self.assertNotIn("salt", evidence)
+
+
+class BarboraLinkTests(unittest.TestCase):
+    def test_accepts_barbora_http_and_https_urls(self):
+        self.assertTrue(is_safe_barbora_url("https://barbora.lv/produkti/test"))
+        self.assertTrue(is_safe_barbora_url("http://www.barbora.lv/produkti/test"))
+
+    def test_rejects_non_barbora_or_script_urls(self):
+        self.assertFalse(is_safe_barbora_url("https://example.com/product"))
+        self.assertFalse(is_safe_barbora_url("javascript:alert(1)"))
+        self.assertFalse(is_safe_barbora_url("javascript://barbora.lv/product"))
+        self.assertFalse(is_safe_barbora_url(None))
 
 
 class NutritionRuleTests(unittest.TestCase):

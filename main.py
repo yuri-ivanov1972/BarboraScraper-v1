@@ -2430,7 +2430,7 @@ def section_lightweight_update():
 
 def section_nutrition_validation():
     """Review possible inconsistencies between ingredients and nutrition facts."""
-    from nutrition_validation import NutritionValidationService
+    from nutrition_validation import NutritionValidationService, is_safe_barbora_url
 
     st.header("🔎 Nutrition Consistency Validation")
     st.info(
@@ -2548,6 +2548,13 @@ def section_nutrition_validation():
                     st.caption(
                         f"SKU: {result['sku']} · ID: {result['product_id']} · {category}"
                     )
+                    barbora_url = result.get("barbora_url")
+                    if is_safe_barbora_url(barbora_url):
+                        st.link_button("Open product on Barbora", barbora_url)
+                    elif barbora_url:
+                        st.caption("Barbora link unavailable: stored URL is invalid.")
+                    else:
+                        st.caption("No Barbora link stored for this product.")
                     reasons = result.get("reasons") or []
                     if not reasons:
                         st.write("No consistency issues detected.")

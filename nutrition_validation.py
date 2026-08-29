@@ -12,6 +12,7 @@ import re
 from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from urllib.parse import urlsplit
 
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor, execute_batch
@@ -223,6 +224,24 @@ def _value(product: Dict[str, Any], key: str) -> Optional[float]:
 def _contains_polyol_or_sweetener(ingredients_text: Any) -> bool:
     normalized = normalize_ingredient_text(ingredients_text)
     return any(_term_pattern(term).search(normalized) for term in POLYOL_TERMS)
+
+
+def is_safe_barbora_url(url: Any) -> bool:
+    """Allow only absolute HTTP(S) links hosted on Barbora."""
+    if not isinstance(url, str) or not url.strip():
+        return False
+    try:
+        parsed = urlsplit(url.strip())
+    except ValueError:
+        return False
+    hostname = (parsed.hostname or "").casefold().rstrip(".")
+    return (
+        parsed.scheme.casefold() in {"http", "https"}
+        and (
+            hostname == "barbora.lv"
+            or hostname.endswith(".barbora.lv")
+        )
+    )
 
 
 def _reason(
@@ -668,7 +687,8 @@ class NutritionValidationService:
         try:
             with conn.cursor() as cur:
                 query = """
-                    SELECT nv.product_id, p.name, p.sku, nc.name_lv AS category_name,
+                    SELECT nv.product_id, p.name, p.sku, p.barbora_url,
+                           nc.name_lv AS category_name,
                            nv.suspicion_level, nv.suspicion_score,
                            nv.reasons, nv.checked_at
                     FROM nutrition_validation nv
