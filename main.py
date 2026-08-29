@@ -2428,6 +2428,155 @@ def section_lightweight_update():
             st.warning(f"Could not load history: {e}")
 
 
+def section_nutrition_validation():
+    """Review possible inconsistencies between ingredients and nutrition facts."""
+    from nutrition_validation import NutritionValidationService
+
+    st.header("🔎 Nutrition Consistency Validation")
+    st.info(
+        "This tool records explainable suspicions separately. It never changes "
+        "the original ingredient or nutrition values."
+    )
+
+    service = NutritionValidationService()
+    try:
+        service.ensure_schema()
+    except Exception as exc:
+        st.error(f"Could not prepare validation database: {exc}")
+        return
+
+    col_run, col_filter = st.columns([2, 1])
+    with col_run:
+        if st.button("▶️ Validate all existing products", type="primary", use_container_width=True):
+            progress = st.progress(0)
+            status = st.empty()
+
+            def update_progress(current, total, name):
+                if current == total or current % 25 == 0:
+                    progress.progress(current / total if total else 1.0)
+                    status.text(f"Checking {current}/{total}: {name[:90]}")
+
+            with st.spinner("Validating nutrition consistency..."):
+                result = service.validate_all(progress_callback=update_progress)
+            progress.empty()
+            status.empty()
+            if result["errors"]:
+                st.warning(
+                    f"Validated {result['checked']} of {result['total']} products; "
+                    f"{len(result['errors'])} errors occurred."
+                )
+                with st.expander("Validation errors"):
+                    for error in result["errors"][:25]:
+                        st.write(f"- {error}")
+            else:
+                st.success(f"Validated {result['checked']} products successfully.")
+
+    with col_filter:
+        selected_level = st.selectbox(
+            "Show results",
+            ["high", "medium", "low", "none", "all"],
+            format_func=lambda value: "All levels" if value == "all" else value.title(),
+        )
+        result_search = st.text_input(
+            "Search products",
+            placeholder="Name, SKU, or product ID",
+            key="nutrition_validation_search",
+        )
+
+    try:
+        summary = service.get_summary()
+        levels = summary["levels"]
+        metric_cols = st.columns(5)
+        for column, label, key in zip(
+            metric_cols,
+            ("Checked", "None", "Low", "Medium", "High"),
+            ("total", "none", "low", "medium", "high"),
+        ):
+            with column:
+                st.metric(label, summary["total"] if key == "total" else levels[key])
+
+        st.subheader("Rule frequency")
+        if summary["rules"]:
+            total = summary["total"] or 1
+            rule_rows = [
+                {
+                    "Rule": rule,
+                    "Products": count,
+                    "Percentage": f"{count / total * 100:.1f}%",
+                }
+                for rule, count in summary["rules"].items()
+            ]
+            st.dataframe(rule_rows, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No validation findings yet. Run validation to populate results.")
+
+        page_size = 50
+        result_count = service.get_result_count(selected_level, result_search)
+        total_pages = max(1, (result_count + page_size - 1) // page_size)
+        result_page = st.number_input(
+            "Results page",
+            min_value=1,
+            max_value=total_pages,
+            value=1,
+            step=1,
+            key=f"nutrition_validation_page_{selected_level}_{result_search}",
+        )
+        results = service.get_results(
+            selected_level,
+            search=result_search,
+            limit=page_size,
+            offset=(result_page - 1) * page_size,
+        )
+        st.subheader(f"Product findings ({result_count})")
+        if result_count:
+            first_result = (result_page - 1) * page_size + 1
+            last_result = min(result_page * page_size, result_count)
+            st.caption(
+                f"Showing {first_result}–{last_result} of {result_count}, "
+                f"highest score first."
+            )
+        if not results:
+            st.caption("No results for the selected level.")
+        else:
+            for result in results:
+                level = result["suspicion_level"].upper()
+                name = result["name"] or f"Product {result['product_id']}"
+                category = result.get("category_name") or "No category"
+                with st.expander(
+                    f"{level} · {result['suspicion_score']} points · {name}"
+                ):
+                    st.caption(
+                        f"SKU: {result['sku']} · ID: {result['product_id']} · {category}"
+                    )
+                    reasons = result.get("reasons") or []
+                    if not reasons:
+                        st.write("No consistency issues detected.")
+                    for reason in reasons:
+                        st.markdown(
+                            f"**{reason.get('rule', 'Finding')}** "
+                            f"({reason.get('severity', 'unknown')})"
+                        )
+                        st.write(reason.get("message", "No explanation available."))
+                        evidence = ", ".join(reason.get("ingredient_evidence") or [])
+                        if evidence:
+                            percentages = reason.get("ingredient_percentages") or {}
+                            percentage_text = ", ".join(
+                                f"{term}: {value:g}%"
+                                for term, value in percentages.items()
+                            )
+                            st.caption(
+                                f"Ingredient evidence: {evidence} · "
+                                f"{reason.get('nutrition_field')}: "
+                                f"{reason.get('nutrition_value')}"
+                                + (
+                                    f" · Declared percentages: {percentage_text}"
+                                    if percentage_text else ""
+                                )
+                            )
+    except Exception as exc:
+        st.error(f"Could not load validation results: {exc}")
+
+
 def section_ingredient_analysis():
     """Combined Ingredient Analysis with AI categorization and NOVA4 suspicion detection"""
     st.header("🧪 Combined Ingredient Analysis")
@@ -2659,7 +2808,7 @@ def section_nova_override():
 def main():
     st.title("🛒 Maxima Product Scraper")
     
-    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -2702,6 +2851,12 @@ def main():
                      type="primary" if st.session_state.view_mode == 'ingredient_analysis' else "secondary"):
             st.session_state.view_mode = 'ingredient_analysis'
             st.rerun()
+
+    with col8:
+        if st.button("🔎 Nutrition Check", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'nutrition_validation' else "secondary"):
+            st.session_state.view_mode = 'nutrition_validation'
+            st.rerun()
     
     st.divider()
     
@@ -2717,6 +2872,8 @@ def main():
         section_lightweight_update()
     elif st.session_state.view_mode == 'ingredient_analysis':
         section_ingredient_analysis()
+    elif st.session_state.view_mode == 'nutrition_validation':
+        section_nutrition_validation()
     else:
         section_nutrition_enrichment()
 

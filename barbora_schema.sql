@@ -148,6 +148,22 @@ CREATE TABLE IF NOT EXISTS nutritionfacts (
 CREATE INDEX IF NOT EXISTS idx_nutritionfacts_product    ON nutritionfacts (product_id);
 CREATE INDEX IF NOT EXISTS idx_nutritionfacts_nutriscore ON nutritionfacts (nutri_score_grade);
 
+-- ============================================================
+-- 4b. NUTRITION_VALIDATION
+--    Current, explainable consistency result per product.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS nutrition_validation (
+    id               SERIAL PRIMARY KEY,
+    product_id       INTEGER NOT NULL UNIQUE REFERENCES products(product_id) ON DELETE CASCADE,
+    suspicion_level   VARCHAR(10) NOT NULL CHECK (suspicion_level IN ('none', 'low', 'medium', 'high')),
+    suspicion_score   NUMERIC NOT NULL DEFAULT 0,
+    reasons           JSONB NOT NULL DEFAULT '[]'::jsonb,
+    checked_at        TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_nutrition_validation_level_score
+    ON nutrition_validation (suspicion_level, suspicion_score DESC);
+
 
 -- ============================================================
 -- 5. PRODUCTPHOTOS
