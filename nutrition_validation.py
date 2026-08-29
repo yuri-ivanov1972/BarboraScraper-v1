@@ -43,6 +43,20 @@ NUTRITION_VALIDATION_CONFIG: Dict[str, Any] = {
     },
 }
 
+# Availability is append-only in product_price_history; the newest row is the
+# authoritative current state. Products without a history row are not current
+# available products and are intentionally excluded from review.
+CURRENT_AVAILABILITY_JOIN = """
+JOIN LATERAL (
+    SELECT ph.is_available
+    FROM product_price_history ph
+    WHERE ph.product_id = p.product_id
+    ORDER BY ph.recorded_at DESC, ph.price_history_id DESC
+    LIMIT 1
+) current_availability
+    ON current_availability.is_available IS TRUE
+"""
+
 
 # The English terms are retained because some labels and imported records use
 # them. Latvian terms are included alongside them rather than transliterated,
@@ -650,18 +664,22 @@ class NutritionValidationService:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT suspicion_level, COUNT(*) AS count
-                    FROM nutrition_validation
+                    FROM nutrition_validation nv
+                    JOIN products p ON p.product_id = nv.product_id
+                    {availability_join}
                     GROUP BY suspicion_level
-                """)
+                """.format(availability_join=CURRENT_AVAILABILITY_JOIN))
                 levels = {row["suspicion_level"]: int(row["count"]) for row in cur.fetchall()}
                 cur.execute("""
                     SELECT reason->>'rule' AS rule, COUNT(*) AS count
                     FROM nutrition_validation nv
+                    JOIN products p ON p.product_id = nv.product_id
+                    {availability_join}
                     CROSS JOIN LATERAL jsonb_array_elements(nv.reasons) AS reason
                     WHERE reason->>'rule' IS NOT NULL
                     GROUP BY reason->>'rule'
                     ORDER BY count DESC, rule
-                """)
+                """.format(availability_join=CURRENT_AVAILABILITY_JOIN))
                 rule_counts = {
                     row["rule"]: int(row["count"]) for row in cur.fetchall()
                 }
@@ -693,8 +711,9 @@ class NutritionValidationService:
                            nv.reasons, nv.checked_at
                     FROM nutrition_validation nv
                     JOIN products p ON p.product_id = nv.product_id
+                    {availability_join}
                     LEFT JOIN normalized_categories nc ON nc.category_id = p.category_id
-                """
+                """.format(availability_join=CURRENT_AVAILABILITY_JOIN)
                 params: List[Any] = []
                 filters = []
                 if level and level != "all":
@@ -732,7 +751,8 @@ class NutritionValidationService:
                     SELECT COUNT(*) AS count
                     FROM nutrition_validation nv
                     JOIN products p ON p.product_id = nv.product_id
-                """
+                    {availability_join}
+                """.format(availability_join=CURRENT_AVAILABILITY_JOIN)
                 filters = []
                 params: List[Any] = []
                 if level and level != "all":

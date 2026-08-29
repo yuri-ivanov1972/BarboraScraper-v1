@@ -1,6 +1,7 @@
 import unittest
 
 from nutrition_validation import (
+    CURRENT_AVAILABILITY_JOIN,
     extract_ingredient_evidence,
     is_safe_barbora_url,
     validate_product,
@@ -65,6 +66,14 @@ class BarboraLinkTests(unittest.TestCase):
         self.assertFalse(is_safe_barbora_url("javascript:alert(1)"))
         self.assertFalse(is_safe_barbora_url("javascript://barbora.lv/product"))
         self.assertFalse(is_safe_barbora_url(None))
+
+
+class AvailabilityReviewTests(unittest.TestCase):
+    def test_review_scope_uses_latest_available_price_row(self):
+        self.assertIn("ORDER BY ph.recorded_at DESC, ph.price_history_id DESC",
+                      CURRENT_AVAILABILITY_JOIN)
+        self.assertIn("ON current_availability.is_available IS TRUE",
+                      CURRENT_AVAILABILITY_JOIN)
 
 
 class NutritionRuleTests(unittest.TestCase):
