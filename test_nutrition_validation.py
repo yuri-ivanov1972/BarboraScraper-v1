@@ -1,9 +1,14 @@
+import csv
+import io
 import unittest
 
 from nutrition_validation import (
     CURRENT_AVAILABILITY_JOIN,
     extract_ingredient_evidence,
+    findings_to_csv,
+    FINDINGS_CSV_COLUMNS,
     is_safe_barbora_url,
+    sanitize_csv_cell,
     validate_product,
 )
 
@@ -74,6 +79,70 @@ class AvailabilityReviewTests(unittest.TestCase):
                       CURRENT_AVAILABILITY_JOIN)
         self.assertIn("ON current_availability.is_available IS TRUE",
                       CURRENT_AVAILABILITY_JOIN)
+
+
+class FindingsCsvTests(unittest.TestCase):
+    def test_csv_has_stable_columns_and_escapes_special_text(self):
+        csv_text = findings_to_csv([{
+            "name": 'Siers, "īpašais"',
+            "product_id": 42,
+            "sku": "SKU-42",
+            "category_name": "Piena produkti",
+            "suspicion_level": "high",
+            "suspicion_score": 12,
+            "reasons": [{
+                "rule": "rule_one",
+                "severity": "high",
+                "message": "Line one, \"quoted\"\nLine two",
+            }],
+            "barbora_url": "https://barbora.lv/produkti/test",
+            "checked_at": "2026-08-31T08:00:00+00:00",
+        }])
+        parsed_rows = list(csv.reader(io.StringIO(csv_text)))
+        self.assertEqual(parsed_rows[0], list(FINDINGS_CSV_COLUMNS))
+        self.assertEqual(parsed_rows[1][0], 'Siers, "īpašais"')
+        self.assertEqual(
+            parsed_rows[1][6],
+            'rule_one (high): Line one, "quoted"\nLine two',
+        )
+        self.assertIn('"Siers, ""īpašais"""', csv_text)
+        self.assertIn("Line two", csv_text)
+
+    def test_empty_csv_contains_headers_only(self):
+        csv_text = findings_to_csv([])
+        self.assertEqual(csv_text.count("\r\n"), 1)
+        self.assertIn("Product name", csv_text)
+
+    def test_formula_leading_cells_are_literal_text(self):
+        malicious_values = (
+            "=HYPERLINK(\"https://evil.example\", \"click\")",
+            " +SUM(1,1)",
+            "\t-2+3",
+            "@SUM(1,1)",
+        )
+        for value in malicious_values:
+            self.assertTrue(sanitize_csv_cell(value).startswith("'"))
+
+        csv_text = findings_to_csv([{
+            "name": malicious_values[0],
+            "product_id": 42,
+            "sku": malicious_values[1],
+            "category_name": malicious_values[2],
+            "suspicion_level": "high",
+            "suspicion_score": 12,
+            "reasons": [{
+                "rule": "rule_one",
+                "severity": "high",
+                "message": malicious_values[3],
+            }],
+            "barbora_url": malicious_values[0],
+            "checked_at": "2026-08-31T08:00:00+00:00",
+        }])
+        row = list(csv.reader(io.StringIO(csv_text)))[1]
+        self.assertEqual(row[0], "'" + malicious_values[0])
+        self.assertEqual(row[2], "'" + malicious_values[1])
+        self.assertEqual(row[3], "'" + malicious_values[2])
+        self.assertEqual(row[7], "'" + malicious_values[0])
 
 
 class NutritionRuleTests(unittest.TestCase):

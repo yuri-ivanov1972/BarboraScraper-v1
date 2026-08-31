@@ -6,6 +6,8 @@ it reports suspicious records without changing the source data.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
@@ -256,6 +258,68 @@ def is_safe_barbora_url(url: Any) -> bool:
             or hostname.endswith(".barbora.lv")
         )
     )
+
+
+FINDINGS_CSV_COLUMNS = (
+    "Product name",
+    "Product ID",
+    "SKU",
+    "Category",
+    "Suspicion level",
+    "Suspicion score",
+    "Finding explanations",
+    "Barbora URL",
+    "Checked at",
+)
+
+
+def sanitize_csv_cell(value: Any) -> Any:
+    """Prevent spreadsheet formula evaluation for untrusted text cells."""
+    if value is None or not isinstance(value, str):
+        return value
+    index = 0
+    while index < len(value) and (
+        value[index].isspace() or ord(value[index]) < 32
+    ):
+        index += 1
+    if index < len(value) and value[index] in {"=", "+", "-", "@"}:
+        return "'" + value
+    return value
+
+
+def findings_to_csv(results: Sequence[Dict[str, Any]]) -> str:
+    """Serialize findings as a spreadsheet-friendly UTF-8 CSV string."""
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=FINDINGS_CSV_COLUMNS,
+        extrasaction="ignore",
+        lineterminator="\r\n",
+    )
+    writer.writeheader()
+    for result in results:
+        explanations = []
+        for reason in result.get("reasons") or []:
+            rule = reason.get("rule", "Finding")
+            severity = reason.get("severity", "unknown")
+            message = reason.get("message", "")
+            explanations.append(f"{rule} ({severity}): {message}")
+        row = {
+            "Product name": result.get("name") or "",
+            "Product ID": result.get("product_id") or "",
+            "SKU": result.get("sku") or "",
+            "Category": result.get("category_name") or "",
+            "Suspicion level": result.get("suspicion_level") or "",
+            "Suspicion score": result.get("suspicion_score") or "",
+            "Finding explanations": "\n".join(explanations),
+            "Barbora URL": result.get("barbora_url") or "",
+            "Checked at": result.get("checked_at") or "",
+        }
+        writer.writerow({
+            column: sanitize_csv_cell(value)
+            for column, value in row.items()
+        })
+    return output.getvalue()
 
 
 def _reason(
@@ -697,7 +761,7 @@ class NutritionValidationService:
         self,
         level: Optional[str] = None,
         search: str = "",
-        limit: int = 50,
+        limit: Optional[int] = 50,
         offset: int = 0,
     ) -> List[Dict[str, Any]]:
         self.ensure_schema()
@@ -728,15 +792,22 @@ class NutritionValidationService:
                     params.extend((term, term, search.strip()))
                 if filters:
                     query += " WHERE " + " AND ".join(filters)
-                query += (
-                    " ORDER BY nv.suspicion_score DESC, p.name "
-                    "LIMIT %s OFFSET %s"
-                )
-                params.extend((limit, offset))
+                query += " ORDER BY nv.suspicion_score DESC, p.name"
+                if limit is not None:
+                    query += " LIMIT %s OFFSET %s"
+                    params.extend((limit, offset))
                 cur.execute(query, tuple(params))
                 return [dict(row) for row in cur.fetchall()]
         finally:
             conn.close()
+
+    def get_results_for_export(
+        self,
+        level: Optional[str] = None,
+        search: str = "",
+    ) -> List[Dict[str, Any]]:
+        """Return every currently available finding matching the active filters."""
+        return self.get_results(level=level, search=search, limit=None)
 
     def get_result_count(
         self,

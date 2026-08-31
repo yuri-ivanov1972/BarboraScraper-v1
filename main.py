@@ -2430,7 +2430,11 @@ def section_lightweight_update():
 
 def section_nutrition_validation():
     """Review possible inconsistencies between ingredients and nutrition facts."""
-    from nutrition_validation import NutritionValidationService, is_safe_barbora_url
+    from nutrition_validation import (
+        NutritionValidationService,
+        findings_to_csv,
+        is_safe_barbora_url,
+    )
 
     st.header("🔎 Nutrition Consistency Validation")
     st.info(
@@ -2527,7 +2531,23 @@ def section_nutrition_validation():
             limit=page_size,
             offset=(result_page - 1) * page_size,
         )
-        st.subheader(f"Product findings ({result_count})")
+        export_results = service.get_results_for_export(
+            selected_level, search=result_search
+        )
+        findings_heading, export_action = st.columns([3, 1])
+        with findings_heading:
+            st.subheader(f"Product findings ({result_count})")
+        with export_action:
+            if export_results:
+                st.download_button(
+                    "Download CSV",
+                    data=findings_to_csv(export_results).encode("utf-8-sig"),
+                    file_name="nutrition-findings.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+            else:
+                st.caption("No matching products to export.")
         if result_count:
             first_result = (result_page - 1) * page_size + 1
             last_result = min(result_page * page_size, result_count)
