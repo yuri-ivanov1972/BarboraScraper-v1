@@ -1,6 +1,7 @@
 import unittest
+import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from barbora_parser import BarboraParser
 from brand_producer import (
@@ -9,8 +10,13 @@ from brand_producer import (
     normalize_entity_name,
     normalize_website_url,
     persist_brand_producer_links,
+    verify_brand_producer_schema,
 )
-from backfill_brand_producer import run_backfill
+from backfill_brand_producer import (
+    BackfillFatalError,
+    get_database_url,
+    run_backfill,
+)
 
 
 class FakeResponse:
@@ -132,6 +138,107 @@ class NormalizationTests(unittest.TestCase):
             normalize_website_url("javascript:alert(1)")
 
 
+class ProductionTargetTests(unittest.TestCase):
+    DEV_URL = "postgresql://dev:password@dev.example.com:5432/catalog"
+    PROD_URL = "postgresql://prod:password@prod.example.com:5432/catalog"
+
+    def test_production_requires_explicit_confirmation(self):
+        with self.assertRaisesRegex(ValueError, "confirm-production"):
+            get_database_url(
+                production=True,
+                environment={
+                    "PROD_DATABASE_URL": self.PROD_URL,
+                    "DATABASE_URL": self.DEV_URL,
+                },
+            )
+
+    def test_confirmation_cannot_be_used_without_production(self):
+        with self.assertRaisesRegex(ValueError, "requires --production"):
+            get_database_url(
+                production=False,
+                confirm_production=True,
+                environment={"DATABASE_URL": self.DEV_URL},
+            )
+
+    def test_production_requires_separate_database_url(self):
+        with self.assertRaisesRegex(ValueError, "PROD_DATABASE_URL"):
+            get_database_url(production=True, confirm_production=True, environment={})
+
+    def test_production_rejects_same_database_url(self):
+        with self.assertRaisesRegex(ValueError, "must differ"):
+            get_database_url(
+                production=True,
+                confirm_production=True,
+                environment={
+                    "DATABASE_URL": self.DEV_URL,
+                    "PROD_DATABASE_URL": self.DEV_URL,
+                },
+            )
+
+    def test_production_resolves_explicit_production_url(self):
+        self.assertEqual(
+            get_database_url(
+                production=True,
+                confirm_production=True,
+                environment={
+                    "DATABASE_URL": self.DEV_URL,
+                    "PROD_DATABASE_URL": self.PROD_URL,
+                },
+            ),
+            self.PROD_URL,
+        )
+
+    def test_production_rejects_equivalent_urls_with_different_credentials_and_options(self):
+        development_url = (
+            "postgresql://dev:one@DB.EXAMPLE.COM/catalog?sslmode=require"
+        )
+        production_url = (
+            "postgresql://prod:two@db.example.com:5432/catalog?application_name=backfill"
+        )
+        with self.assertRaisesRegex(ValueError, "must differ"):
+            get_database_url(
+                production=True,
+                confirm_production=True,
+                environment={
+                    "DATABASE_URL": development_url,
+                    "PROD_DATABASE_URL": production_url,
+                },
+            )
+
+    def test_production_guard_runs_before_database_connection(self):
+        connection_factory = Mock()
+        parser = Mock()
+        with self.assertRaisesRegex(ValueError, "confirm-production"):
+            run_backfill(
+                "prod",
+                parser=parser,
+                production=True,
+                confirm_production=False,
+                connection_factory=connection_factory,
+            )
+        connection_factory.assert_not_called()
+        parser.extract_product_details.assert_not_called()
+
+    def test_programmatic_production_run_rejects_unvalidated_target(self):
+        connection_factory = Mock()
+        parser = Mock()
+        other_url = "postgresql://other:password@other.example.com:5432/catalog"
+        with self.assertRaisesRegex(ValueError, "validated PROD_DATABASE_URL"):
+            run_backfill(
+                other_url,
+                parser=parser,
+                production=True,
+                confirm_production=True,
+                environment={
+                    "DATABASE_URL": self.DEV_URL,
+                    "PROD_DATABASE_URL": self.PROD_URL,
+                },
+                connection_factory=connection_factory,
+            )
+        connection_factory.assert_not_called()
+        parser.extract_product_details.assert_not_called()
+
+
 class FakePersistenceCursor:
     def __init__(self):
         self.calls = []
@@ -165,7 +272,8 @@ class PersistenceTests(unittest.TestCase):
 
 
 class FakeCursor:
-    def __init__(self, rows=None):
+    def __init__(self, connection, rows=None):
+        self.connection = connection
         self.rows = rows or []
 
     def __enter__(self):
@@ -175,25 +283,49 @@ class FakeCursor:
         return False
 
     def execute(self, *args, **kwargs):
+        sql = " ".join(str(args[0]).split()) if args else ""
+        if (
+            self.connection.fail_on_execute
+            and sql.startswith(self.connection.fail_on_execute)
+        ):
+            raise RuntimeError(f"forced execute failure: {sql}")
         return None
 
     def fetchall(self):
-        return self.rows
+        self.connection.fetchall_calls += 1
+        if not self.connection.pages:
+            return []
+        return self.connection.pages.pop(0)
 
 
 class FakeConnection:
-    def __init__(self, rows=None):
+    def __init__(
+        self,
+        rows=None,
+        pages=None,
+        fail_commit_on=None,
+        fail_on_execute=None,
+    ):
         self.rows = rows
+        self.pages = list(pages) if pages is not None else [rows or []]
         self.committed = False
+        self.commit_count = 0
+        self.rollback_count = 0
+        self.fetchall_calls = 0
+        self.fail_commit_on = fail_commit_on
+        self.fail_on_execute = fail_on_execute
 
     def cursor(self, *args, **kwargs):
-        return FakeCursor(self.rows)
+        return FakeCursor(self, self.rows)
 
     def commit(self):
         self.committed = True
+        self.commit_count += 1
+        if self.commit_count == self.fail_commit_on:
+            raise RuntimeError("forced commit failure")
 
     def rollback(self):
-        return None
+        self.rollback_count += 1
 
     def close(self):
         return None
@@ -210,14 +342,15 @@ class BackfillTests(unittest.TestCase):
             None if url.endswith("/bad")
             else SimpleNamespace(brand="Laima", producer="Orkla", manufacturer=None)
         )
-        connections = iter([FakeConnection(rows), FakeConnection()])
+        connection = FakeConnection(rows)
         with patch("backfill_brand_producer.persist_brand_producer_links") as persist:
             with patch("backfill_brand_producer.ensure_brand_producer_schema"):
                 result = run_backfill(
                     "db", parser=parser, retries=0, delay=0,
-                    sleep_fn=lambda _: None, connection_factory=lambda _: next(connections),
+                    sleep_fn=lambda _: None, connection_factory=lambda _: connection,
                 )
         self.assertEqual(result["selected"], 2)
+        self.assertEqual(result["attempted"], 2)
         self.assertEqual(result["errors"], 1)
         self.assertEqual(result["processed"], 1)
         self.assertEqual(result["updated"], 1)
@@ -237,20 +370,279 @@ class BackfillTests(unittest.TestCase):
             None if url.endswith("/bad")
             else SimpleNamespace(brand="Laima", producer="Orkla", manufacturer=None)
         )
-        connections = iter([FakeConnection(rows), FakeConnection(), FakeConnection()])
+        connection = FakeConnection(rows)
         with patch("backfill_brand_producer.persist_brand_producer_links"):
             with patch("backfill_brand_producer.ensure_brand_producer_schema"):
                 result = run_backfill(
                     "db", parser=parser, retries=0, delay=0,
-                    sleep_fn=lambda _: None, connection_factory=lambda _: next(connections),
+                    sleep_fn=lambda _: None, connection_factory=lambda _: connection,
                 )
         self.assertEqual(result["resume_after_product_id"], 1)
         self.assertEqual(result["failed_product_ids"], [2])
+
+    def test_limit_counts_failed_attempts(self):
+        rows = [
+            {"product_id": 1, "sku": "bad-1", "barbora_url": "https://barbora.lv/bad-1"},
+            {"product_id": 2, "sku": "bad-2", "barbora_url": "https://barbora.lv/bad-2"},
+        ]
+        parser = SimpleNamespace(extract_product_details=lambda _url: None)
+        connection = FakeConnection(rows)
+        with patch("backfill_brand_producer.ensure_brand_producer_schema"):
+            result = run_backfill(
+                "db",
+                parser=parser,
+                limit=1,
+                batch_size=25,
+                retries=0,
+                delay=0,
+                sleep_fn=lambda _: None,
+                connection_factory=lambda _: connection,
+            )
+        self.assertEqual(result["attempted"], 1)
+        self.assertEqual(result["errors"], 1)
+
+    def test_production_uses_read_only_schema_preflight(self):
+        connection = FakeConnection([])
+        with patch("backfill_brand_producer.verify_brand_producer_schema") as verify:
+            result = run_backfill(
+                ProductionTargetTests.PROD_URL,
+                parser=SimpleNamespace(),
+                production=True,
+                confirm_production=True,
+                retries=0,
+                delay=0,
+                environment={
+                    "DATABASE_URL": ProductionTargetTests.DEV_URL,
+                    "PROD_DATABASE_URL": ProductionTargetTests.PROD_URL,
+                },
+                connection_factory=lambda _: connection,
+            )
+        verify.assert_called_once_with(connection)
+        self.assertTrue(result["dry_run"] is False)
+
+    def test_commits_each_completed_batch(self):
+        pages = [
+            [
+                {"product_id": 1, "sku": "one", "barbora_url": "https://barbora.lv/one"},
+                {"product_id": 2, "sku": "two", "barbora_url": "https://barbora.lv/two"},
+            ],
+            [
+                {"product_id": 3, "sku": "three", "barbora_url": "https://barbora.lv/three"},
+            ],
+        ]
+        parser = SimpleNamespace(
+            extract_product_details=lambda _url: SimpleNamespace(
+                brand="Laima", producer="Orkla", manufacturer=None
+            )
+        )
+        connection = FakeConnection(pages=pages)
+        with patch("backfill_brand_producer.ensure_brand_producer_schema"):
+            with patch("backfill_brand_producer.persist_brand_producer_links"):
+                result = run_backfill(
+                    "db",
+                    parser=parser,
+                    batch_size=2,
+                    retries=0,
+                    delay=0,
+                    sleep_fn=lambda _: None,
+                    connection_factory=lambda _: connection,
+                )
+        self.assertEqual(result["attempted"], 3)
+        self.assertEqual(connection.commit_count, 2)
+
+    def test_dry_run_rolls_back_instead_of_committing_batch(self):
+        rows = [
+            {"product_id": 1, "sku": "one", "barbora_url": "https://barbora.lv/one"},
+        ]
+        parser = SimpleNamespace(
+            extract_product_details=lambda _url: SimpleNamespace(
+                brand="Laima", producer="Orkla", manufacturer=None
+            )
+        )
+        connection = FakeConnection(rows)
+        with patch("backfill_brand_producer.verify_brand_producer_schema") as verify:
+            with patch("backfill_brand_producer.ensure_brand_producer_schema") as ensure:
+                with patch("backfill_brand_producer.persist_brand_producer_links"):
+                    result = run_backfill(
+                        "db",
+                        parser=parser,
+                        dry_run=True,
+                        retries=0,
+                        delay=0,
+                        sleep_fn=lambda _: None,
+                        connection_factory=lambda _: connection,
+                    )
+        verify.assert_called_once_with(connection)
+        ensure.assert_not_called()
+        self.assertTrue(result["dry_run"])
+        self.assertEqual(connection.commit_count, 0)
+        self.assertEqual(connection.rollback_count, 1)
+        self.assertEqual(result["resume_after_product_id"], 0)
+        self.assertEqual(result["simulated_resume_after_product_id"], 1)
+
+    def test_commit_failure_reports_last_durable_resume_cursor(self):
+        pages = [
+            [{"product_id": 1, "sku": "one", "barbora_url": "https://barbora.lv/one"}],
+            [{"product_id": 2, "sku": "two", "barbora_url": "https://barbora.lv/two"}],
+        ]
+        parser = SimpleNamespace(
+            extract_product_details=lambda _url: SimpleNamespace(
+                brand="Laima", producer="Orkla", manufacturer=None
+            )
+        )
+        connection = FakeConnection(pages=pages, fail_commit_on=2)
+        with patch("backfill_brand_producer.ensure_brand_producer_schema"):
+            with patch("backfill_brand_producer.persist_brand_producer_links"):
+                with self.assertRaises(BackfillFatalError) as raised:
+                    run_backfill(
+                        "db",
+                        parser=parser,
+                        batch_size=1,
+                        retries=0,
+                        delay=0,
+                        sleep_fn=lambda _: None,
+                        connection_factory=lambda _: connection,
+                    )
+        result = raised.exception.result
+        self.assertEqual(result["resume_after_product_id"], 1)
+        self.assertEqual(result["processed"], 1)
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("commit failure", result["fatal_error"])
+
+    def test_savepoint_recovery_failure_keeps_last_durable_cursor(self):
+        rows = [
+            {"product_id": 1, "sku": "bad", "barbora_url": "https://barbora.lv/bad"},
+        ]
+        connection = FakeConnection(
+            rows=rows,
+            fail_on_execute="ROLLBACK TO SAVEPOINT",
+        )
+        with patch("backfill_brand_producer.ensure_brand_producer_schema"):
+            with self.assertRaises(BackfillFatalError) as raised:
+                run_backfill(
+                    "db",
+                    parser=SimpleNamespace(extract_product_details=lambda _url: None),
+                    retries=0,
+                    delay=0,
+                    sleep_fn=lambda _: None,
+                    connection_factory=lambda _: connection,
+                )
+        self.assertEqual(raised.exception.result["resume_after_product_id"], 0)
+        self.assertEqual(raised.exception.result["status"], "failed")
+
+    def test_main_returns_failure_exit_status_when_any_product_fails(self):
+        with patch("backfill_brand_producer.get_database_url", return_value="db"):
+            with patch(
+                "backfill_brand_producer.run_backfill",
+                return_value={"errors": 1},
+            ):
+                with patch("builtins.print"):
+                    exit_code = __import__("backfill_brand_producer").main([])
+        self.assertEqual(exit_code, 1)
+
+    def test_main_returns_guard_failure_without_traceback(self):
+        with patch.dict("os.environ", {"DATABASE_URL": "dev"}, clear=True):
+            with patch("builtins.print") as output:
+                exit_code = __import__("backfill_brand_producer").main(["--production"])
+        self.assertEqual(exit_code, 2)
+        output.assert_called_once()
+        self.assertIn("--confirm-production", output.call_args.args[0])
+        self.assertEqual(json.loads(output.call_args.args[0])["status"], "failed")
+
+    def test_main_prints_fatal_recovery_summary_as_json(self):
+        fatal_result = {
+            "status": "failed",
+            "fatal_error": "forced commit failure",
+            "resume_after_product_id": 25,
+        }
+        with patch(
+            "backfill_brand_producer.run_backfill",
+            side_effect=BackfillFatalError("forced commit failure", fatal_result),
+        ):
+            with patch("builtins.print") as output:
+                exit_code = __import__("backfill_brand_producer").main([])
+        self.assertEqual(exit_code, 2)
+        self.assertEqual(json.loads(output.call_args.args[0]), fatal_result)
 
     def test_schema_migration_is_ordered_and_committed(self):
         conn = FakeConnection()
         ensure_brand_producer_schema(conn)
         self.assertTrue(conn.committed)
+
+    def test_schema_preflight_accepts_complete_schema_without_writes(self):
+        connection = FakeConnection(
+            pages=[
+                [("brands",), ("producers",), ("brand_producers",)],
+                [
+                    ("brands", "id"),
+                    ("brands", "name"),
+                    ("brands", "normalized_name"),
+                    ("producers", "id"),
+                    ("producers", "name"),
+                    ("producers", "normalized_name"),
+                    ("brand_producers", "brand_id"),
+                    ("brand_producers", "producer_id"),
+                    ("products", "product_id"),
+                    ("products", "brand_id"),
+                    ("products", "producer_id"),
+                    ("products", "updated_at"),
+                ],
+                [
+                    ("brands", ["normalized_name"]),
+                    ("producers", ["normalized_name"]),
+                    ("brand_producers", ["brand_id", "producer_id"]),
+                ],
+            ]
+        )
+        verify_brand_producer_schema(connection)
+        self.assertEqual(connection.commit_count, 0)
+        self.assertEqual(connection.rollback_count, 0)
+
+    def test_schema_preflight_reports_publish_requirement(self):
+        connection = FakeConnection(
+            pages=[
+                [("brands",), ("producers",)],
+                [
+                    ("brands", "id"),
+                    ("producers", "id"),
+                    ("products", "product_id"),
+                    ("products", "brand_id"),
+                ],
+                [],
+            ]
+        )
+        with self.assertRaisesRegex(RuntimeError, "Publish the latest development schema"):
+            verify_brand_producer_schema(connection)
+
+    def test_schema_preflight_rejects_missing_conflict_target(self):
+        connection = FakeConnection(
+            pages=[
+                [("brands",), ("producers",), ("brand_producers",)],
+                [
+                    ("brands", "id"),
+                    ("brands", "name"),
+                    ("brands", "normalized_name"),
+                    ("producers", "id"),
+                    ("producers", "name"),
+                    ("producers", "normalized_name"),
+                    ("brand_producers", "brand_id"),
+                    ("brand_producers", "producer_id"),
+                    ("products", "product_id"),
+                    ("products", "brand_id"),
+                    ("products", "producer_id"),
+                    ("products", "updated_at"),
+                ],
+                [
+                    ("brands", ["normalized_name"]),
+                    ("producers", ["normalized_name"]),
+                ],
+            ]
+        )
+        with self.assertRaisesRegex(
+            RuntimeError,
+            r"brand_producers\(brand_id, producer_id\)",
+        ):
+            verify_brand_producer_schema(connection)
 
 
 if __name__ == "__main__":

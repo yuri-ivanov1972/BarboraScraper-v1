@@ -55,6 +55,117 @@ def ensure_brand_producer_schema(connection) -> None:
         raise
 
 
+def verify_brand_producer_schema(connection) -> None:
+    """Verify the production prerequisites without changing the schema."""
+    required_columns = {
+        "brands": {"id", "name", "normalized_name"},
+        "producers": {"id", "name", "normalized_name"},
+        "brand_producers": {"brand_id", "producer_id"},
+        "products": {"product_id", "brand_id", "producer_id", "updated_at"},
+    }
+    required_tables = set(required_columns) - {"products"}
+    required_unique_targets = {
+        ("brands", frozenset({"normalized_name"})),
+        ("producers", frozenset({"normalized_name"})),
+        ("brand_producers", frozenset({"brand_id", "producer_id"})),
+    }
+
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name = ANY(%s)
+            """,
+            (list(required_tables),),
+        )
+        table_rows = cur.fetchall()
+        tables = {
+            row["table_name"] if isinstance(row, dict) else row[0]
+            for row in table_rows
+        }
+
+        cur.execute(
+            """
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = ANY(%s)
+            """,
+            (list(required_columns),),
+        )
+        column_rows = cur.fetchall()
+        existing_columns = {table: set() for table in required_columns}
+        for row in column_rows:
+            table_name = row["table_name"] if isinstance(row, dict) else row[0]
+            column_name = row["column_name"] if isinstance(row, dict) else row[1]
+            existing_columns.setdefault(table_name, set()).add(column_name)
+
+        cur.execute(
+            """
+            SELECT table_name, array_agg(column_name ORDER BY position) AS columns
+            FROM (
+                SELECT
+                    table_class.relname AS table_name,
+                    index_info.indexrelid AS index_oid,
+                    attribute.attname AS column_name,
+                    indexed_column.ordinality AS position
+                FROM pg_catalog.pg_class AS table_class
+                JOIN pg_catalog.pg_namespace AS namespace
+                  ON namespace.oid = table_class.relnamespace
+                JOIN pg_catalog.pg_index AS index_info
+                  ON index_info.indrelid = table_class.oid
+                JOIN unnest(index_info.indkey)
+                     WITH ORDINALITY AS indexed_column(attnum, ordinality)
+                  ON indexed_column.attnum > 0
+                JOIN pg_catalog.pg_attribute AS attribute
+                  ON attribute.attrelid = table_class.oid
+                 AND attribute.attnum = indexed_column.attnum
+                WHERE namespace.nspname = 'public'
+                  AND table_class.relname = ANY(%s)
+                  AND index_info.indisunique
+                  AND index_info.indisvalid
+                  AND index_info.indpred IS NULL
+                  AND index_info.indexprs IS NULL
+            ) AS unique_index_columns
+            GROUP BY table_name, index_oid
+            """,
+            (list(required_tables),),
+        )
+        unique_rows = cur.fetchall()
+        unique_targets = set()
+        for row in unique_rows:
+            table_name = row["table_name"] if isinstance(row, dict) else row[0]
+            columns = row["columns"] if isinstance(row, dict) else row[1]
+            unique_targets.add((table_name, frozenset(columns)))
+
+    missing_tables = sorted(required_tables - tables)
+    missing_columns = {
+        table: sorted(columns - existing_columns.get(table, set()))
+        for table, columns in required_columns.items()
+        if columns - existing_columns.get(table, set())
+    }
+    missing_unique_targets = sorted(
+        required_unique_targets - unique_targets,
+        key=lambda item: (item[0], sorted(item[1])),
+    )
+    if missing_tables or missing_columns or missing_unique_targets:
+        missing = []
+        if missing_tables:
+            missing.append(f"tables: {', '.join(missing_tables)}")
+        for table, columns in sorted(missing_columns.items()):
+            missing.append(f"{table} columns: {', '.join(columns)}")
+        for table, columns in missing_unique_targets:
+            missing.append(
+                f"unique conflict target: {table}({', '.join(sorted(columns))})"
+            )
+        raise RuntimeError(
+            "Brand/producer production schema is incomplete "
+            f"({'; '.join(missing)}). Publish the latest development schema first."
+        )
+
+
 def clean_label(value: Optional[str]) -> Optional[str]:
     """Return a trimmed, whitespace-collapsed label or None for blank values."""
     if value is None:
