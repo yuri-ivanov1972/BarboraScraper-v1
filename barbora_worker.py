@@ -486,6 +486,7 @@ class BarboraWorker:
                 or getattr(product, 'brand_name', None),
                 producer_name=getattr(product, 'producer_name', None)
                 or getattr(product, 'producer', None)
+                or getattr(product, 'distributor_name', None)
                 or getattr(product, 'manufacturer', None),
             )
             

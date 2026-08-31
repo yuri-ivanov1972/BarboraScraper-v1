@@ -92,6 +92,7 @@ def run_backfill(
                             or getattr(product, "brand_name", None),
                             getattr(product, "producer", None)
                             or getattr(product, "producer_name", None)
+                            or getattr(product, "distributor_name", None)
                             or getattr(product, "manufacturer", None),
                         )
                     conn.commit()
@@ -103,6 +104,7 @@ def run_backfill(
                     getattr(product, "brand", None)
                     or getattr(product, "brand_name", None)
                     or getattr(product, "producer", None)
+                    or getattr(product, "distributor_name", None)
                     or getattr(product, "producer_name", None)
                     or getattr(product, "manufacturer", None)
                 ):

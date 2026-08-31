@@ -89,6 +89,30 @@ class ParserTests(unittest.TestCase):
         self.assertIsNone(details.brand)
         self.assertEqual(details.producer, "Producer SIA")
 
+    def test_uses_distributor_when_producer_is_missing(self):
+        details = parse_html("""
+            <h1>Test</h1>
+            <dl>
+              <dt>Ražotājs:</dt><dd> </dd>
+              <dt>Piegādātāja kontaktinformācija:</dt>
+              <dd>Granarolo Baltics O&#220;</dd>
+            </dl>
+        """)
+        self.assertEqual(details.distributor_name, "Granarolo Baltics OÜ")
+        self.assertEqual(details.producer, "Granarolo Baltics OÜ")
+        self.assertEqual(details.producer_name, "Granarolo Baltics OÜ")
+
+    def test_actual_producer_takes_precedence_over_distributor(self):
+        details = parse_html("""
+            <h1>Test</h1>
+            <dl>
+              <dt>Ražotājs:</dt><dd>Actual Producer SIA</dd>
+              <dt>Piegādātāja kontaktinformācija:</dt><dd>Distributor SIA</dd>
+            </dl>
+        """)
+        self.assertEqual(details.producer, "Actual Producer SIA")
+        self.assertEqual(details.distributor_name, "Distributor SIA")
+
 
 class NormalizationTests(unittest.TestCase):
     def test_unicode_normalization_casefold_and_whitespace(self):

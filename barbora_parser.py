@@ -67,6 +67,7 @@ class BarboraProductDetails:
     manufacturer: Optional[str] = None
     brand: Optional[str] = None
     producer: Optional[str] = None
+    distributor_name: Optional[str] = None
     brand_name: Optional[str] = None
     producer_name: Optional[str] = None
     storage_conditions: Optional[str] = None
@@ -452,6 +453,7 @@ class BarboraParser:
             country_of_origin = None
             brand = None
             producer = None
+            distributor = None
             net_quantity = None
             
             other_info_dl = soup.find('dl', class_='b-dl-align-left')
@@ -477,6 +479,8 @@ class BarboraParser:
                         brand = dd_text
                     elif 'ražotājs' in dt_text or 'razotajs' in dt_text:
                         producer = dd_text
+                    elif 'piegādātāja kontaktinformācija' in dt_text or 'piegadataja kontaktinformacija' in dt_text:
+                        distributor = dd_text
                     elif 'neto daudzums' in dt_text:
                         net_quantity = dd_text
 
@@ -487,7 +491,11 @@ class BarboraParser:
                 label_text = re.sub(
                     r'\s+', ' ', label_span.get_text(" ", strip=True)
                 ).strip().lower().rstrip(':').strip()
-                if label_text not in {'zīmols', 'ražotājs', 'razotajs'}:
+                if label_text not in {
+                    'zīmols', 'ražotājs', 'razotajs',
+                    'piegādātāja kontaktinformācija',
+                    'piegadataja kontaktinformacija',
+                }:
                     continue
                 value_span = label_span.next_sibling
                 while (
@@ -505,6 +513,15 @@ class BarboraParser:
                     brand = value
                 elif label_text in {'ražotājs', 'razotajs'} and producer is None:
                     producer = value
+                elif label_text in {
+                    'piegādātāja kontaktinformācija',
+                    'piegadataja kontaktinformacija',
+                } and distributor is None:
+                    distributor = value
+
+            # Distributor information is the best available producer proxy
+            # when Barbora omits or leaves the producer field blank.
+            producer_value = producer or distributor
             
             nutrition = BarboraNutritionInfo()
             nutrition_title = soup.find('h3', class_='b-product-info--info-3-title', 
@@ -549,11 +566,12 @@ class BarboraParser:
                 allergens=allergens,
                 nutrition=nutrition,
                 country_of_origin=country_of_origin,
-                manufacturer=producer,
+                manufacturer=producer_value,
                 brand=brand,
-                producer=producer,
+                producer=producer_value,
+                distributor_name=distributor,
                 brand_name=brand,
-                producer_name=producer,
+                producer_name=producer_value,
                 weight=net_quantity,
                 photo_urls=photo_urls if photo_urls else None,
             )
