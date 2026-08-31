@@ -940,6 +940,18 @@ def render_product_detail_view():
         st.caption(f"SKU: {product['sku']}")
         if product.get('quantity_value'):
             st.caption(f"Daudzums: {product['quantity_value']}{product.get('quantity_unit', '')}")
+        if product.get('brand_name'):
+            brand_text = f"Zīmols: {product['brand_name']}"
+            if product.get('brand_website_url'):
+                st.markdown(f"[{brand_text}]({product['brand_website_url']})")
+            else:
+                st.caption(brand_text)
+        if product.get('producer_name'):
+            producer_text = f"Ražotājs: {product['producer_name']}"
+            if product.get('producer_website_url'):
+                st.markdown(f"[{producer_text}]({product['producer_website_url']})")
+            else:
+                st.caption(producer_text)
         # Hide / unhide toggle
         if product.get('is_hidden'):
             if st.button("👁️ Atcelt slēpšanu", key=f"unhide_{product_id}", type="secondary"):
@@ -2832,10 +2844,68 @@ def section_nova_override():
     db.close()
 
 
+def section_brand_producer_management():
+    """List brand/producer master data and manage website URLs."""
+    st.header("🏷️ Brands & Producers")
+    st.caption(
+        "Names and relationships come from full Barbora product-page scrapes. "
+        "Website URLs are managed manually and are never overwritten by scraping."
+    )
+
+    db = ProductViewDatabase()
+    tab_brands, tab_producers = st.tabs(["Brands", "Producers"])
+
+    with tab_brands:
+        brands = db.get_brand_records()
+        st.caption(f"{len(brands)} brand(s)")
+        if not brands:
+            st.info("No brands have been scraped yet.")
+        for brand in brands:
+            related = ", ".join(brand["producer_names"]) or "No related producers"
+            with st.expander(f"{brand['name']} — {brand['product_count']} product(s)"):
+                st.caption(f"Related producers: {related}")
+                with st.form(f"brand_website_{brand['id']}"):
+                    website = st.text_input(
+                        "Website URL", value=brand["website_url"] or "",
+                        placeholder="https://example.com",
+                    )
+                    if st.form_submit_button("Save website"):
+                        try:
+                            db.update_brand_website(brand["id"], website)
+                            st.success("Brand website saved.")
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
+
+    with tab_producers:
+        producers = db.get_producer_records()
+        st.caption(f"{len(producers)} producer(s)")
+        if not producers:
+            st.info("No producers have been scraped yet.")
+        for producer in producers:
+            related = ", ".join(producer["brand_names"]) or "No related brands"
+            with st.expander(f"{producer['name']} — {producer['product_count']} product(s)"):
+                st.caption(f"Related brands: {related}")
+                with st.form(f"producer_website_{producer['id']}"):
+                    website = st.text_input(
+                        "Website URL", value=producer["website_url"] or "",
+                        placeholder="https://example.com",
+                    )
+                    if st.form_submit_button("Save website"):
+                        try:
+                            db.update_producer_website(producer["id"], website)
+                            st.success("Producer website saved.")
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
+
+    db.close()
+
+
 def main():
     st.title("🛒 Maxima Product Scraper")
     
-    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+    col1, col2, col3, col4, col5, col6, col7, col8, col9 = st.columns(9)
     
     with col1:
         if st.button("📦 Category Processing", use_container_width=True, 
@@ -2884,6 +2954,12 @@ def main():
                      type="primary" if st.session_state.view_mode == 'nutrition_validation' else "secondary"):
             st.session_state.view_mode = 'nutrition_validation'
             st.rerun()
+
+    with col9:
+        if st.button("🏷️ Brands", use_container_width=True,
+                     type="primary" if st.session_state.view_mode == 'brand_producer_management' else "secondary"):
+            st.session_state.view_mode = 'brand_producer_management'
+            st.rerun()
     
     st.divider()
     
@@ -2901,6 +2977,8 @@ def main():
         section_ingredient_analysis()
     elif st.session_state.view_mode == 'nutrition_validation':
         section_nutrition_validation()
+    elif st.session_state.view_mode == 'brand_producer_management':
+        section_brand_producer_management()
     else:
         section_nutrition_enrichment()
 

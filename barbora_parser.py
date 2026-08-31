@@ -65,6 +65,10 @@ class BarboraProductDetails:
     nutrition: Optional[BarboraNutritionInfo] = None
     country_of_origin: Optional[str] = None
     manufacturer: Optional[str] = None
+    brand: Optional[str] = None
+    producer: Optional[str] = None
+    brand_name: Optional[str] = None
+    producer_name: Optional[str] = None
     storage_conditions: Optional[str] = None
     weight: Optional[str] = None
     photo_urls: Optional[List[str]] = None
@@ -447,23 +451,60 @@ class BarboraParser:
             
             country_of_origin = None
             brand = None
+            producer = None
             net_quantity = None
             
             other_info_dl = soup.find('dl', class_='b-dl-align-left')
+            # Prefer the product metadata list, but tolerate pages where Barbora
+            # moves these labels to another definition list.
+            dts = other_info_dl.find_all('dt') if other_info_dl else soup.find_all('dt')
             if other_info_dl:
-                dts = other_info_dl.find_all('dt')
-                for dt in dts:
-                    dt_text = dt.get_text(strip=True).lower()
-                    dd = dt.find_next_sibling('dd')
-                    if dd:
-                        dd_text = dd.get_text(strip=True)
+                outside_dts = [dt for dt in soup.find_all('dt') if dt not in dts]
+                dts.extend(outside_dts)
+            for dt in dts:
+                # Use the adjacent dd only. This avoids accidentally pairing
+                # a label with a later metadata value when markup changes.
+                dt_text = re.sub(r'\s+', ' ', dt.get_text(" ", strip=True)).strip().lower()
+                dd = dt.find_next_sibling('dd')
+                if dd:
+                    dd_text = re.sub(r'\s+', ' ', dd.get_text(" ", strip=True)).strip()
+                    if not dd_text:
+                        dd_text = None
                         
-                        if 'izcelsmes valsts' in dt_text:
-                            country_of_origin = dd_text
-                        elif 'zīmols' in dt_text:
-                            brand = dd_text
-                        elif 'neto daudzums' in dt_text:
-                            net_quantity = dd_text
+                    if 'izcelsmes valsts' in dt_text:
+                        country_of_origin = dd_text
+                    elif 'zīmols' in dt_text:
+                        brand = dd_text
+                    elif 'ražotājs' in dt_text or 'razotajs' in dt_text:
+                        producer = dd_text
+                    elif 'neto daudzums' in dt_text:
+                        net_quantity = dd_text
+
+            # Some Barbora metadata variants use adjacent spans instead of a
+            # definition list. Pair only direct span siblings so a label can
+            # never capture an unrelated value farther down the page.
+            for label_span in soup.find_all('span'):
+                label_text = re.sub(
+                    r'\s+', ' ', label_span.get_text(" ", strip=True)
+                ).strip().lower().rstrip(':').strip()
+                if label_text not in {'zīmols', 'ražotājs', 'razotajs'}:
+                    continue
+                value_span = label_span.next_sibling
+                while (
+                    value_span is not None
+                    and isinstance(value_span, str)
+                    and not value_span.strip()
+                ):
+                    value_span = value_span.next_sibling
+                if value_span is None or getattr(value_span, 'name', None) != 'span':
+                    continue
+                value = re.sub(
+                    r'\s+', ' ', value_span.get_text(" ", strip=True)
+                ).strip() or None
+                if label_text == 'zīmols' and brand is None:
+                    brand = value
+                elif label_text in {'ražotājs', 'razotajs'} and producer is None:
+                    producer = value
             
             nutrition = BarboraNutritionInfo()
             nutrition_title = soup.find('h3', class_='b-product-info--info-3-title', 
@@ -508,6 +549,11 @@ class BarboraParser:
                 allergens=allergens,
                 nutrition=nutrition,
                 country_of_origin=country_of_origin,
+                manufacturer=producer,
+                brand=brand,
+                producer=producer,
+                brand_name=brand,
+                producer_name=producer,
                 weight=net_quantity,
                 photo_urls=photo_urls if photo_urls else None,
             )

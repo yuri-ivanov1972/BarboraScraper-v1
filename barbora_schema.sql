@@ -35,6 +35,33 @@ CREATE INDEX IF NOT EXISTS idx_normalized_categories_parent ON normalized_catego
 --    Core product catalogue. Prices live in product_price_history.
 --    Nutrition lives in nutritionfacts (1-to-1 via UNIQUE FK).
 -- ============================================================
+CREATE TABLE IF NOT EXISTS brands (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    normalized_name TEXT NOT NULL UNIQUE,
+    website_url     TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS producers (
+    id              SERIAL PRIMARY KEY,
+    name            TEXT NOT NULL,
+    normalized_name TEXT NOT NULL UNIQUE,
+    website_url     TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS brand_producers (
+    brand_id        INTEGER NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+    producer_id     INTEGER NOT NULL REFERENCES producers(id) ON DELETE CASCADE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (brand_id, producer_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_brand_producers_producer ON brand_producers (producer_id);
+
 CREATE TABLE IF NOT EXISTS products (
     product_id          SERIAL          PRIMARY KEY,
     sku                 TEXT            NOT NULL UNIQUE,
@@ -63,13 +90,17 @@ CREATE TABLE IF NOT EXISTS products (
     nova_score          INTEGER,
     nova_source         VARCHAR(30),    -- 'additive_override'|'category_inherited'|'manual_override'
     name_manual_edit    BOOLEAN         DEFAULT FALSE,  -- protected from scraper overwrites when TRUE
-    is_hidden           BOOLEAN         DEFAULT FALSE   -- hidden from the browser UI (still scraped/stored)
+    is_hidden           BOOLEAN         DEFAULT FALSE,  -- hidden from the browser UI (still scraped/stored)
+    brand_id            INTEGER REFERENCES brands(id),
+    producer_id         INTEGER REFERENCES producers(id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_products_sku              ON products (sku);
 CREATE INDEX IF NOT EXISTS idx_products_category         ON products (category_id);
 CREATE INDEX IF NOT EXISTS idx_products_name_norm        ON products (name_norm);
 CREATE INDEX IF NOT EXISTS idx_products_needs_enrichment ON products (needs_enrichment);
+CREATE INDEX IF NOT EXISTS idx_products_brand ON products (brand_id);
+CREATE INDEX IF NOT EXISTS idx_products_producer ON products (producer_id);
 
 
 -- ============================================================

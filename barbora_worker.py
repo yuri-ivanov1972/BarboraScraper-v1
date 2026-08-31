@@ -21,6 +21,7 @@ from nutriscore_calculator import NutriscoreCalculator
 from ingredient_processor import IngredientProcessor
 from fiber_estimator import FiberEstimator
 from fix_broken_photos import _scrape_photos, _save_photos, _make_session as _make_photo_session
+from brand_producer import ensure_brand_producer_schema, persist_brand_producer_links
 
 
 def normalize_latvian_text(text: str) -> str:
@@ -71,6 +72,7 @@ class BarboraWorker:
         
         init_conn = psycopg2.connect(self.db_url)
         try:
+            ensure_brand_producer_schema(init_conn)
             self.nutriscore_calculator = NutriscoreCalculator(init_conn)
             logger.info("NutriscoreCalculator initialized with category mappings from database")
         finally:
@@ -476,6 +478,16 @@ class BarboraWorker:
                   product.country_of_origin, qty_value, qty_unit))
             
             product_id = cur.fetchone()[0]
+
+            persist_brand_producer_links(
+                cur,
+                product_id,
+                brand_name=getattr(product, 'brand', None)
+                or getattr(product, 'brand_name', None),
+                producer_name=getattr(product, 'producer_name', None)
+                or getattr(product, 'producer', None)
+                or getattr(product, 'manufacturer', None),
+            )
             
             if product.ingredients:
                 cur.execute("""

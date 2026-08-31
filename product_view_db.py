@@ -7,6 +7,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 from typing import List, Dict, Optional, Tuple
+from brand_producer import ensure_brand_producer_schema, normalize_website_url
 
 
 class ProductViewDatabase:
@@ -18,6 +19,7 @@ class ProductViewDatabase:
     
     def _run_migrations(self):
         """Apply idempotent schema migrations for columns added after initial deployment."""
+        ensure_brand_producer_schema(self.connection)
         migrations = [
             "ALTER TABLE products ADD COLUMN IF NOT EXISTS name_manual_edit BOOLEAN DEFAULT FALSE",
             "ALTER TABLE products ADD COLUMN IF NOT EXISTS is_hidden BOOLEAN NOT NULL DEFAULT FALSE",
@@ -270,6 +272,10 @@ class ProductViewDatabase:
             p.quantity_unit,
             p.barbora_url,
             p.country_of_origin,
+            b.name as brand_name,
+            b.website_url as brand_website_url,
+            pr.name as producer_name,
+            pr.website_url as producer_website_url,
             p.nova_score,
             p.nova_source,
             nc.barbora_category_code,
@@ -292,6 +298,8 @@ class ProductViewDatabase:
         FROM products p
         LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
         LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
+        LEFT JOIN brands b ON p.brand_id = b.id
+        LEFT JOIN producers pr ON p.producer_id = pr.id
         WHERE p.product_id = %s
         """
         
@@ -337,6 +345,66 @@ class ProductViewDatabase:
                 product['price_date'] = None
             
             return product
+
+    def get_brand_records(self) -> List[Dict]:
+        """List brands with product counts and their related producers."""
+        self._ensure_connection()
+        query = """
+        SELECT b.id, b.name, b.website_url, COUNT(DISTINCT p.product_id) AS product_count,
+               COALESCE(
+                   ARRAY_AGG(DISTINCT pr.name) FILTER (WHERE pr.id IS NOT NULL),
+                   ARRAY[]::TEXT[]
+               ) AS producer_names
+        FROM brands b
+        LEFT JOIN products p ON p.brand_id = b.id
+        LEFT JOIN brand_producers bp ON bp.brand_id = b.id
+        LEFT JOIN producers pr ON pr.id = bp.producer_id
+        GROUP BY b.id
+        ORDER BY b.name
+        """
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_producer_records(self) -> List[Dict]:
+        """List producers with product counts and their related brands."""
+        self._ensure_connection()
+        query = """
+        SELECT pr.id, pr.name, pr.website_url, COUNT(DISTINCT p.product_id) AS product_count,
+               COALESCE(
+                   ARRAY_AGG(DISTINCT b.name) FILTER (WHERE b.id IS NOT NULL),
+                   ARRAY[]::TEXT[]
+               ) AS brand_names
+        FROM producers pr
+        LEFT JOIN products p ON p.producer_id = pr.id
+        LEFT JOIN brand_producers bp ON bp.producer_id = pr.id
+        LEFT JOIN brands b ON b.id = bp.brand_id
+        GROUP BY pr.id
+        ORDER BY pr.name
+        """
+        with self.connection.cursor() as cursor:
+            cursor.execute(query)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def update_brand_website(self, brand_id: int, website_url: Optional[str]) -> None:
+        """Update only the manually managed brand website URL."""
+        self._ensure_connection()
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE brands SET website_url = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (normalize_website_url(website_url), brand_id),
+            )
+        self.connection.commit()
+
+    def update_producer_website(self, producer_id: int, website_url: Optional[str]) -> None:
+        """Update only the manually managed producer website URL."""
+        self._ensure_connection()
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE producers SET website_url = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                (normalize_website_url(website_url), producer_id),
+            )
+        self.connection.commit()
     
     def search_products(self, search_term: str, page: int = 1, page_size: int = 20) -> Tuple[List[Dict], int]:
         """
