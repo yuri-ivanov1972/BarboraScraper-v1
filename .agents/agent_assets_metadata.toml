@@ -77,3 +77,17 @@ mtime_ms = 1791658715423
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/75c541eb-931a-48ac-b3c7-619c49c676c2/6cef2e05-2660-48e9-8d5c-77d0e1329bbc"
 storage_version_token = "1791658803720337"
 content_type = "text/csv"
+
+[[outputs]]
+id = "s7eneD6LXtdxCWMDby5jS"
+uri = "file://generated-artifacts/production-nutrition-reload-final.csv"
+type = "table"
+title = "Production reload—final results"
+description = "Verified results for all 2,113 selected products: 164 updated, including 96 nutrition recoveries with fiber-aware Nutri-Scores and 88 name changes. Includes per-product apply outcomes and unresolved source checks."
+logical_id = "8dfc4715-5ef5-43f1-915d-843c676603c8"
+content_hash = "sha256:c1c88dd670163f6dab23eee84a0165ceae6934394b9454162dc15eef48af7d9f"
+size = 1671532
+mtime_ms = 1791659108670
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/8dfc4715-5ef5-43f1-915d-843c676603c8/2ab56b4c-dd42-4226-8ba8-3e89debdaf88"
+storage_version_token = "1791659135374916"
+content_type = "text/csv"
