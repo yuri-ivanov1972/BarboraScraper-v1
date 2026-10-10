@@ -49,3 +49,17 @@ mtime_ms = 1791623641495
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/a4cc778a-44b0-4c74-9385-1b63afb4cf74/6c21f292-d805-431f-919b-d5e6b3c092bd"
 storage_version_token = "1791623667662120"
 content_type = "text/markdown"
+
+[[outputs]]
+id = "lSXkYcleLuFtQKS8980b3"
+uri = "file://generated-artifacts/production-nutrition-reload.json.csv"
+type = "table"
+title = "Completed production nutrition preview"
+description = "Per-product report for all 2,113 selected products, showing proposed nutrition/name changes and unresolved pages. No production updates have been applied."
+logical_id = "e78098b8-f227-4181-a29e-5df908f6b152"
+content_hash = "sha256:7e41815627860291b3bd95285563bcbc825d91aa7d3112546ab9ce00abe7addf"
+size = 1631627
+mtime_ms = 1791657408046
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/e78098b8-f227-4181-a29e-5df908f6b152/b55d6b66-b33e-4bf0-9e50-116c059ea1aa"
+storage_version_token = "1791657433254030"
+content_type = "text/csv"
