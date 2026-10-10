@@ -1,1 +1,2 @@
 - [Barbora reload fiber policy](barbora-reload-fiber.md) — missing website fiber must keep the existing estimation approach for Nutri-Score.
+- [Enrichment availability](enrichment-availability.md) — available for scraping means latest scraped availability, not successful page fetching.
