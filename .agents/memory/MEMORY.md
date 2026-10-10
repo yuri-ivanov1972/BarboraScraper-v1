@@ -1,0 +1,1 @@
+- [Barbora reload fiber policy](barbora-reload-fiber.md) — missing website fiber must keep the existing estimation approach for Nutri-Score.
