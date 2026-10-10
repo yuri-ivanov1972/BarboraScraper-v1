@@ -6,15 +6,46 @@ id = "3qsrsTUPLdQjlXw1N6ACu"
 uri = "file://attached_assets/generated_videos/scraping_products_to_database.mp4"
 type = "video"
 title = "Clip 1 — Scraping products into the database"
+logical_id = "13809df0-de8d-4154-a187-b5cf5ffc7b47"
 
 [[outputs]]
 id = "1OUdI_aoNU7TcymLDaCsS"
 uri = "file://attached_assets/generated_videos/price_history_tracking.mp4"
 type = "video"
 title = "Clip 2 — Price history tracking over time"
+logical_id = "80c3df87-610e-437b-8e3c-c0fc03131df7"
 
 [[outputs]]
 id = "sXbPncX6nXDuKu7q_Oxcr"
 uri = "file://attached_assets/generated_videos/nightly_scheduler_2am_latvia.mp4"
 type = "video"
 title = "Clip 3 — Nightly 2am scheduler (Latvia)"
+logical_id = "c8115ae8-33e5-490e-a5de-dfe465bf7e45"
+
+[[outputs]]
+id = "35Vztml8bVRVJZODfmCEh"
+uri = "file://generated-artifacts/database-schema-share.zip"
+type = "unspecified"
+title = "Database schema sharing package"
+description = "ZIP containing schema.sql and SCHEMA_REFERENCE.md. Verified PostgreSQL schema-only export from development; no data or credentials."
+logical_id = "a4936e93-415b-4769-a181-3765e043b320"
+content_hash = "sha256:9038ce015fcf1ae989b0ddf99fea92601bbac6fb66cc43c530515d7fdd1cdbb2"
+size = 13304
+mtime_ms = 1791623641496
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/a4936e93-415b-4769-a181-3765e043b320/ccc4c6c9-e10c-4c4b-a35b-dd4a9347aa47"
+storage_version_token = "1791623667006842"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "9bL6mS4G7qf-LAQJTDfGd"
+uri = "file://docs/database-share/SCHEMA_REFERENCE.md"
+type = "text"
+title = "Database schema reference"
+description = "Readable reference for 20 tables, keys, indexes, relationships, the materialized view, correct joins, and import prerequisites."
+logical_id = "a4cc778a-44b0-4c74-9385-1b63afb4cf74"
+content_hash = "sha256:7786a0410dec3474cd720b3ee843ff71f6ca1ff4e913218351212db7f4c01197"
+size = 39820
+mtime_ms = 1791623641495
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/a4cc778a-44b0-4c74-9385-1b63afb4cf74/6c21f292-d805-431f-919b-d5e6b3c092bd"
+storage_version_token = "1791623667662120"
+content_type = "text/markdown"
