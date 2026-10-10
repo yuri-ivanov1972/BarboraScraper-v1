@@ -56,7 +56,8 @@ def verify_schema(conn):
     required = {
         "products": {"product_id", "sku", "name", "name_norm", "barbora_url", "category_id",
                      "name_manual_edit", "needs_enrichment", "nutrition_source",
-                     "enrichment_reviewed", "enrichment_skipped", "updated_at", "ingredients"},
+                     "enrichment_reviewed", "enrichment_skipped", "updated_at", "ingredients",
+                     "rimi_category_code"},
         "nutritionfacts": {"product_id", "nutrition_manual_edit", "energy_kj", "energy_kcal",
                            "fat_total", "fat_saturated", "carbs_total", "carbs_sugars",
                            "protein", "salt", "fiber", "ingredients_text", "usda_fdc_id",

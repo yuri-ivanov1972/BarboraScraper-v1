@@ -78,18 +78,46 @@ be finite/non-negative. A real numeric zero is accepted, including all-zero
 nutrition for water. Partial or empty nutrition is only reported and does not
 replace existing measurements or clear the enrichment flag.
 
-Fiber is optional for clearing the enrichment flag. On a complete nutrition
-replacement, an absent source fiber value is proposed as **NULL (unknown)**,
-not zero or an old estimate/USDA value; `is_fiber_correct` is false, and the old
-score is cleared. Such changes are visible in the preview before approval.
-No AI, USDA lookup, or fiber estimation is performed.
+Fiber is optional in the Barbora response. When absent, use the existing
+`FiberEstimator` and configuration: retain positive existing fiber and its
+correctness flag, otherwise apply the configured category/keyword exception
+estimate using the stored `rimi_category_code` and effective product name.
+Estimates have `is_fiber_correct=false`; they are never represented as scraped
+Barbora measurements. The report includes fiber origin, value and reason.
+A configured zero is a valid estimate. Unmapped categories do not become
+fabricated zeros; a verified existing zero can be retained, otherwise fiber
+and score remain unknown. Explicit website fiber takes precedence if supplied.
+No AI or USDA lookup is performed and no global estimation rules are changed.
 
-When fiber is explicit, the existing category-aware calculator is used with
+With explicit, retained or estimated fiber, the existing calculator is used with
 stored ingredients, the effective product name, and the production category
 mapping, including beverage/sweetener rules. A failed calculation clears the old
 score instead of retaining a stale grade. A name-only change also refreshes or
-clears a name-dependent score where nutrition is not manually protected; it does
-not otherwise change nutrition or its provenance/date.
+clears a name-dependent score where nutrition is not manually protected. If the
+stored core scoring inputs are complete but fiber needs estimation, a name-only
+update can also estimate fiber with the same policy; it leaves other nutrition,
+the core source/date, and the enrichment flag unchanged.
+
+## Rebuild the saved preview with category fiber estimation
+
+The original preview that proposed clearing missing fiber must not be applied.
+Rebuild from the completed saved candidates into a **new** manifest:
+
+```bash
+python reload_barbora_nutrition.py \
+  --production --confirm-production --dry-run \
+  --rebuild-from generated-artifacts/production-nutrition-reload.json \
+  --manifest generated-artifacts/production-nutrition-reload-fiber.json
+```
+
+This reads the production category mapping in a read-only transaction, but makes
+no HTTP requests and does not recapture or extend the original product scope.
+The original file remains unchanged. The new manifest records the source digest,
+fiber configuration digest, revised proposal policy and its own approval digest.
+Rebuild requires a completed source preview, no apply checkpoint for that source,
+and a new output filename. It cannot be combined with source retries or a limit.
+Old fiber-clearing manifests are explicitly blocked by apply, even if their old
+digest is supplied. Review and approve the **revised** report before production writes.
 
 ## Apply only after preview approval
 
@@ -100,7 +128,7 @@ completed preview:
 ```bash
 python reload_barbora_nutrition.py \
   --production --confirm-production --apply \
-  --manifest generated-artifacts/production-nutrition-reload.json \
+  --manifest generated-artifacts/production-nutrition-reload-fiber.json \
   --approved-sha256 APPROVED_PREVIEW_SHA256
 ```
 

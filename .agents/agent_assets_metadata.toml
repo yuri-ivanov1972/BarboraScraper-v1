@@ -63,3 +63,17 @@ mtime_ms = 1791657408046
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/e78098b8-f227-4181-a29e-5df908f6b152/b55d6b66-b33e-4bf0-9e50-116c059ea1aa"
 storage_version_token = "1791657433254030"
 content_type = "text/csv"
+
+[[outputs]]
+id = "_4iCaNxn-pRJsGVFqdRgK"
+uri = "file://generated-artifacts/production-nutrition-reload-fiber.json.csv"
+type = "table"
+title = "Revised production preview—with fiber estimation"
+description = "All 2,113 products, with 164 proposed updates: 96 nutrition recoveries with calculated Nutri-Scores and 88 name changes. Includes fiber values, estimation origins and before/after details. No production updates have been applied."
+logical_id = "75c541eb-931a-48ac-b3c7-619c49c676c2"
+content_hash = "sha256:0fd805eb25e713c0ac9bb89748635fa2afc91bee9259527a191ca8523ff6defe"
+size = 1650894
+mtime_ms = 1791658715423
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/75c541eb-931a-48ac-b3c7-619c49c676c2/6cef2e05-2660-48e9-8d5c-77d0e1329bbc"
+storage_version_token = "1791658803720337"
+content_type = "text/csv"

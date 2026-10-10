@@ -7,9 +7,10 @@ import unittest
 from argparse import Namespace
 from pathlib import Path
 from unittest.mock import Mock, patch
+from fiber_estimator import FiberEstimator
 
 from nutrition_reload_source import BarboraSource, SourceError, parse_page, trusted_url
-from nutrition_reload_plan import propose, assert_allowlist, digest
+from nutrition_reload_plan import PROPOSAL_POLICY, propose, assert_allowlist, digest
 from nutrition_reload_store import database_target, apply_one, capture
 from reload_barbora_nutrition import main, preview, apply, summary
 
@@ -114,16 +115,139 @@ class ReloadTests(unittest.TestCase):
             self.assertNotIn("energy_kj", result["nutrition_changes"])
         calc.calculate_single_product.assert_not_called()
 
-    def test_unknown_fiber_is_not_zero_or_old_estimate(self):
+    def estimator(self):
+        estimator = FiberEstimator.__new__(FiberEstimator)
+        estimator.category_defaults = {10: 2.5, 11: 0}
+        estimator.exception_rules = [{"category_id_prefix": "10", "keywords": ["Pilngraudu"],
+                                     "fiber": 7, "reason": "Whole grain"}]
+        return estimator
+
+    def missing_fiber(self):
         candidate = parse_page(page())
         del candidate["nutrition"]["fiber"]
+        return candidate
+
+    def test_missing_fiber_retains_existing_value_and_provenance(self):
         calc = self.calculator()
-        result = propose(baseline(), candidate, calc)
-        self.assertIsNone(result["nutrition_changes"]["fiber"])
-        self.assertFalse(result["nutrition_changes"]["is_fiber_correct"])
+        for correct in [True, False]:
+            row = baseline()
+            row["nutrition"]["is_fiber_correct"] = correct
+            result = propose(row, self.missing_fiber(), calc, self.estimator())
+            self.assertEqual(result["nutrition_changes"]["fiber"], 4)
+            self.assertEqual(result["nutrition_changes"]["is_fiber_correct"], correct)
+            self.assertEqual(result["fiber_origin"]["kind"], "existing")
         self.assertIsNone(result["nutrition_changes"]["usda_fdc_id"])
-        self.assertIsNone(result["nutrition_changes"]["nutri_score_grade"])
-        calc.calculate_single_product.assert_not_called()
+        self.assertEqual(result["nutrition_changes"]["nutri_score_grade"], "B")
+        self.assertEqual(calc.calculate_single_product.call_args.kwargs["fiber"], 4)
+
+    def test_category_estimation_and_configured_zero(self):
+        for code, expected in [(10, 2.5), (11, 0)]:
+            row = baseline()
+            row["product"]["rimi_category_code"] = code
+            row["nutrition"]["fiber"] = None
+            calc = self.calculator()
+            result = propose(row, self.missing_fiber(), calc, self.estimator())
+            self.assertEqual(result["nutrition_changes"]["fiber"], expected)
+            self.assertFalse(result["nutrition_changes"]["is_fiber_correct"])
+            self.assertEqual(result["fiber_origin"]["kind"], "category")
+            self.assertEqual(calc.calculate_single_product.call_args.kwargs["fiber"], expected)
+            self.assertEqual(result["nutrition_changes"]["nutri_score_grade"], "B")
+
+    def test_exceptions_use_effective_name_and_protect_manual_names(self):
+        for protected, expected in [(False, 7), (True, 2.5)]:
+            row = baseline()
+            row["product"].update(rimi_category_code=10, name_manual_edit=protected)
+            row["nutrition"]["fiber"] = 0
+            candidate = self.missing_fiber()
+            candidate["name"] = "Pilngraudu pasta"
+            result = propose(row, candidate, self.calculator(), self.estimator())
+            self.assertEqual(result["nutrition_changes"]["fiber"], expected)
+
+    def test_unmapped_fiber_is_unknown_not_fabricated_zero(self):
+        for code in [None, 999]:
+            row = baseline()
+            row["product"]["rimi_category_code"] = code
+            row["nutrition"]["fiber"] = None
+            calc = self.calculator()
+            result = propose(row, self.missing_fiber(), calc, self.estimator())
+            self.assertIsNone(result["nutrition_changes"]["fiber"])
+            self.assertIsNone(result["nutrition_changes"]["nutri_score_grade"])
+            self.assertEqual(result["fiber_origin"]["kind"], "unmatched")
+            calc.calculate_single_product.assert_not_called()
+
+    def test_verified_existing_zero_preserved_when_unmapped(self):
+        row = baseline()
+        row["nutrition"].update(fiber=0, is_fiber_correct=True)
+        result = propose(row, self.missing_fiber(), self.calculator(), self.estimator())
+        self.assertEqual(result["nutrition_changes"]["fiber"], 0)
+        self.assertTrue(result["nutrition_changes"]["is_fiber_correct"])
+
+    def test_manual_nutrition_blocks_estimation(self):
+        row = baseline()
+        row["nutrition"].update(nutrition_manual_edit=True, fiber=None)
+        estimator = Mock()
+        result = propose(row, self.missing_fiber(), self.calculator(), estimator)
+        self.assertFalse(result["nutrition_changes"])
+        estimator.estimate_fiber.assert_not_called()
+
+    def test_name_only_with_complete_stored_nutrition_can_estimate_fiber(self):
+        row = baseline()
+        row["product"]["rimi_category_code"] = 10
+        row["nutrition"].update(energy_kj=100, carbs_sugars=1, fat_saturated=0.1,
+                                salt=0, protein=0, fat_total=1, fiber=None)
+        candidate = {"sku": SKU, "name": "New name", "nutrition": {}, "nutrition_issue": None}
+        result = propose(row, candidate, self.calculator(), self.estimator())
+        self.assertEqual(result["nutrition_status"], "absent_nutrition")
+        self.assertEqual(result["nutrition_changes"]["fiber"], 2.5)
+        self.assertEqual(result["nutrition_changes"]["nutri_score_grade"], "B")
+        self.assertNotIn("needs_enrichment", result["product_changes"])
+        self.assertNotIn("usda_fdc_id", result["nutrition_changes"])
+
+    def test_old_fiber_preview_cannot_be_applied(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "manifest.json"
+            manifest = {"version": 1, "target": "production", "target_hash": "hash",
+                        "preview_complete": True, "rows": []}
+            path.write_text(json.dumps(manifest))
+            args = Namespace(manifest=str(path), production=True, approved_sha256=digest(manifest))
+            with patch("reload_barbora_nutrition.connect") as connect:
+                with self.assertRaisesRegex(ValueError, "Obsolete fiber"):
+                    apply(args, "dsn", "hash")
+                connect.assert_not_called()
+
+    def test_rebuild_uses_saved_candidates_without_http_or_scope_recapture(self):
+        with tempfile.TemporaryDirectory() as folder:
+            original = Path(folder) / "original.json"
+            output = Path(folder) / "revised.json"
+            row = dict(baseline(), candidate=self.missing_fiber(), proposal={"old": True},
+                       outcome="previewed")
+            row["product"]["rimi_category_code"] = 10
+            row["nutrition"]["fiber"] = None
+            frozen = {"version": 1, "target": "production", "target_hash": "hash",
+                      "preview_complete": True, "rows": [row]}
+            original.write_text(json.dumps(frozen))
+            before = original.read_bytes()
+            args = Namespace(manifest=str(output), production=True, limit=None,
+                             retry_source_errors=False, rebuild_from=str(original))
+            conn = Mock()
+            with patch("reload_barbora_nutrition.connect", return_value=conn) as connect, \
+                 patch("reload_barbora_nutrition.verify_schema"), \
+                 patch("reload_barbora_nutrition.capture") as capture, \
+                 patch("reload_barbora_nutrition.FiberEstimator", return_value=self.estimator()), \
+                 patch("reload_barbora_nutrition.NutriscoreCalculator", return_value=self.calculator()), \
+                 patch("reload_barbora_nutrition.BarboraSource") as source:
+                result = preview(args, "dsn", "hash")
+                self.assertEqual(original.read_bytes(), before)
+                rebuilt = json.loads(output.read_text())
+                self.assertEqual(rebuilt["proposal_policy"], PROPOSAL_POLICY)
+                self.assertEqual(rebuilt["rebuilt_from_sha256"], digest(frozen))
+                self.assertNotEqual(result["approval_sha256"], digest(frozen))
+                self.assertEqual(result["selected"], 1)
+                self.assertEqual(result["nutrition_scores_calculated"], 1)
+                connect.assert_called_with("dsn", readonly=True)
+                conn.commit.assert_not_called()
+                capture.assert_not_called()
+                source.assert_not_called()
 
     def test_score_uses_stored_category_ingredients_and_new_name(self):
         calc = self.calculator()

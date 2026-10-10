@@ -7,6 +7,7 @@ The schema must already be restored there. Never connects to application DBs.
 import sys
 from pathlib import Path
 from unittest.mock import Mock
+from fiber_estimator import FiberEstimator
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -107,8 +108,33 @@ def run(socket):
             cur.execute("SELECT count(*) FROM " + table)
             assert cur.fetchone()[0] == 0
     conn.rollback()
+    estimator = FiberEstimator()
+    code, expected = next((code, value) for code, value in estimator.category_defaults.items()
+                          if value > 0)
+    with conn.cursor() as cur:
+        cur.execute("UPDATE products SET needs_enrichment=TRUE,rimi_category_code=%s WHERE product_id=%s",
+                    (code, row["product"]["product_id"]))
+        cur.execute("UPDATE nutritionfacts SET fiber=NULL,is_fiber_correct=FALSE WHERE product_id=%s",
+                    (row["product"]["product_id"],))
+    conn.commit()
+    conn.set_session(readonly=True, isolation_level="REPEATABLE READ")
+    refresh = capture(conn, "test", False)
+    conn.rollback()
+    conn.set_session(readonly=False, isolation_level="READ COMMITTED")
+    row = next(r for r in refresh["rows"] if r["product"]["sku"] == SKU)
+    candidate = parse_page(page())
+    candidate["nutrition"].pop("fiber")
+    row["proposal"] = propose(row, candidate, calculator, estimator)
+    assert row["proposal"]["fiber_origin"]["kind"] == "category"
+    assert apply_one(conn, row) == "updated"
+    assert apply_one(conn, row) == "already_applied_or_matches_approved_state"
+    with conn.cursor() as cur:
+        cur.execute("SELECT fiber,is_fiber_correct,nutri_score_grade,ingredients_text FROM nutritionfacts WHERE product_id=%s",
+                    (row["product"]["product_id"],))
+        assert cur.fetchone() == (expected, False, "B", "Keep this")
+    conn.rollback()
     conn.close()
-    print("PASS: local PostgreSQL read-only enforcement, new/existing nutrition writes, unrelated-field preservation, skipped eligibility, manual name protection, resume idempotence and concurrent-edit rejection.")
+    print("PASS: local PostgreSQL read-only enforcement, new/existing nutrition writes, estimated-fiber provenance, unrelated-field preservation, skipped eligibility, manual name protection, resume idempotence and concurrent-edit rejection.")
 
 
 if __name__ == "__main__":

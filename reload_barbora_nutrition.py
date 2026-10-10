@@ -10,7 +10,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from nutriscore_calculator import NutriscoreCalculator
-from nutrition_reload_plan import digest, propose
+from fiber_estimator import FiberEstimator
+from nutrition_reload_plan import PROPOSAL_POLICY, digest, propose
 from nutrition_reload_source import BarboraSource, SourceError
 from nutrition_reload_store import (
     apply_one, capture, connect, database_target, utcnow, verify_schema, write_json,
@@ -36,6 +37,12 @@ def summary(manifest, applied=None):
         "still_needing_enrichment_after_proposed_apply": len(rows) - nutrition,
         "failed": sum(r["outcome"] == "source_failed" for r in attempted),
         "nutrition_outcomes": dict(Counter(r["proposal"]["nutrition_status"] for r in proposals)),
+        "fiber_outcomes": dict(Counter(r["proposal"].get("fiber_origin", {}).get("kind")
+                                      for r in proposals if r["proposal"].get("fiber_origin"))),
+        "nutrition_scores_calculated": sum(
+            r["proposal"]["nutrition_status"] == "complete"
+            and r["proposal"]["nutrition_changes"].get("nutri_score_grade") is not None
+            for r in proposals),
         "source_errors": dict(Counter(r.get("error") for r in attempted if r["outcome"] == "source_failed")),
         "apply_outcomes": dict(Counter((applied or {}).values())),
         "updated": sum(v == "updated" for v in (applied or {}).values()),
@@ -49,7 +56,7 @@ def report(path, manifest, applied=None):
     with open(str(path) + ".csv", "w", newline="") as out:
         columns = ["product_id", "sku", "old_name", "barbora_name", "name_update",
                    "nutrition_status", "old_nutrition", "candidate_nutrition",
-                   "proposed_nutrition", "proposed_product_changes", "notes",
+                   "proposed_nutrition", "proposed_product_changes", "notes", "fiber_origin",
                    "fetched_url", "recovered_url", "outcome", "error", "apply_outcome"]
         writer = csv.DictWriter(out, fieldnames=columns)
         writer.writeheader()
@@ -65,6 +72,7 @@ def report(path, manifest, applied=None):
                 "proposed_nutrition": json.dumps(proposal.get("nutrition_changes"), ensure_ascii=False),
                 "proposed_product_changes": json.dumps(proposal.get("product_changes"), ensure_ascii=False),
                 "notes": "; ".join(proposal.get("notes", [])),
+                "fiber_origin": json.dumps(proposal.get("fiber_origin"), ensure_ascii=False),
                 "fetched_url": candidate.get("fetched_url", ""),
                 "recovered_url": candidate.get("recovered_url", False),
                 "outcome": row["outcome"], "error": row.get("error", ""),
@@ -79,12 +87,28 @@ def report(path, manifest, applied=None):
 
 def preview(args, dsn, target_hash):
     path = Path(args.manifest)
+    rebuild = getattr(args, "rebuild_from", None)
+    if rebuild and (path.exists() or Path(rebuild).resolve() == path.resolve()):
+        raise ValueError("Rebuild requires a new output manifest; the original must be preserved")
+    if rebuild and Path(str(rebuild) + ".apply.json").exists():
+        raise ValueError("Cannot rebuild a manifest with an apply checkpoint")
+    config = Path(__file__).with_name("fiber_estimation_config.json")
+    estimator = FiberEstimator(config)
     conn = connect(dsn, readonly=True)
     try:
         verify_schema(conn)
-        if path.exists():
+        if rebuild:
+            manifest = json.loads(Path(rebuild).read_text())
+            validate_target(manifest, target_hash, args.production)
+            if not manifest["preview_complete"]:
+                raise ValueError("Rebuild requires a completed source preview")
+            manifest["rebuilt_from_sha256"] = digest(manifest)
+        elif path.exists():
             manifest = json.loads(path.read_text())
             validate_target(manifest, target_hash, args.production)
+            if (manifest.get("proposal_policy") != PROPOSAL_POLICY
+                    and any(row.get("proposal") for row in manifest["rows"])):
+                raise ValueError("Saved proposals use an obsolete fiber policy; use --rebuild-from with a new output")
         else:
             manifest = capture(conn, target_hash, args.production, args.limit)
             write_json(path, manifest)
@@ -98,6 +122,17 @@ def preview(args, dsn, target_hash):
         conn.rollback()
     finally:
         conn.close()
+    if rebuild:
+        for row in manifest["rows"]:
+            if row["outcome"] == "previewed":
+                row["proposal"] = propose(row, row["candidate"], calculator, estimator)
+        manifest["proposals_rebuilt_at"] = utcnow()
+    manifest["proposal_policy"] = PROPOSAL_POLICY
+    manifest["fiber_estimation_config_sha256"] = digest(json.loads(config.read_text()))
+    if rebuild:
+        write_json(path, manifest)
+        report(path, manifest)
+        return summary(manifest)
     source = BarboraSource(delay=args.delay, retries=args.retries, timeout=args.timeout,
                            max_pages=args.max_category_pages)
     pending = [r for r in manifest["rows"] if r["outcome"] is None]
@@ -117,7 +152,7 @@ def preview(args, dsn, target_hash):
                 if error:
                     row["outcome"] = "source_failed"
                 else:
-                    row["proposal"] = propose(row, candidate, calculator)
+                    row["proposal"] = propose(row, candidate, calculator, estimator)
                     row["outcome"] = "previewed"
         write_json(path, manifest)
         report(path, manifest)
@@ -140,6 +175,8 @@ def apply(args, dsn, target_hash):
     if (not manifest["preview_complete"] or not args.approved_sha256
             or args.approved_sha256 != digest(manifest)):
         raise ValueError("Apply requires the exact completed preview approval SHA-256")
+    if manifest.get("proposal_policy") != PROPOSAL_POLICY:
+        raise ValueError("Obsolete fiber proposals cannot be applied; rebuild and approve the revised preview")
     ids = [r["product"]["product_id"] for r in manifest["rows"]]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate products in manifest")
@@ -200,6 +237,8 @@ def main(argv=None):
     parser.add_argument("--max-category-pages", type=int, default=30)
     parser.add_argument("--retry-source-errors", action="store_true",
                         help="Retry only failed source checks in the same frozen scope; produces a new approval digest")
+    parser.add_argument("--rebuild-from",
+                        help="Recalculate completed saved candidates into a NEW preview manifest, without HTTP requests")
     args = parser.parse_args(argv)
     try:
         if (args.delay < 0.25 or args.retries not in range(4) or args.timeout <= 0
@@ -212,6 +251,8 @@ def main(argv=None):
             raise ValueError("Apply cannot change the frozen preview scope with --limit")
         if args.apply and args.retry_source_errors:
             raise ValueError("Source retries are preview-only")
+        if args.rebuild_from and (args.apply or args.retry_source_errors or args.limit is not None):
+            raise ValueError("Rebuild is preview-only and cannot retry sources or change scope")
         dsn, fingerprint = database_target(args.production, args.confirm_production)
         path = Path(args.manifest)
         path.parent.mkdir(parents=True, exist_ok=True)
