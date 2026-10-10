@@ -1226,6 +1226,8 @@ def section_nutrition_enrichment():
     
     st.header("🥗 Nutrition Data Enrichment")
     st.caption("Enrich products with missing nutrition data using USDA FoodData Central")
+    st.caption("Only products marked available in their latest scraped availability record "
+               "are listed as needing enrichment. Unavailable products keep their existing flags.")
     
     if 'enrichment_batch' not in st.session_state:
         st.session_state.enrichment_batch = None
@@ -1246,6 +1248,14 @@ def section_nutrition_enrichment():
     
     try:
         service = NutritionEnrichmentService(status_callback=log_callback)
+        if st.session_state.enrichment_batch is not None:
+            removed = service.refresh_batch_availability(st.session_state.enrichment_batch)
+            if removed:
+                st.info(f"Removed {removed} products from this batch because they are no longer "
+                        "available or awaiting enrichment.")
+            if not st.session_state.enrichment_batch.matches:
+                st.session_state.enrichment_batch = None
+                st.session_state.enrichment_processing = False
         stats = service.get_enrichment_stats()
         
         col1, col2, col3, col4 = st.columns(4)
@@ -1261,11 +1271,11 @@ def section_nutrition_enrichment():
         # Show scan button if no products are flagged but some need enrichment
         unflagged_count = service.get_unflagged_missing_count()
         if unflagged_count > 0:
-            st.warning(f"Found {unflagged_count} products with missing nutrition data that aren't flagged for enrichment.")
+            st.warning(f"Found {unflagged_count} available products with missing nutrition data that aren't flagged for enrichment.")
             if st.button("🔍 Scan & Flag Products", type="primary"):
                 with st.spinner("Scanning products with missing nutrition data..."):
                     result = service.scan_and_flag_products()
-                    st.success(f"Flagged {result['flagged']} products for enrichment!")
+                    st.success(f"Flagged {result['flagged']} available products for enrichment!")
                     st.rerun()
         
         st.divider()
@@ -1287,6 +1297,7 @@ def section_nutrition_enrichment():
         
         with col3:
             if st.button("🔄 Load Batch", type="primary", disabled=st.session_state.enrichment_processing):
+                st.session_state.enrichment_batch = None
                 st.session_state.enrichment_log = []
                 st.session_state.enrichment_log_buffer = []
                 log_buffer.clear()
@@ -1299,7 +1310,7 @@ def section_nutrition_enrichment():
                 batch = st.session_state.enrichment_batch
                 st.info(f"Batch: {batch.approved} approved, {batch.skipped} skipped, {batch.pending} pending, {batch.no_match} no match")
             if stats['skipped'] > 0:
-                st.caption(f"📋 {stats['skipped']} products in skip list (sorted to end of batches)")
+                st.caption(f"📋 {stats['skipped']} available products in skip list (sorted to end of batches)")
         
         if st.session_state.enrichment_processing and not st.session_state.enrichment_batch:
             with st.spinner("Loading and processing products..."):
@@ -1307,9 +1318,12 @@ def section_nutrition_enrichment():
                 products = service.get_products_needing_enrichment(limit=batch_size, category_id=cat_id)
                 if products:
                     batch = service.process_batch(products)
-                    st.session_state.enrichment_batch = batch
+                    service.refresh_batch_availability(batch)
+                    st.session_state.enrichment_batch = batch if batch.matches else None
+                    if not batch.matches:
+                        st.info("No available products remain awaiting enrichment in this batch.")
                 else:
-                    st.success("No products need enrichment in this category!")
+                    st.success("No available products need enrichment in this category!")
                 st.session_state.enrichment_log = list(log_buffer)
                 st.session_state.enrichment_processing = False
                 st.rerun()
@@ -1384,9 +1398,9 @@ def section_nutrition_enrichment():
                             selected_idx = st.selectbox(
                                 "Select match:",
                                 options=range(len(option_labels)),
-                                format_func=lambda x: option_labels[x],
+                                    format_func=lambda x, labels=option_labels: labels[x],
                                 index=match.selected_index,
-                                key=f"select_{i}"
+                                    key=f"select_{match.product.product_id}"
                             )
                             
                             if selected_idx != match.selected_index:
@@ -1424,22 +1438,22 @@ def section_nutrition_enrichment():
                         bcol1, bcol2, bcol3 = st.columns(3)
                         
                         with bcol1:
-                            if match.usda_match and match.status == 'pending' and st.button("✅ Approve", key=f"approve_{i}"):
+                            if match.usda_match and match.status == 'pending' and st.button("✅ Approve", key=f"approve_{match.product.product_id}"):
                                 service.save_enrichment(match)
                                 st.rerun()
                         
                         with bcol2:
-                            if match.status in ['pending', 'no_match'] and st.button("⏭️ Skip", key=f"skip_{i}"):
+                            if match.status in ['pending', 'no_match'] and st.button("⏭️ Skip", key=f"skip_{match.product.product_id}"):
                                 service.skip_product(match)
                                 st.rerun()
-                            if match.status == 'skipped' and st.button("🔄 Unskip", key=f"unskip_{i}"):
+                            if match.status == 'skipped' and st.button("🔄 Unskip", key=f"unskip_{match.product.product_id}"):
                                 service.unskip_product(match)
                                 st.rerun()
                         
                         with bcol3:
-                            custom_term = st.text_input("Custom search:", key=f"search_{i}", 
+                            custom_term = st.text_input("Custom search:", key=f"search_{match.product.product_id}",
                                 placeholder="e.g., pomegranate, lime, persimmon")
-                            if custom_term and st.button("🔍 Search", key=f"dosearch_{i}"):
+                            if custom_term and st.button("🔍 Search", key=f"dosearch_{match.product.product_id}"):
                                 new_match = service.search_custom_term(match.product, custom_term)
                                 batch.matches[i] = new_match
                                 st.rerun()

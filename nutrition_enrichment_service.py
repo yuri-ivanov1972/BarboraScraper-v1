@@ -22,6 +22,7 @@ import threading
 from food_translator import FoodTranslator, TranslationResult
 from usda_enrichment import USDAClient, USDAFoodMatch, NutritionData
 from nutriscore_calculator import calculate_nutriscore
+from enrichment_availability import LATEST_AVAILABLE_SQL, QUEUE_ELIGIBLE_SQL
 
 
 @dataclass
@@ -234,15 +235,15 @@ class NutritionEnrichmentService:
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(f"""
                     SELECT 
-                        COUNT(*) FILTER (WHERE needs_enrichment = TRUE AND (enrichment_reviewed IS NULL OR enrichment_reviewed = FALSE)) as needs_enrichment,
+                        COUNT(*) FILTER (WHERE {QUEUE_ELIGIBLE_SQL}) as needs_enrichment,
                         COUNT(*) FILTER (WHERE enrichment_reviewed = TRUE) as reviewed,
                         COUNT(*) FILTER (WHERE nutrition_source = 'usda_api') as from_usda,
                         COUNT(*) FILTER (WHERE nutrition_source = 'rimi_scraped') as from_rimi,
-                        COUNT(*) FILTER (WHERE enrichment_skipped = TRUE AND (enrichment_reviewed IS NULL OR enrichment_reviewed = FALSE)) as skipped,
+                        COUNT(*) FILTER (WHERE {QUEUE_ELIGIBLE_SQL} AND enrichment_skipped IS TRUE) as skipped,
                         COUNT(*) as total
-                    FROM products
+                    FROM products p
                 """)
                 row = cur.fetchone()
                 return {
@@ -265,13 +266,14 @@ class NutritionEnrichmentService:
         try:
             with conn.cursor() as cur:
                 # Find products with missing/empty nutrition data that aren't already flagged
-                cur.execute("""
+                cur.execute(f"""
                     UPDATE products p
                     SET needs_enrichment = TRUE, updated_at = NOW()
                     FROM nutritionfacts nf
                     WHERE p.product_id = nf.product_id
                       AND (p.needs_enrichment IS NULL OR p.needs_enrichment = FALSE)
                       AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                      AND {LATEST_AVAILABLE_SQL}
                       AND (
                           (nf.energy_kj IS NULL OR nf.energy_kj = 0)
                           AND (nf.energy_kcal IS NULL OR nf.energy_kcal = 0)
@@ -295,12 +297,13 @@ class NutritionEnrichmentService:
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(f"""
                     SELECT COUNT(*)
                     FROM products p
                     JOIN nutritionfacts nf ON p.product_id = nf.product_id
                     WHERE (p.needs_enrichment IS NULL OR p.needs_enrichment = FALSE)
                       AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                      AND {LATEST_AVAILABLE_SQL}
                       AND (
                           (nf.energy_kj IS NULL OR nf.energy_kj = 0)
                           AND (nf.energy_kcal IS NULL OR nf.energy_kcal = 0)
@@ -315,15 +318,14 @@ class NutritionEnrichmentService:
         conn = self._get_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
+                cur.execute(f"""
                     SELECT 
                         nc.category_id,
                         nc.name_lv,
                         COUNT(p.product_id) as product_count
                     FROM normalized_categories nc
                     JOIN products p ON p.category_id = nc.category_id
-                    WHERE p.needs_enrichment = TRUE
-                      AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                    WHERE {QUEUE_ELIGIBLE_SQL}
                     GROUP BY nc.category_id, nc.name_lv
                     ORDER BY nc.name_lv
                 """)
@@ -338,7 +340,7 @@ class NutritionEnrichmentService:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 category_filter = ""
                 params = []
-                if category_id:
+                if category_id is not None:
                     category_filter = "AND p.category_id = %s"
                     params.append(category_id)
                 params.extend([limit, offset])
@@ -361,8 +363,7 @@ class NutritionEnrichmentService:
                     FROM products p
                     LEFT JOIN normalized_categories nc ON p.category_id = nc.category_id
                     LEFT JOIN nutritionfacts nf ON p.product_id = nf.product_id
-                    WHERE p.needs_enrichment = TRUE
-                      AND (p.enrichment_reviewed IS NULL OR p.enrichment_reviewed = FALSE)
+                    WHERE {QUEUE_ELIGIBLE_SQL}
                       {category_filter}
                     ORDER BY COALESCE(p.enrichment_skipped, FALSE) ASC, p.product_id
                     LIMIT %s OFFSET %s
@@ -397,6 +398,36 @@ class NutritionEnrichmentService:
         finally:
             conn.close()
     
+    def refresh_batch_availability(self, batch: EnrichmentBatch) -> int:
+        """Prune stale cached entries, preserving matches/options for eligible products."""
+        if not batch.matches:
+            return 0
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT p.product_id, p.needs_enrichment,
+                           COALESCE(p.enrichment_reviewed, FALSE)
+                    FROM products p
+                    WHERE p.product_id=ANY(%s) AND {LATEST_AVAILABLE_SQL}
+                """, ([m.product.product_id for m in batch.matches],))
+                available = {pid: needs and not reviewed for pid, needs, reviewed in cur.fetchall()}
+            original_count = batch.total
+            batch.matches = [m for m in batch.matches if m.product.product_id in available
+                             and (m.status == "approved" or available[m.product.product_id])]
+            return original_count - batch.total
+        finally:
+            conn.close()
+
+    def _lock_eligible_product(self, cur, product_id: int) -> bool:
+        """Recheck availability/eligibility before an explicit batch action writes."""
+        cur.execute(f"""
+            SELECT p.product_id FROM products p
+            WHERE p.product_id=%s AND {QUEUE_ELIGIBLE_SQL}
+            FOR UPDATE OF p
+        """, (product_id,))
+        return cur.fetchone() is not None
+
     def process_single_product(self, product: ProductForEnrichment, num_options: int = 5, 
                                translator=None, usda_client=None) -> EnrichmentMatch:
         """Process a single product: translate and search USDA for multiple options"""
@@ -517,6 +548,10 @@ class NutritionEnrichmentService:
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
+                if not self._lock_eligible_product(cur, match.product.product_id):
+                    conn.rollback()
+                    self.status_callback("Product is no longer available or awaiting enrichment; reload the batch.")
+                    return False
                 nutrition = match.usda_match.nutrition
                 
                 usda_fdc_id = match.usda_match.fdc_id
@@ -614,6 +649,10 @@ class NutritionEnrichmentService:
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
+                if not self._lock_eligible_product(cur, match.product.product_id):
+                    conn.rollback()
+                    self.status_callback("Product is no longer available or awaiting enrichment; reload the batch.")
+                    return False
                 cur.execute("""
                     UPDATE products
                     SET 
@@ -639,6 +678,10 @@ class NutritionEnrichmentService:
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
+                if not self._lock_eligible_product(cur, match.product.product_id):
+                    conn.rollback()
+                    self.status_callback("Product is no longer available or awaiting enrichment; reload the batch.")
+                    return False
                 cur.execute("""
                     UPDATE products
                     SET 
