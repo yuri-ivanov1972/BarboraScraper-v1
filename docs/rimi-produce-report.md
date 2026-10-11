@@ -57,6 +57,12 @@ import. Neither pack weights nor target fiber estimates are used to transform
 nutrients. All existing fiber, manual edits, flags, timestamps and scores remain
 unchanged.
 
+Subsequent import authorization: the user approved all 190 rank-one pairs,
+including review-only candidates, and explicitly confirmed Rimi's stored
+USDA-enriched nutrition is per 100 g of edible food. See
+`docs/rimi-nutrition-import.md` for the guarded one-time production operation.
+The original report and its warnings remain unchanged.
+
 Both readers use server-enforced read-only repeatable-read transactions. Separate
 databases have separate snapshot timestamps, not a shared atomic snapshot.
 Connection errors are sanitized to avoid disclosing connection credentials.

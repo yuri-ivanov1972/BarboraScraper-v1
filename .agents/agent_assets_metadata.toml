@@ -119,3 +119,31 @@ mtime_ms = 1791741053876
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/db883dd5-c3b7-4f2a-a6a8-6ebf0fc10e43/57042486-5cde-4c7e-8390-61d8944074e0"
 storage_version_token = "1791741197982408"
 content_type = "text/csv"
+
+[[outputs]]
+id = "emKOanQYAvPvIIR5D35HS"
+uri = "file://generated-artifacts/rimi-nutrition-import-2026-10-11/import-audit.csv"
+type = "table"
+title = "Production nutrition import audit — 190 products"
+description = "Verified results, approved Rimi references, accepted warnings, enrichment status and Nutri-Score results for all 190 products."
+logical_id = "1bbe5cd3-54d3-4dba-90d8-4a60c4af0a3c"
+content_hash = "sha256:8b28df5c153f5a44e6df9ba6434b421d0f209d7d119d2f05a8806f7599ed8bc5"
+size = 55733
+mtime_ms = 1791742731618
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/1bbe5cd3-54d3-4dba-90d8-4a60c4af0a3c/6a11734c-b641-4855-b52c-9ec6dbbdd8cd"
+storage_version_token = "1791742808651132"
+content_type = "text/csv"
+
+[[outputs]]
+id = "gwXymLOeI_H7mhg7VNM3Q"
+uri = "file://generated-artifacts/rimi-nutrition-import-2026-10-11/remaining-enrichment.csv"
+type = "table"
+title = "20 products still needing nutrition enrichment"
+description = "Partially enriched products with missing source nutrients and links for follow-up."
+logical_id = "1418ad45-b9d8-4c09-9a7b-49ee9882ef5b"
+content_hash = "sha256:a4c49bc313c4ae063cb5705374f10cb91d636d2e9cbdcd0e27524de6bb5d1938"
+size = 6666
+mtime_ms = 1791742731622
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/1418ad45-b9d8-4c09-9a7b-49ee9882ef5b/58165fa7-8d85-447c-af9c-e8d02a922180"
+storage_version_token = "1791742809321797"
+content_type = "text/csv"

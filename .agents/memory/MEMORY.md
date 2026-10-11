@@ -2,3 +2,4 @@
 - [Enrichment availability](enrichment-availability.md) — available for scraping means latest scraped availability, not successful page fetching.
 - [Streamlit loop formatters](streamlit-loop-formatters.md) — saved formatters run after loops; bind per-product labels eagerly and use stable identity keys.
 - [Account secret visibility](account-secret-visibility.md) — account-linked connections can work despite negative secret-existence metadata; verify runtime access safely.
+- [Rimi nutrition basis](rimi-nutrition-basis.md) — user confirmed stored USDA-enriched Rimi nutrients are per 100 g of edible food.
