@@ -91,3 +91,31 @@ mtime_ms = 1791659108670
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/8dfc4715-5ef5-43f1-915d-843c676603c8/2ab56b4c-dd42-4226-8ba8-3e89debdaf88"
 storage_version_token = "1791659135374916"
 content_type = "text/csv"
+
+[[outputs]]
+id = "njWfCU8BYTrgxJpfQQ9H2"
+uri = "file://generated-artifacts/rimi-produce-2026-10-11/matches.csv"
+type = "table"
+title = "Barbora–Rimi nutrition match suggestions"
+description = "225 available Barbora products: closer candidates for 44, review-only candidates for 146, plus all unmatched, unresolved and excluded products. Includes nutrition, provenance, links and warnings. Report only—no database changes."
+logical_id = "8e290b14-d9f0-4853-bbc4-1ce875de9c04"
+content_hash = "sha256:0e221b77947da142dd610779f26db054ae16bfab8d6d19c7f9e351844049bb16"
+size = 636602
+mtime_ms = 1791741053859
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/8e290b14-d9f0-4853-bbc4-1ce875de9c04/8be723c7-088e-417a-9998-03e9bcb82be4"
+storage_version_token = "1791741196907520"
+content_type = "text/csv"
+
+[[outputs]]
+id = "_nqtyaMiCJRFbO1D0bf4z"
+uri = "file://generated-artifacts/rimi-produce-2026-10-11/source-audit.csv"
+type = "table"
+title = "Rimi nutrition source-quality audit"
+description = "All 607 scoped Rimi records, including unknown origins, missing nutrients and questionable USDA reference reuse. Unknown-origin and invalid nutrition are not recommended replacements."
+logical_id = "db883dd5-c3b7-4f2a-a6a8-6ebf0fc10e43"
+content_hash = "sha256:ddc83eff41fa9b03d71d1f13a97b9d27740cc0ef94f02d085aa0371676f7a8b0"
+size = 384669
+mtime_ms = 1791741053876
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/db883dd5-c3b7-4f2a-a6a8-6ebf0fc10e43/57042486-5cde-4c7e-8390-61d8944074e0"
+storage_version_token = "1791741197982408"
+content_type = "text/csv"
