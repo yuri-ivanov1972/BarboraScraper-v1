@@ -184,6 +184,19 @@ class RecoveryTests(unittest.TestCase):
         self.execute("UPDATE normalized_categories SET normalized_category='bad' WHERE category_id=233")
         with self.assertRaisesRegex(RefreshError,"hierarchy"): self.preview()
 
+    def test_unrelated_queued_job_is_not_claimed_or_changed(self):
+        self.execute("""
+            INSERT INTO category_processing_jobs(category_code,category_id,total_products,
+                processed_count,status,requested_by,update_mode,notes)
+            VALUES ('unrelated-category',2,5,0,'queued','fixture','full','Leave this job alone')
+        """)
+        before = self.execute("SELECT to_jsonb(j) FROM category_processing_jobs j")
+        self.apply()
+        after = self.execute("""
+            SELECT to_jsonb(j) FROM category_processing_jobs j WHERE category_code='unrelated-category'
+        """)
+        self.assertEqual(before, after)
+
     def test_rollback_after_second_product_failure_has_no_partial_category_or_product(self):
         import poultry_category_recovery as recovery
         original = recovery.persist_refresh_plan

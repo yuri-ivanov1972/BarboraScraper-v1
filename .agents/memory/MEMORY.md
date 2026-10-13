@@ -5,3 +5,4 @@
 - [Rimi nutrition basis](rimi-nutrition-basis.md) — user confirmed stored USDA-enriched Rimi nutrients are per 100 g of edible food.
 - [Product refresh policy](product-refresh-policy.md) — preview before Apply; preserve manual edits; prefer complete valid Barbora nutrition.
 - [NOVA completion concurrency](nova-completion-concurrency.md) — retry analysis saves as a whole when product refresh conflicts; do not separate score updates from analysis commits.
+- [Production preview freshness](production-preview-freshness.md) — refetch expired previews and compare all approved data, not just counts or visible changes.
