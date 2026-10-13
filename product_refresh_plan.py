@@ -7,6 +7,7 @@ from brand_producer import clean_label, normalize_entity_name
 from ingredient_processor import extract_ingredient_tokens
 from nutrition_reload_plan import FIELDS, REQUIRED, normalize_name, resolve_fiber
 from nutrition_validation import validate_product
+from nova_calculator import calculate_nova
 
 PRODUCT_FIELDS = {"name", "name_norm", "barbora_url", "description", "allergens", "ingredients",
                   "country_of_origin", "quantity_value", "quantity_unit", "category_id",
@@ -229,16 +230,12 @@ def build_plan(snapshot, candidate, context, calculator, estimator):
     ingredients_changed = bool(text and not protected_ingredients and accepted_text != (current_text or ""))
     if effective_p.get("nova_source") != "manual_override":
         known = {i["ingredient"]: i for i in context["ingredients"]}
-        unknown = [t for t in tokens if t not in known or known[t].get("suspicion_level") is None
-                   or known[t].get("is_processed") is False]
-        if any(known.get(t, {}).get("suspicion_level") in {"avoid", "limit"} for t in tokens):
-            pc.update(nova_score=4, nova_source="additive_override")
-        elif unknown:
-            pc.update(nova_score=None, nova_source=None)
+        score, source, reason = calculate_nova(
+            [known.get(t, {}) for t in tokens],
+            context["nova_categories"].get(str(effective_p.get("rimi_category_code"))))
+        pc.update(nova_score=score, nova_source=source)
+        if reason == "pending_analysis":
             notes.append("NOVA awaits usable analysis of the accepted ingredients; stale automatic score cleared.")
-        else:
-            value = context["nova_categories"].get(str(effective_p.get("rimi_category_code")))
-            pc.update(nova_score=value, nova_source="category_inherited" if value is not None else None)
         for k in ("nova_score", "nova_source"):
             rows.append({"Section": "Derived", "Field": k, "Before": p.get(k), "Website / after": pc[k],
                          "Status": "Changed" if p.get(k) != pc[k] else "Unchanged", "Note": ""})

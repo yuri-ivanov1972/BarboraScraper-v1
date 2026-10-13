@@ -37,7 +37,13 @@ grade rather than a stale, apparently valid score.
 New ingredients enter the existing pending-analysis catalogue. If classification
 depends on analysis not yet available, the automatic NOVA score is cleared with
 a preview explanation; no live AI analysis or external enrichment is run by a
-preview. A later refresh can recompute NOVA after analysis becomes available.
+preview. Saving single or batch ingredient analysis automatically recalculates
+NOVA for currently linked products in the same transaction, using their current
+category and mappings. Manual NOVA overrides are retained. Remaining unknown
+ingredients keep category-based scores pending; a confirmed avoid/limit additive
+can establish NOVA 4 even while other ingredients remain unknown. Completed natural
+ingredient analysis is usable even though it has no suspicion marker. Reprocessing
+the same analysis does not rewrite unchanged product scores.
 
 Promotion prices are stored using existing history columns. Promotion type/card
 requirements are displayed in the preview, but the current schema has no column
@@ -57,7 +63,7 @@ rows, allowlisted fields, a complete baseline comparison and rollback on failure
 The detail-view database reader skips startup migration statements.
 
 ```sh
-python -m unittest test_product_refresh test_brand_producer \
+python -m unittest test_nova_analysis_completion test_product_refresh test_brand_producer \
   test_nutrition_reload test_nutrition_reload_postgres test_nutrition_validation
 ```
 

@@ -4,6 +4,7 @@ import json
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from google import genai
+from nova_calculator import recalculate_linked_products
 
 GEMINI_MODEL = "gemini-2.5-flash"
 BATCH_SIZE = 40
@@ -241,56 +242,43 @@ def analyze_ingredients_batch(ingredients: list[dict], batch_size: int = BATCH_S
 
 
 def update_ingredient_combined(conn, result: dict):
-    """Update all fields for a single ingredient in one transaction"""
-    with conn.cursor() as cur:
-        cur.execute("""
-            UPDATE ingredient_analysis 
-            SET clean_name = %s,
-                category = %s,
-                is_processed = %s,
-                suspicion_level = %s,
-                suspicion_category = %s,
-                health_note = %s
-            WHERE id = %s
-        """, (
-            result['clean_name'],
-            result['category'],
-            result['is_processed'],
-            result['suspicion_level'],
-            result['suspicion_category'],
-            result['health_note'],
-            result['id']
-        ))
-    conn.commit()
+    """Save a single completion through the same atomic path as batch saves."""
+    batch_update_ingredients(conn, [result])
 
 
 def batch_update_ingredients(conn, results: list[dict]):
-    """Update multiple ingredients in a single transaction"""
+    """Atomically save analysis and targeted NOVA, retrying concurrent conflicts.
+
+    This API owns the connection's transaction, as before. Product refresh locks
+    products before updating ingredient frequencies; analysis writes ingredients
+    first. A deadlock/serialization conflict must retry the entire save, not just
+    the scoring query. No AI requests are made inside this transaction.
+    """
     if not results:
         return 0
-    
-    with conn.cursor() as cur:
-        for result in results:
-            cur.execute("""
-                UPDATE ingredient_analysis 
-                SET clean_name = %s,
-                    category = %s,
-                    is_processed = %s,
-                    suspicion_level = %s,
-                    suspicion_category = %s,
-                    health_note = %s
-                WHERE id = %s
-            """, (
-                result['clean_name'],
-                result['category'],
-                result['is_processed'],
-                result['suspicion_level'],
-                result['suspicion_category'],
-                result['health_note'],
-                result['id']
-            ))
-    conn.commit()
-    return len(results)
+    for attempt in range(3):
+        try:
+            saved_ids = []
+            with conn.cursor() as cur:
+                # Stable ingredient ordering also avoids batch-vs-batch deadlocks.
+                for result in sorted(results, key=lambda r: r['id']):
+                    cur.execute("""
+                        UPDATE ingredient_analysis
+                        SET clean_name=%s,category=%s,is_processed=%s,
+                            suspicion_level=%s,suspicion_category=%s,health_note=%s
+                        WHERE id=%s RETURNING id
+                    """, (result['clean_name'], result['category'], result['is_processed'],
+                          result['suspicion_level'], result['suspicion_category'],
+                          result['health_note'], result['id']))
+                    if cur.fetchone() is not None:
+                        saved_ids.append(result['id'])
+            recalculate_linked_products(conn, saved_ids)
+            conn.commit()
+            return len(saved_ids)
+        except Exception as exc:
+            conn.rollback()
+            if getattr(exc, "pgcode", None) not in {"40001", "40P01"} or attempt == 2:
+                raise
 
 
 def get_unanalyzed_ingredients(limit: int = 1000) -> list[dict]:
@@ -411,16 +399,19 @@ def run_full_analysis(progress_callback=None) -> dict:
         
         processed = 0
         batch_num = 0
+        attempted_ids = []
+        pending = 0
         
         while True:
             with conn.cursor() as cur:
                 cur.execute("""
                     SELECT id, ingredient 
                     FROM ingredient_analysis 
-                    WHERE category IS NULL OR category = 'uncategorized'
+                    WHERE (category IS NULL OR category = 'uncategorized')
+                      AND NOT (id = ANY(%s))
                     ORDER BY frequency DESC NULLS LAST
                     LIMIT %s
-                """, (BATCH_SIZE,))
+                """, (attempted_ids, BATCH_SIZE))
                 ingredients = list(cur.fetchall())
             
             if not ingredients:
@@ -428,6 +419,8 @@ def run_full_analysis(progress_callback=None) -> dict:
             
             results = analyze_ingredients_batch(ingredients, batch_size=BATCH_SIZE)
             batch_update_ingredients(conn, results)
+            attempted_ids.extend(ingredient['id'] for ingredient in ingredients)
+            pending += sum(r.get('category') not in {'natural', 'processed'} for r in results)
             
             processed += len(results)
             batch_num += 1
@@ -447,7 +440,8 @@ def run_full_analysis(progress_callback=None) -> dict:
         return {
             "processed": processed,
             "total": total,
-            "batches": batch_num
+            "batches": batch_num,
+            "pending": pending
         }
     
     finally:

@@ -121,7 +121,7 @@ def context_for(conn, snapshot, candidate):
 def policy_hash():
     files = ("fiber_estimation_config.json", "fiber_estimator.py", "nutriscore_calculator.py",
              "nutrition_reload_plan.py", "product_refresh_plan.py", "ingredient_processor.py",
-             "nutrition_validation.py")
+             "nutrition_validation.py", "nova_calculator.py")
     return digest({p: hashlib.sha256(Path(p).read_bytes()).hexdigest() for p in files})
 
 

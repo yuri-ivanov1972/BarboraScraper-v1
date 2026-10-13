@@ -2714,6 +2714,9 @@ def section_ingredient_analysis():
                 st.info(result['message'])
             else:
                 st.success(f"Completed! Processed {result.get('processed', 0)} ingredients in {result.get('batches', 0)} batches")
+                if result.get('pending'):
+                    st.warning(f"{result['pending']} ingredients still await usable analysis. "
+                               "Their products' NOVA scores may remain pending. Retry analysis later.")
     
     if 'test_results' in st.session_state and st.session_state.test_results:
         st.subheader("Test Results Preview")
