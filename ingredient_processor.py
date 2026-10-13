@@ -181,6 +181,10 @@ class IngredientProcessor:
         try:
             # Clean the text
             text = ingredients_text.strip()
+            # A separate precautionary allergen sentence is not an ingredient.
+            # Keep the original accepted text in nutritionfacts unchanged.
+            text = re.split(r'\.\s*var\s+saturēt\b', text, maxsplit=1,
+                            flags=re.IGNORECASE)[0]
             
             # Remove common prefixes (case insensitive)
             text = re.sub(r'^(ingredients?|sastāvs?|sastāvdaļas?)[:;]?\s*', '', text, flags=re.IGNORECASE)

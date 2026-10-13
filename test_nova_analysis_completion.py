@@ -10,7 +10,7 @@ from psycopg2.extras import RealDictCursor
 
 from combined_ingredient_analyzer import (
     batch_update_ingredients, update_ingredient_combined, get_fallback_result,
-    run_full_analysis,
+    run_full_analysis, validate_combined_result,
 )
 from nova_calculator import assign_nova_score, calculate_nova, recalculate_linked_products
 from product_refresh_store import apply_preview, RefreshError
@@ -74,6 +74,15 @@ class CompletionTests(unittest.TestCase):
         before = self.execute("SELECT xmin::text FROM products ORDER BY product_id")
         self.save([analysis(1), analysis(2, "processed", "clean")])
         self.assertEqual(before, self.execute("SELECT xmin::text FROM products ORDER BY product_id"))
+
+    def test_completed_flavouring_marker_uses_existing_atomic_path(self):
+        self.execute("UPDATE ingredient_analysis SET ingredient='aromatizētāji' WHERE id=1")
+        result = dict(analysis(1, "processed", "caution"), suspicion_category="flavor_enhancer")
+        self.save([result])
+        self.assertEqual(self.scores(), [(4, "additive_override"), (4, "additive_override")])
+        self.execute("UPDATE products SET nova_source='manual_override',nova_score=2 WHERE product_id=1")
+        self.save([result])
+        self.assertEqual(self.scores()[0], (2, "manual_override"))
 
     def test_additive_despite_unknown_then_failed_analysis_clears(self):
         with psycopg2.connect(self.dsn) as conn:
@@ -238,6 +247,31 @@ class CompletionTests(unittest.TestCase):
 
 
 class RuleTests(unittest.TestCase):
+    def test_incomplete_ai_result_cannot_become_clean_analysis(self):
+        for partial in (
+            {"category": "processed"},
+            {"category": "processed", "is_processed": True},
+            {"category": "natural", "is_processed": True, "suspicion_level": None},
+            {"category": "processed", "is_processed": True, "suspicion_level": "invalid"},
+        ):
+            result = validate_combined_result(partial, "fixture", 1)
+            self.assertEqual(result["category"], "uncategorized")
+            self.assertEqual(calculate_nova([result], 1)[2], "pending_analysis")
+
+    def test_flavourings_are_processing_markers_not_harm_flags(self):
+        marker = dict(analysis(1, "processed", "caution"), ingredient="aromatizētāji",
+                      suspicion_category="flavor_enhancer")
+        self.assertEqual(calculate_nova([marker, {}], 1),
+                         (4, "additive_override", "flavouring_marker"))
+        for change in ({"ingredient": "garšvielas"}, {"is_processed": None},
+                       {"suspicion_category": None}, {"category": "uncategorized"}):
+            self.assertNotEqual(calculate_nova([dict(marker, **change), {}], 1)[0], 4)
+        self.assertEqual(calculate_nova([], 1)[2], "pending_analysis")
+        salt = dict(analysis(1), ingredient="sāls")
+        self.assertEqual(calculate_nova([salt], 1),
+                         (None, None, "unsupported_preparation_default"))
+        self.assertEqual(calculate_nova([salt], 3)[0], 3)
+
     def test_unknown_vs_completed_natural_and_legacy(self):
         self.assertEqual(calculate_nova([{}], 1), (None, None, "pending_analysis"))
         self.assertEqual(calculate_nova([analysis(1)], 1), (1, "category_inherited", "category"))

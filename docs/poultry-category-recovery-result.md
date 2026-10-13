@@ -30,6 +30,11 @@ Fiber, Nutri-Score and NOVA remain unassigned where supported inputs or mappings
 are missing. No fiber policy was changed, no Rimi mapping was guessed, and no
 unknown analysis was treated as a confident NOVA result.
 
+The subsequent scoring investigation, separate explicit approval, applied results
+and verification are in [poultry-scoring-result.md](poultry-scoring-result.md).
+Both products now have supported estimated fiber, Nutri-Score C and NOVA 4;
+recovery itself did not authorize those later scoring/mapping updates.
+
 ## Verification
 
 - Server-enforced read-only checks matched every approved product/nutrition

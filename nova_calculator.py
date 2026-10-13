@@ -6,18 +6,44 @@ from psycopg2.extras import RealDictCursor
 
 logger = logging.getLogger(__name__)
 
+FLAVOURING_NAMES = {"aromatizētāji", "dabīgie aromatizētāji"}
+
+
+def usable_analysis(ingredient):
+    """Missing/contradictory analysis must not become evidence of clean food."""
+    return ((ingredient.get("category") == "natural"
+             and ingredient.get("is_processed") is False
+             and ingredient.get("suspicion_level") is None)
+            or (ingredient.get("category") in {None, "processed"}
+                and ingredient.get("is_processed") is True
+                and ingredient.get("suspicion_level") in {"clean", "caution", "none"}))
+
 
 def calculate_nova(ingredients, category_score):
     """Return (score, source, reason); unknown is not evidence of clean food."""
     if any(i.get("suspicion_level") in {"avoid", "limit"} for i in ingredients):
         return 4, "additive_override", "additive"
+    # NOVA is processing classification, not additive harm severity. Explicit
+    # flavourings are a group-4 marker even when their health flag is caution.
+    # Monteiro et al. 2019: https://pubmed.ncbi.nlm.nih.gov/30744710/
+    if any(i.get("category") == "processed" and i.get("is_processed") is True
+           and i.get("suspicion_category") == "flavor_enhancer"
+           and i.get("suspicion_level") == "caution"
+           and (i.get("ingredient") or i.get("clean_name") or "").strip().lower()
+           in FLAVOURING_NAMES for i in ingredients):
+        return 4, "additive_override", "flavouring_marker"
+    if not ingredients and category_score is not None:
+        return None, None, "pending_analysis"
     for ingredient in ingredients:
-        natural = (ingredient.get("category") == "natural"
-                   and ingredient.get("is_processed") is False)
-        classified = (ingredient.get("is_processed") is True
-                      and ingredient.get("suspicion_level") in {"clean", "caution", "none"})
-        if not (natural or classified):
+        if not usable_analysis(ingredient):
             return None, None, "pending_analysis"
+    # An inherited minimally-processed default is not evidence that an added
+    # salt/flavouring preparation is raw meat. Without a supported override,
+    # leave it unknown rather than silently inheriting group 1.
+    if category_score == 1 and any(
+            (i.get("ingredient") or i.get("clean_name") or "").strip().lower()
+            in (FLAVOURING_NAMES | {"sāls"}) for i in ingredients):
+        return None, None, "unsupported_preparation_default"
     if category_score in {1, 2, 3, 4}:
         return category_score, "category_inherited", "category"
     return None, None, "no_category"

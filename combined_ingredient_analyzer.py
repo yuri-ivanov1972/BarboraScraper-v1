@@ -52,6 +52,17 @@ def clean_ingredient_name(ingredient: str) -> str:
 
 def validate_combined_result(result: dict, original_ingredient: str, ingredient_id: int) -> dict:
     """Validate and normalize the combined AI result"""
+    if not isinstance(result, dict):
+        return get_fallback_result(original_ingredient, ingredient_id)
+    category = str(result.get('category', '')).lower().strip()
+    # An omitted assessment is not an explicit null assessment. Do not turn
+    # partial AI output into a completed, apparently clean analysis.
+    if (category not in {'natural', 'processed'}
+            or 'suspicion_level' not in result
+            or result.get('is_processed') is not (category == 'processed')
+            or result['suspicion_level'] not in {None, 'clean', 'caution', 'limit', 'avoid'}
+            or (category == 'natural' and result['suspicion_level'] is not None)):
+        return get_fallback_result(original_ingredient, ingredient_id)
     clean_name = result.get('clean_name') or clean_ingredient_name(original_ingredient)
     
     category = str(result.get('category', 'uncategorized')).lower().strip()

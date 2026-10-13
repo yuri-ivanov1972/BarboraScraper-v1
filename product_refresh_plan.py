@@ -196,7 +196,7 @@ def build_plan(snapshot, candidate, context, calculator, estimator):
             notes.append("Stored nutrition is also incomplete; Needs Enrichment remains/set true.")
     effective_p, effective_n = dict(p, **pc), dict(old, **nc)
     score_inputs_changed = bool(old or nc) or any(k in pc for k in ("name", "category_id", "rimi_category_code"))
-    if score_inputs_changed:
+    if score_inputs_changed and not manual_nutrition:
         score = {"nutri_score_grade": None, "nutri_score_points": None}
         fiber, correct, origin = resolve_fiber(
             effective_p, old, nutrition.get("fiber") if complete and not manual_nutrition else None,

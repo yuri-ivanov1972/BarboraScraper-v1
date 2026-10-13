@@ -6,3 +6,4 @@
 - [Product refresh policy](product-refresh-policy.md) — preview before Apply; preserve manual edits; prefer complete valid Barbora nutrition.
 - [NOVA completion concurrency](nova-completion-concurrency.md) — retry analysis saves as a whole when product refresh conflicts; do not separate score updates from analysis commits.
 - [Production preview freshness](production-preview-freshness.md) — refetch expired previews and compare all approved data, not just counts or visible changes.
+- [Poultry preparation scoring](poultry-preparation-scoring.md) — verified minced-meat categories can mix raw meat and preparations; NOVA needs ingredient evidence.
