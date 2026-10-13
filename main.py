@@ -115,6 +115,11 @@ def render_product_card(product: dict) -> None:
     if st.button(f"{hidden_prefix}**{product_name[:50]}**", key=f"prod_{product['product_id']}", use_container_width=True):
         st.session_state.selected_product_id = product['product_id']
         st.rerun()
+    if st.button("Refresh from Barbora", key=f"card_refresh_{product['product_id']}",
+                 use_container_width=True):
+        st.session_state.selected_product_id = product['product_id']
+        st.session_state.barbora_refresh_requested = product['product_id']
+        st.rerun()
     
     # Quantity
     qty = product.get('quantity_value')
@@ -909,7 +914,8 @@ def save_nutrition_edits(product_id: int, category_id: int, ingredients_text: st
 def render_product_detail_view():
     """Render detailed product view (similar to reference app)"""
     
-    db = ProductViewDatabase()
+    # Browsing/previewing a product must not run setup/migration writes.
+    db = ProductViewDatabase(initialize_schema=False)
     product = db.get_product_details(st.session_state.selected_product_id)
     
     if not product:
@@ -929,6 +935,8 @@ def render_product_detail_view():
 
     product_id = product['product_id']
     sku        = product['sku']
+    from product_refresh_ui import render_refresh_controls
+    render_refresh_controls(product_id)
 
     # Product header
     col1, col2 = st.columns([2, 1])
@@ -938,6 +946,10 @@ def render_product_detail_view():
             st.error("🚫 Slēpts — nerādīts produktu pārlūkā")
         st.title(product['name'])
         st.caption(f"SKU: {product['sku']}")
+        if product.get("description"):
+            st.write(product["description"])
+        if product.get("allergens"):
+            st.caption(f"Allergēni: {product['allergens']}")
         if product.get('quantity_value'):
             st.caption(f"Daudzums: {product['quantity_value']}{product.get('quantity_unit', '')}")
         if product.get('brand_name'):

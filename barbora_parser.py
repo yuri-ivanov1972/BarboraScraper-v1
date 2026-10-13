@@ -405,12 +405,19 @@ class BarboraParser:
         try:
             response = self.session.get(product_url, timeout=15)
             response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
+            return self.parse_product_details(response.text)
+        except Exception as e:
+            self.status_callback(f"Error extracting product details: {str(e)}")
+            return None
+
+    def parse_product_details(self, html: str) -> Optional[BarboraProductDetails]:
+        """Parse already fetched HTML without network or database side effects."""
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
             
             sku = ""
             ga4_pattern = r'window\.reportUserActionToGa4\(window\.ga4EventTypes\.viewItem,\s*\{[^}]*items:\s*\[(\{[^}]+\})\]'
-            ga4_match = re.search(ga4_pattern, response.text, re.DOTALL)
+            ga4_match = re.search(ga4_pattern, html, re.DOTALL)
             if ga4_match:
                 try:
                     item_json = json.loads(ga4_match.group(1))

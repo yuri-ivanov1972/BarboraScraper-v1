@@ -12,6 +12,13 @@ import re
 from typing import Dict, List, Set, Tuple
 from datetime import datetime, timezone
 
+def extract_ingredient_tokens(text):
+    """Use existing tokenization without opening pools, caches or writing mappings."""
+    processor = object.__new__(IngredientProcessor)
+    processor.status_callback = lambda message: None
+    return processor._extract_ingredients(text)
+
+
 class IngredientProcessor:
     """Processes ingredients for new products and maintains frequency tracking"""
     

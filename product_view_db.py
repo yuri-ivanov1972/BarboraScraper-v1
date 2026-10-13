@@ -13,8 +13,9 @@ from brand_producer import ensure_brand_producer_schema, normalize_website_url
 class ProductViewDatabase:
     """Database manager for Product View UI"""
     
-    def __init__(self):
+    def __init__(self, initialize_schema=True):
         self.connection = None
+        self.initialize_schema = initialize_schema
         self._connect()
     
     def _run_migrations(self):
@@ -38,7 +39,8 @@ class ProductViewDatabase:
             )
         except Exception as e:
             raise Exception(f"Database connection failed: {str(e)}")
-        self._run_migrations()
+        if self.initialize_schema:
+            self._run_migrations()
     
     def _ensure_connection(self):
         """Ensure database connection is active"""
@@ -272,6 +274,10 @@ class ProductViewDatabase:
             p.quantity_unit,
             p.barbora_url,
             p.country_of_origin,
+            p.description,
+            p.allergens,
+            p.nutrition_source,
+            p.needs_enrichment,
             b.name as brand_name,
             b.website_url as brand_website_url,
             pr.name as producer_name,
@@ -313,10 +319,10 @@ class ProductViewDatabase:
         
         # Price history query (latest price)
         price_query = """
-        SELECT price, created_at
+        SELECT price, discount_price, is_available, recorded_at
         FROM product_price_history
         WHERE product_id = %s
-        ORDER BY created_at DESC
+        ORDER BY recorded_at DESC, price_history_id DESC
         LIMIT 1
         """
         
@@ -338,8 +344,10 @@ class ProductViewDatabase:
             cursor.execute(price_query, (product_id,))
             price_row = cursor.fetchone()
             if price_row:
-                product['price'] = float(price_row['price'])
-                product['price_date'] = price_row['created_at']
+                current_price = price_row['discount_price'] if price_row['discount_price'] is not None else price_row['price']
+                product['price'] = float(current_price) if current_price is not None else None
+                product['price_date'] = price_row['recorded_at']
+                product['is_available'] = price_row['is_available']
             else:
                 product['price'] = None
                 product['price_date'] = None
