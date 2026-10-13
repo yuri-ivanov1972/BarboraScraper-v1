@@ -187,6 +187,67 @@ def persist_ingredients(cur, sku, tokens):
         """, (sorted(affected),))
 
 
+def persist_refresh_plan(conn, snapshot, plan):
+    """Write a validated full-information plan inside the caller's transaction.
+
+    Does not commit, initialize schema, fetch pages or process other products.
+    Both the card refresh and scoped category recovery use this same pipeline.
+    """
+    validate_changes(plan)
+    pid = snapshot["product"]["product_id"]
+    with conn.cursor() as cur:
+        _update(cur, "products", pid, plan["product_changes"], "updated_at")
+        changes = plan["nutrition_changes"]
+        if changes:
+            timestamp = "data_source_date" if plan["nutrition_complete"] else None
+            if snapshot["nutrition"] is None:
+                fields = ["product_id"] + list(changes)
+                values = [pid] + list(changes.values())
+                cur.execute(sql.SQL("INSERT INTO public.nutritionfacts ({}) VALUES ({})").format(
+                    sql.SQL(",").join(map(sql.Identifier, fields)),
+                    sql.SQL(",").join(sql.Placeholder() for _ in fields)), values)
+                if timestamp:
+                    cur.execute("UPDATE public.nutritionfacts SET data_source_date=CURRENT_TIMESTAMP WHERE product_id=%s", (pid,))
+            else:
+                _update(cur, "nutritionfacts", pid, changes, timestamp)
+        elif plan["nutrition_complete"] and snapshot["nutrition"] is not None:
+            cur.execute("UPDATE public.nutritionfacts SET data_source_date=CURRENT_TIMESTAMP WHERE product_id=%s", (pid,))
+        for kind, value in plan["links"].items():
+            entity_id = _get_or_create_entity(cur, "brands" if kind == "brand" else "producers", value)
+            _update(cur, "products", pid, {kind + "_id": entity_id}, "updated_at")
+        if plan["links"]:
+            cur.execute("""
+                INSERT INTO public.brand_producers(brand_id,producer_id)
+                SELECT brand_id,producer_id FROM public.products
+                WHERE product_id=%s AND brand_id IS NOT NULL AND producer_id IS NOT NULL
+                ON CONFLICT DO NOTHING
+            """, (pid,))
+        if plan["photos"]:
+            alt_texts = {r["photo_url"]: r.get("alt_text") for r in snapshot["photos"]}
+            cur.execute("DELETE FROM public.productphotos WHERE product_id=%s", (pid,))
+            for index, url in enumerate(plan["photos"]):
+                cur.execute("INSERT INTO public.productphotos(product_id,photo_url,is_primary,alt_text) VALUES (%s,%s,%s,%s)",
+                            (pid, url, index == 0, alt_texts.get(url)))
+        if plan["market"]:
+            fields = sorted(plan["market"])
+            cur.execute(sql.SQL("""
+                INSERT INTO public.product_price_history(product_id,{},data_source,recorded_at)
+                VALUES (%s,{},'barbora_scraped',CURRENT_TIMESTAMP)
+            """).format(sql.SQL(",").join(map(sql.Identifier, fields)),
+                        sql.SQL(",").join(sql.Placeholder() for _ in fields)),
+                        [pid] + [plan["market"][f] for f in fields])
+        if plan["ingredient_tokens"] is not None:
+            persist_ingredients(cur, snapshot["product"]["sku"], plan["ingredient_tokens"])
+        cur.execute("UPDATE public.products SET updated_at=CURRENT_TIMESTAMP WHERE product_id=%s", (pid,))
+        validation = plan["validation"]
+        cur.execute("""
+            INSERT INTO public.nutrition_validation(product_id,suspicion_level,suspicion_score,reasons,checked_at)
+            VALUES (%s,%s,%s,%s,CURRENT_TIMESTAMP) ON CONFLICT(product_id) DO UPDATE SET
+                suspicion_level=EXCLUDED.suspicion_level,suspicion_score=EXCLUDED.suspicion_score,
+                reasons=EXCLUDED.reasons,checked_at=EXCLUDED.checked_at
+        """, (pid, validation["suspicion_level"], validation["suspicion_score"], Json(validation["reasons"])))
+
+
 def apply_preview(preview, dsn=None):
     dsn = dsn or os.environ["DATABASE_URL"]
     if preview.get("sha256") != digest({k: v for k, v in preview.items() if k != "sha256"}):
@@ -212,59 +273,7 @@ def apply_preview(preview, dsn=None):
         if not any(plan[k] for k in ("product_changes", "nutrition_changes", "links", "photos", "market")):
             conn.rollback()
             return {"status": "no_changes"}
-        with conn.cursor() as cur:
-            _update(cur, "products", pid, plan["product_changes"], "updated_at")
-            changes = plan["nutrition_changes"]
-            if changes:
-                timestamp = "data_source_date" if plan["nutrition_complete"] else None
-                if snapshot["nutrition"] is None:
-                    fields = ["product_id"] + list(changes)
-                    values = [pid] + list(changes.values())
-                    cur.execute(sql.SQL("INSERT INTO public.nutritionfacts ({}) VALUES ({})").format(
-                        sql.SQL(",").join(map(sql.Identifier, fields)),
-                        sql.SQL(",").join(sql.Placeholder() for _ in fields)), values)
-                    if timestamp:
-                        cur.execute("UPDATE public.nutritionfacts SET data_source_date=CURRENT_TIMESTAMP WHERE product_id=%s", (pid,))
-                else:
-                    _update(cur, "nutritionfacts", pid, changes, timestamp)
-            elif plan["nutrition_complete"] and snapshot["nutrition"] is not None:
-                cur.execute("UPDATE public.nutritionfacts SET data_source_date=CURRENT_TIMESTAMP WHERE product_id=%s", (pid,))
-            # Only changed, present links are touched; a missing producer never clears one.
-            for kind, value in plan["links"].items():
-                entity_id = _get_or_create_entity(cur, "brands" if kind == "brand" else "producers", value)
-                _update(cur, "products", pid, {kind + "_id": entity_id}, "updated_at")
-            if plan["links"]:
-                cur.execute("""
-                    INSERT INTO public.brand_producers(brand_id,producer_id)
-                    SELECT brand_id,producer_id FROM public.products
-                    WHERE product_id=%s AND brand_id IS NOT NULL AND producer_id IS NOT NULL
-                    ON CONFLICT DO NOTHING
-                """, (pid,))
-            if plan["photos"]:
-                # Valid replacement gallery only; absent/placeholder galleries never reach Apply.
-                alt_texts = {r["photo_url"]: r.get("alt_text") for r in snapshot["photos"]}
-                cur.execute("DELETE FROM public.productphotos WHERE product_id=%s", (pid,))
-                for index, url in enumerate(plan["photos"]):
-                    cur.execute("INSERT INTO public.productphotos(product_id,photo_url,is_primary,alt_text) VALUES (%s,%s,%s,%s)",
-                                (pid, url, index == 0, alt_texts.get(url)))
-            if plan["market"]:
-                fields = sorted(plan["market"])
-                cur.execute(sql.SQL("""
-                    INSERT INTO public.product_price_history(product_id,{},data_source,recorded_at)
-                    VALUES (%s,{},'barbora_scraped',CURRENT_TIMESTAMP)
-                """).format(sql.SQL(",").join(map(sql.Identifier, fields)),
-                            sql.SQL(",").join(sql.Placeholder() for _ in fields)),
-                            [pid] + [plan["market"][f] for f in fields])
-            if plan["ingredient_tokens"] is not None:
-                persist_ingredients(cur, snapshot["product"]["sku"], plan["ingredient_tokens"])
-            cur.execute("UPDATE public.products SET updated_at=CURRENT_TIMESTAMP WHERE product_id=%s", (pid,))
-            validation = plan["validation"]
-            cur.execute("""
-                INSERT INTO public.nutrition_validation(product_id,suspicion_level,suspicion_score,reasons,checked_at)
-                VALUES (%s,%s,%s,%s,CURRENT_TIMESTAMP) ON CONFLICT(product_id) DO UPDATE SET
-                    suspicion_level=EXCLUDED.suspicion_level,suspicion_score=EXCLUDED.suspicion_score,
-                    reasons=EXCLUDED.reasons,checked_at=EXCLUDED.checked_at
-            """, (pid, validation["suspicion_level"], validation["suspicion_score"], Json(validation["reasons"])))
+        persist_refresh_plan(conn, snapshot, plan)
         conn.commit()
         return {"status": "updated", "product_id": pid}
     except RefreshError:
