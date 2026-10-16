@@ -147,3 +147,31 @@ mtime_ms = 1791742731622
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/1418ad45-b9d8-4c09-9a7b-49ee9882ef5b/58165fa7-8d85-447c-af9c-e8d02a922180"
 storage_version_token = "1791742809321797"
 content_type = "text/csv"
+
+[[outputs]]
+id = "vgDnel2EAeAR3GC3zPj02"
+uri = "file://generated-artifacts/photo-production-preview-products.csv"
+type = "table"
+title = "Production photo preview — 25 products"
+description = "One row per product: stored primary photo, current Barbora candidate, SKU verification and safe proposed action. No production changes."
+logical_id = "ed604992-8045-43cb-82ef-9595db4e7883"
+content_hash = "sha256:350dab9b713217213be03d1f592f2e9202977b0f2f5dddf10cbc19e55f701181"
+size = 11953
+mtime_ms = 1792142289982
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/ed604992-8045-43cb-82ef-9595db4e7883/bf6b22f2-8510-4cff-83a9-f9f473fbac73"
+storage_version_token = "1792142296886593"
+content_type = "text/csv"
+
+[[outputs]]
+id = "-SzYQc8DL8mCHWTkPZEn8"
+uri = "file://generated-artifacts/photo-production-preview.csv"
+type = "table"
+title = "Detailed photo checks"
+description = "Stored photos and current candidates, including access-blocked and deferred results."
+logical_id = "1ff5a1de-af37-4e96-a38a-1416dc571107"
+content_hash = "sha256:fed3c9079684c0441e5edc4202af5553ab6aaa5966a53c2333e1b8df1f7fcc1d"
+size = 43966
+mtime_ms = 1792142260839
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/1ff5a1de-af37-4e96-a38a-1416dc571107/9df19f58-6e85-4e6d-bfbf-255c90ae3f37"
+storage_version_token = "1792142297652519"
+content_type = "text/csv"
