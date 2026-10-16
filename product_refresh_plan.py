@@ -136,6 +136,10 @@ def build_plan(snapshot, candidate, context, calculator, estimator):
                            for index, r in enumerate(snapshot["photos"]))
     photo_changes = photos if photos and (photos != previous_photos or primary_mismatch) else None
     present("Photos", "photo_urls", previous_photos, photos or None)
+    if (snapshot.get("photo_ownership") == "manual" or
+        (previous_photos and snapshot.get("photo_ownership") == "unknown")):
+        photo_changes = None
+        rows[-1].update(Status="Protected", Note="Manual or unknown photo ownership; photos preserved.")
     market = candidate.get("market", {})
     last = snapshot.get("market") or {}
     desired_market = {k: last.get(k) for k in MARKET_FIELDS}

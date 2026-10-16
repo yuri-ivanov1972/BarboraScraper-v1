@@ -23,6 +23,7 @@ class BarboraLightweightUpdater:
     def __init__(self, status_callback: Optional[Callable[[str], None]] = None):
         self.status_callback = status_callback or (lambda x: None)
         self.parser = BarboraParser(status_callback)
+        self.photo_tracking = False
         
     def _get_connection(self, retries: int = 5, delay: int = 10):
         """Get database connection with retry logic for Neon cold-start wake-up.
@@ -132,6 +133,16 @@ class BarboraLightweightUpdater:
             return {'success': False, 'sku': product.sku, 'error': 'Product not found'}
         
         product_id = row['product_id']
+        if self.photo_tracking and product.is_available:
+            from photo_maintenance import PhotoMaintenance
+            cur.execute("SAVEPOINT photo_candidate")
+            try:
+                PhotoMaintenance.observe(cur, product_id, product.big_image_url or product.image_url)
+            except Exception as exc:
+                cur.execute("ROLLBACK TO SAVEPOINT photo_candidate")
+                self._log(f"Photo candidate deferred for {product.sku}: {exc}")
+            finally:
+                cur.execute("RELEASE SAVEPOINT photo_candidate")
         old_price = float(row['price']) if row['price'] else None
         old_available = row['is_available']
         old_price_per_unit = float(row['price_per_unit']) if row['price_per_unit'] else None
@@ -336,6 +347,12 @@ class BarboraLightweightUpdater:
         """
         start_time = datetime.now()
         self._log("Starting lightweight update...")
+        try:
+            from photo_maintenance import PhotoMaintenance
+            PhotoMaintenance(os.environ["DATABASE_URL"]).initialize()
+            self.photo_tracking = True
+        except Exception as exc:
+            self._log(f"Photo tracking unavailable; price updates continue: {exc}")
         
         categories = self.get_all_level3_categories()
         existing_skus = self.get_existing_skus()

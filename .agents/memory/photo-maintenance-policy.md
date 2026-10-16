@@ -14,3 +14,9 @@ Regular photo maintenance should automatically update retailer photos while pres
 **Why:** The user selected these scope and replacement policies.
 
 **How to apply:** Preserve uncertain/manual ownership, distinguish access restrictions from missing images, and defer host-blocked checks rather than sacrificing these protections to meet the weekly target.
+
+Do not infer that an existing photo is retailer-managed solely because its URL is on the retailer CDN. Unknown ownership needs explicit classification, and external changes to a previously managed primary require renewed review.
+
+**Why:** Existing photo records do not establish whether a human selected the image; guessing would violate the user's requirement to preserve manual photos.
+
+**How to apply:** Keep safe automatic replacements opt-in until a bounded preview is reviewed on the intended database. Preserve unclassified photos instead of bulk-adopting them from the supplied report.

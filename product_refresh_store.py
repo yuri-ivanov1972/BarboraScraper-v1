@@ -65,6 +65,17 @@ def capture(conn, product_id, lock=False):
         snapshot = dict(rows[0])
         cur.execute("SELECT to_jsonb(pp) AS row FROM public.productphotos pp WHERE product_id=%s ORDER BY is_primary DESC,photo_id", (product_id,))
         snapshot["photos"] = [r["row"] for r in cur.fetchall()]
+        cur.execute("SELECT to_regclass('public.photo_maintenance') AS tracking")
+        if cur.fetchone()["tracking"]:
+            cur.execute("""SELECT CASE WHEN ownership='retailer'
+                        AND managed_url IS DISTINCT FROM (
+                          SELECT photo_url FROM productphotos WHERE product_id=%s
+                          ORDER BY is_primary DESC NULLS LAST,photo_id LIMIT 1)
+                        THEN 'unknown' ELSE ownership END AS ownership
+                        FROM public.photo_maintenance WHERE product_id=%s"""
+                        + (" FOR UPDATE" if lock else ""), (product_id, product_id))
+            protection = cur.fetchone()
+            snapshot["photo_ownership"] = protection["ownership"] if protection else "unknown"
         cur.execute("""
             SELECT to_jsonb(h) AS row FROM public.product_price_history h
             WHERE product_id=%s ORDER BY recorded_at DESC,price_history_id DESC LIMIT 1
@@ -228,6 +239,10 @@ def persist_refresh_plan(conn, snapshot, plan):
             for index, url in enumerate(plan["photos"]):
                 cur.execute("INSERT INTO public.productphotos(product_id,photo_url,is_primary,alt_text) VALUES (%s,%s,%s,%s)",
                             (pid, url, index == 0, alt_texts.get(url)))
+            if snapshot.get("photo_ownership") == "retailer":
+                cur.execute("""
+                    UPDATE public.photo_maintenance SET managed_url=%s WHERE product_id=%s
+                """, (plan["photos"][0], pid))
         if plan["market"]:
             fields = sorted(plan["market"])
             cur.execute(sql.SQL("""

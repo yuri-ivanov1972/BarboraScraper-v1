@@ -51,12 +51,11 @@ def _make_session() -> requests.Session:
 def _check_url(args: tuple) -> tuple:
     """Thread worker: returns (photo_id, product_id, is_ok)."""
     photo_id, product_id, url, session = args
-    try:
-        resp = session.head(url, timeout=10, allow_redirects=True)
-        ok = resp.status_code == 200 and "no-image-placeholder" not in resp.url
-        return photo_id, product_id, ok
-    except Exception:
-        return photo_id, product_id, False
+    from photo_maintenance import check_image
+    status, _ = check_image(url, session)
+    # None is deliberately distinct from missing: never repair on a host denial.
+    return photo_id, product_id, (True if status == "working" else
+                                  False if status == "missing_evidence" else None)
 
 
 def _scrape_photos(barbora_url: str, session: requests.Session) -> list:
@@ -81,21 +80,47 @@ def _scrape_photos(barbora_url: str, session: requests.Session) -> list:
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+def _insert_missing_photos(cur, product_id, urls):
+    """Transaction-neutral fill only; never erase existing or protected photos."""
+    from photo_maintenance import normalize_url
+    urls = list(dict.fromkeys(normalize_url(url) for url in urls if normalize_url(url)))
+    if not urls:
+        return False
+    cur.execute("SELECT product_id FROM products WHERE product_id=%s FOR UPDATE", (product_id,))
+    cur.execute("SELECT 1 FROM productphotos WHERE product_id=%s LIMIT 1", (product_id,))
+    if cur.fetchone():
+        return False
+    cur.execute("SELECT to_regclass('photo_maintenance')")
+    row = cur.fetchone()
+    tracking = next(iter(row.values())) if isinstance(row, dict) else row[0]
+    if tracking:
+        cur.execute("SELECT ownership FROM photo_maintenance WHERE product_id=%s FOR UPDATE",
+                    (product_id,))
+        row = cur.fetchone()
+        ownership = next(iter(row.values())) if isinstance(row, dict) else row[0] if row else None
+        if ownership == "manual":
+            return False
+        cur.execute("""
+            INSERT INTO photo_maintenance(product_id,ownership,candidate_url,managed_url,observed_at)
+            VALUES (%s,'retailer',%s,%s,now()) ON CONFLICT(product_id) DO UPDATE
+            SET ownership='retailer',candidate_url=excluded.candidate_url,
+                managed_url=excluded.managed_url,observed_at=now()
+        """, (product_id, urls[0], urls[0]))
+    for i, url in enumerate(urls):
+        cur.execute("INSERT INTO productphotos(product_id,photo_url,is_primary) VALUES (%s,%s,%s)",
+                    (product_id, url, i == 0))
+    return True
+
+
 def _save_photos(conn, product_id: int, urls: list, dry_run: bool) -> bool:
-    """Delete old photo rows and insert fresh ones. Returns True on success."""
+    """Fill an empty gallery safely. Returns True only when inserted."""
     if dry_run:
         return True
     try:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM productphotos WHERE product_id = %s", (product_id,))
-            for i, url in enumerate(urls):
-                cur.execute(
-                    "INSERT INTO productphotos (product_id, photo_url, is_primary) "
-                    "VALUES (%s, %s, %s)",
-                    (product_id, url.strip(), i == 0),
-                )
+            saved = _insert_missing_photos(cur, product_id, urls)
         conn.commit()
-        return True
+        return saved
     except Exception as e:
         try:
             conn.rollback()
@@ -162,7 +187,7 @@ def run(
         for fut in as_completed(futures):
             photo_id, product_id, ok = fut.result()
             checked += 1
-            if not ok:
+            if ok is False:
                 broken_photo_ids.add(photo_id)
                 broken_product_ids.add(product_id)
             if progress_callback:
@@ -235,7 +260,9 @@ def run(
             if dry_run:
                 log(f"  [DRY-RUN] product_id={pid}: would save {len(new_urls)} photo(s)")
             else:
-                _save_photos(conn, pid, new_urls, dry_run=False)
+                if not _save_photos(conn, pid, new_urls, dry_run=False):
+                    unresolvable += 1
+                    continue
             fixed += 1
             if pid in missing_pids:
                 missing_scraped += 1

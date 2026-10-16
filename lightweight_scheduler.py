@@ -77,6 +77,17 @@ def run_lightweight_update():
         except Exception as e:
             log_status(f"Warning: Worker failed: {e}")
     
+    # Prices and new-product work finish first; photo failures never undo them.
+    try:
+        from photo_maintenance import PhotoMaintenance
+        service = PhotoMaintenance(os.environ["DATABASE_URL"])
+        results = service.run_scheduled()
+        log_status(f"Photo maintenance: {len(results)} results (bounded pass)")
+        from collections import Counter
+        log_status(f"  Outcomes: {dict(Counter(r['check_result'] for r in results))}")
+        log_status(f"  Photo changes: {sum(r.get('outcome') in ('Added retailer primary', 'Replaced retailer primary') for r in results)}")
+    except Exception as exc:
+        log_status(f"Photo maintenance deferred: {exc}")
     return summary
 
 

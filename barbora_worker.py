@@ -20,7 +20,7 @@ from barbora_parser import BarboraParser
 from nutriscore_calculator import NutriscoreCalculator
 from ingredient_processor import IngredientProcessor
 from fiber_estimator import FiberEstimator
-from fix_broken_photos import _scrape_photos, _save_photos, _make_session as _make_photo_session
+from fix_broken_photos import _scrape_photos, _save_photos, _insert_missing_photos, _make_session as _make_photo_session
 from brand_producer import ensure_brand_producer_schema, persist_brand_producer_links
 
 
@@ -551,13 +551,9 @@ class BarboraWorker:
                       product.ingredients, nutri_score_points, nutri_score_grade))
             
             if product.photo_urls:
-                cur.execute("DELETE FROM productphotos WHERE product_id = %s", (product_id,))
-                for i, photo_url in enumerate(product.photo_urls):
-                    is_primary = (i == 0)
-                    cur.execute("""
-                        INSERT INTO productphotos (product_id, photo_url, is_primary)
-                        VALUES (%s, %s, %s)
-                    """, (product_id, photo_url, is_primary))
+                # The legacy writer cannot establish ownership or safely merge galleries.
+                # Only fill empty galleries; existing ones are maintained by the bounded pass.
+                _insert_missing_photos(cur, product_id, product.photo_urls)
             
             conn.commit()
             return product_id
