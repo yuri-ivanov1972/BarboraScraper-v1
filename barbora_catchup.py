@@ -16,7 +16,8 @@ from psycopg2.extras import RealDictCursor, execute_values
 
 from nutrition_reload_store import database_target, connect, digest
 from nutrition_reload_source import BarboraSource, SourceError
-from barbora_site_data import category_page, verify_category_path, SiteDataError
+from barbora_site_data import (category_page, verify_category_path, SiteDataError,
+                               RECOVERY_CATEGORY_PATHS)
 
 
 FIELDS = ("price", "discount_price", "price_per_unit", "discount_price_per_unit",
@@ -80,21 +81,33 @@ def snapshot(dsn):
         conn.close()
 
 
-def preview(dsn, target, limit=None, source=None, only_paths=None):
+def preview(dsn, target, limit=None, source=None, only_paths=None, category_paths=None):
     started = timestamp()
     cats, products = snapshot(dsn)
     source = source or BarboraSource(delay=.35, retries=1, max_pages=30)
     selected = cats[:limit] if limit is not None else cats
+    if category_paths is not None:
+        if limit is not None or only_paths is not None:
+            raise ValueError("Explicit category scope cannot be combined with sampling or retry")
+        requested = set(category_paths)
+        if not requested or not requested.issubset(RECOVERY_CATEGORY_PATHS):
+            raise ValueError("Recovery scope must use the confirmed category paths")
+        selected = [c for c in cats if c["path"] in requested]
+        if len(selected) != len(requested) or {c["path"] for c in selected} != requested:
+            raise ValueError("Recovery category scope is missing or ambiguous in the database")
     if only_paths is not None:
         selected = [c for c in selected if c["path"] in only_paths]
     coverage, sightings, new = [], {}, {}
     for i, cat in enumerate(selected, 1):
-        report = dict(cat, status="failed", products=0, warning="")
+        report = dict(cat, status="failed", products=0, warning="",
+                      advertised_count=None, returned_count=0, identity_evidence=None)
         try:
             collected, count, short = {}, None, None
             for page in range(1, source.max_pages + 1):
                 html, url = source.fetch(source.helper.build_category_url(cat["path"], page))
-                data = category_page(html, page, short)
+                data = category_page(html, page, short, cat["path"])
+                report.update(advertised_count=data["count"],
+                              identity_evidence=data["identity_evidence"])
                 short = data["short_id"]
                 verify_category_path(data, cat["path"])
                 if data["category_id"] != cat["barbora_category_code"]:
@@ -106,6 +119,7 @@ def preview(dsn, target, limit=None, source=None, only_paths=None):
                     if p["id"] in collected:
                         raise ValueError("repeated_pagination_sku")
                     collected[p["id"]] = p
+                report["returned_count"] = len(collected)
                 if len(collected) == count:
                     break
             if len(collected) != count:
@@ -120,7 +134,8 @@ def preview(dsn, target, limit=None, source=None, only_paths=None):
                              product_id=products[sku]["product_id"],
                              baseline={k: products[sku][k] for k in FIELDS},
                              baseline_history_id=products[sku]["price_history_id"],
-                             observed=current, observed_at=timestamp())
+                             observed=current, observed_at=timestamp(),
+                             category_path=cat["path"])
                 entry["changed"] = entry["baseline"] != current
                 if sku in sightings and sightings[sku]["observed"] != current:
                     sightings[sku]["conflict"] = True
@@ -132,23 +147,32 @@ def preview(dsn, target, limit=None, source=None, only_paths=None):
         except Exception as exc:
             # Never include raw request/connection diagnostics or tokens in reports.
             report["warning"] = str(exc) if isinstance(exc, (SourceError, SiteDataError)) or type(exc) is ValueError else type(exc).__name__
+            if isinstance(exc, SiteDataError):
+                for field in ("advertised_count", "returned_count"):
+                    if field in exc.details:
+                        report[field] = exc.details[field]
         coverage.append(report)
         print(f"[{i}/{len(selected)}] {cat['path']}: {report['status']} "
               f"({report['products']}) {report['warning']}", flush=True)
     entries = list(sightings.values())
+    selected_ids = {c["category_id"] for c in selected}
     missing = [dict(sku=p["sku"], name=p["name"], reason="not_seen_in_complete_category")
-               for sku, p in products.items() if sku not in sightings]
+               for sku, p in products.items() if sku not in sightings and (
+                   category_paths is None or p.get("category_id") in selected_ids)]
     conflicts = sum(bool(p.get("conflict")) for p in entries)
     complete = (limit is None and only_paths is None and
                 all(c["status"] == "complete" for c in coverage) and bool(entries) and not conflicts)
     result = dict(version=1, target=target, started_at=started, finished_at=timestamp(),
                   scope="prices_availability_only", bounded=limit is not None,
-                  complete=complete, categories_total=len(cats), coverage=coverage,
+                  complete=complete, categories_total=len(selected) if category_paths is not None else len(cats),
+                  coverage=coverage,
                   products=entries, excluded_new=list(new.values()), not_seen=missing,
                   summary=dict(categories_checked=len(coverage),
                                failed_categories=sum(c["status"] != "complete" for c in coverage),
                                existing_observed=len(entries), changes=sum(p["changed"] for p in entries),
                                conflicts=conflicts, new_excluded=len(new), not_seen=len(missing)))
+    if category_paths is not None:
+        result["selection"] = dict(type="confirmed_category_paths", paths=sorted(set(category_paths)))
     result["checksum"] = digest(result)
     return result
 
@@ -160,6 +184,8 @@ def retry_failed(dsn, target, prior, source=None):
     if (digest(original) != checksum or prior["target"] != target or prior["bounded"]
             or prior["scope"] != "prices_availability_only"):
         raise ValueError("A valid full preview for this database is required")
+    if prior.get("selection"):
+        raise ValueError("Generate a fresh scoped preview instead of merging a partial retry")
     age = (datetime.now(timezone.utc) - datetime.fromisoformat(prior["started_at"])).total_seconds()
     if age > 3600:
         raise ValueError("Preview observations expired; restart the full preview")
@@ -223,6 +249,17 @@ def apply(dsn, target, approved, accept_exclusions=False):
     if digest(manifest) != checksum or manifest["target"] != target:
         raise ValueError("Preview checksum or database target changed")
     coverage = manifest.get("coverage", [])
+    selection = manifest.get("selection")
+    if selection is not None:
+        paths = selection.get("paths", [])
+        if (selection.get("type") != "confirmed_category_paths" or not paths
+                or len(set(paths)) != len(paths) or not set(paths).issubset(RECOVERY_CATEGORY_PATHS)
+                or len(coverage) != len(paths) or manifest.get("categories_total") != len(paths)
+                or {c["path"] for c in coverage} != set(paths)):
+            raise ValueError("Approved recovery category scope does not match its coverage")
+        complete_paths = {c["path"] for c in coverage if c["status"] == "complete"}
+        if any(p.get("category_path") not in complete_paths for p in manifest["products"]):
+            raise ValueError("Observation is outside the approved complete categories")
     all_attempted = (bool(coverage) and len(coverage) == manifest.get("categories_total")
                      and len({c["path"] for c in coverage}) == len(coverage)
                      and all(c["status"] in {"complete", "failed"} for c in coverage))
@@ -288,6 +325,8 @@ def main():
     parser.add_argument("--production", action="store_true")
     parser.add_argument("--confirm-production", action="store_true")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--recover-three", action="store_true",
+                        help="Preview only the three user-confirmed recovery categories")
     parser.add_argument("--output", default="generated-artifacts/barbora-catchup")
     parser.add_argument("--apply", help="Explicitly approved full preview JSON")
     parser.add_argument("--retry-failed", help="Read-only retry of failed categories in a full preview")
@@ -296,6 +335,8 @@ def main():
     args = parser.parse_args()
     if args.apply and args.retry_failed:
         parser.error("Choose apply or read-only retry, not both")
+    if args.recover_three and (args.limit is not None or args.retry_failed or args.apply):
+        parser.error("--recover-three is an explicit preview scope, not a sample, retry or apply option")
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be positive")
     dsn, target = database_target(args.production, args.confirm_production)
@@ -305,7 +346,9 @@ def main():
         print(f"Applied {result} current observations; no historical prices invented")
     else:
         result = (retry_failed(dsn, target, json.loads(Path(args.retry_failed).read_text()))
-                  if args.retry_failed else preview(dsn, target, args.limit))
+                  if args.retry_failed else preview(
+                      dsn, target, args.limit,
+                      category_paths=set(RECOVERY_CATEGORY_PATHS) if args.recover_three else None))
         path = write_reports(result, args.output)
         print(json.dumps(result["summary"]), "Complete:", result["complete"], "Manifest:", path)
 

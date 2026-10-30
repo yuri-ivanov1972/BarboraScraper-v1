@@ -49,6 +49,30 @@ not duplicate unchanged price history.
 Publishing the parser repair and approving catch-up data are separate decisions.
 Do not run the normal writing updater as a substitute for a catch-up preview.
 
+## Three-category recovery
+
+The three user-confirmed paths use canonical `/c/{shortId}/{fullPath}` routes.
+Every response must still agree with the current tree and inventory query.
+An empty listing with blank metadata is accepted only when its zero-item response,
+query identity, pagination and exact current-tree path agree. It never makes
+previously stored products unavailable merely because they were not listed.
+
+```sh
+python barbora_catchup.py --production --confirm-production --recover-three \
+  --output generated-artifacts/barbora-three-category-preview
+```
+
+This is a complete **explicit three-category scope**, not a sample of all
+categories. Its manifest binds the exact selected paths and only includes
+observations from categories with complete listings. New products are reported
+but never created. The usual approval, freshness, baseline and exclusion guards
+apply; `--recover-three` is only a preview option, not an Apply option.
+
+The pastry listing was observed advertising 50 items while returning 49 on page
+one and none on page two. That is an inconsistent retailer response, not evidence
+that the missing product is unavailable. Keep this category incomplete unless a
+complete listing is recovered; never lower the expected count silently.
+
 ## Verification
 
 ```sh

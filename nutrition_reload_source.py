@@ -151,7 +151,7 @@ class BarboraSource:
                 html, _ = self.fetch(self.helper.build_category_url(path, page))
                 modern = "window.__remixContext" in html
                 if modern:
-                    metadata = category_page(html, page, short)
+                    metadata = category_page(html, page, short, path)
                     verify_category_path(metadata, path)
                     short = metadata["short_id"]
                     if expected is not None and expected != metadata["count"]:

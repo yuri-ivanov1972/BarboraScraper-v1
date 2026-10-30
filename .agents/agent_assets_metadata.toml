@@ -217,3 +217,31 @@ mtime_ms = 1793390566201
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/c6a687b3-85b2-419f-8c76-b9d8716850c8/d068c54c-8015-4df8-adac-88a8217c03f1"
 storage_version_token = "1793390581962921"
 content_type = "text/csv"
+
+[[outputs]]
+id = "8OZfUME-fJIO0Z3z1TVE-"
+uri = "file://generated-artifacts/barbora-three-category-preview/changes.csv"
+type = "table"
+title = "Three-category preview — 18 proposed updates"
+description = "Read-only production preview: 52 existing popcorn products observed, 18 proposed price/availability updates, and six new products excluded. No production changes applied."
+logical_id = "de848072-c5b5-4644-8900-a130aa5c6b6d"
+content_hash = "sha256:0b0b9ba56dfcaac9f46adce556086edab676d710ed4a8df824b3b1af7002c6ec"
+size = 2309
+mtime_ms = 1793392129709
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/de848072-c5b5-4644-8900-a130aa5c6b6d/72cb817a-eece-4839-b222-d53e1a120f93"
+storage_version_token = "1793392165287080"
+content_type = "text/csv"
+
+[[outputs]]
+id = "j0jVwQs19iQaAFtzTvTJw"
+uri = "file://generated-artifacts/barbora-three-category-preview/coverage.csv"
+type = "table"
+title = "Three-category coverage report"
+description = "Weighted biscuits confirmed empty through query/tree agreement; popcorn complete with 58 items; pastries excluded because the retailer reports 50 but returns 49."
+logical_id = "f82503cf-d267-488c-9616-246da0d2a6e1"
+content_hash = "sha256:2f74ce15b6afed1751e987307baa03b3d5c62f0b3926bff2bc9f487b5a8a0dc8"
+size = 690
+mtime_ms = 1793392129711
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/f82503cf-d267-488c-9616-246da0d2a6e1/4fa539ab-a714-4bd0-a02e-ff4cf9597748"
+storage_version_token = "1793392165921987"
+content_type = "text/csv"

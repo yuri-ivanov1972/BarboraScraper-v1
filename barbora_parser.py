@@ -17,7 +17,7 @@ from psycopg2.extras import RealDictCursor
 import os
 import json
 from barbora_site_data import (SiteDataError, category_page, product_data,
-                               detail_values, query_data, verify_category_path)
+                               detail_values, query_data, verify_category_path, canonical_category_path)
 
 
 @dataclass
@@ -111,7 +111,7 @@ class BarboraParser:
         Returns:
             Full URL like "https://barbora.lv/piena-produkti-un-olas/piens/uht-piens?page=2"
         """
-        normalized_category_path = normalized_category_path.strip().strip('/')
+        normalized_category_path = canonical_category_path(normalized_category_path.strip().strip('/'))
         url = f"{self.BASE_URL}/{normalized_category_path}"
         if page > 1:
             url += f"?page={page}"
@@ -306,7 +306,7 @@ class BarboraParser:
                 
                 modern = "window.__remixContext" in response.text
                 if modern:
-                    metadata = category_page(response.text, page, expected_short)
+                    metadata = category_page(response.text, page, expected_short, category_path)
                     verify_category_path(metadata, category_path)
                     expected_short = metadata["short_id"]
                     if expected is not None and expected != metadata["count"]:
@@ -366,7 +366,7 @@ class BarboraParser:
             response.raise_for_status()
             
             if "window.__remixContext" in response.text:
-                metadata = category_page(response.text, page)
+                metadata = category_page(response.text, page, expected_path=category_path)
                 verify_category_path(metadata, category_path)
                 products_json = metadata["products"]
             else:

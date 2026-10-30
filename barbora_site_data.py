@@ -8,8 +8,27 @@ from urllib.parse import urlsplit
 class SiteDataError(ValueError):
     """A page is not a complete, understood retailer observation."""
 
+    def __init__(self, code, details=None):
+        super().__init__(code)
+        self.details = details or {}
 
-def query_data(html, operation):
+
+# User-supplied recovery hints, not replacement database category identities.
+RECOVERY_CATEGORY_PATHS = {
+    "bakaleja/saldumi/sveramie-cepumi": "L0BE",
+    "bakaleja/uzkodas/kukuruzas-nujinas-un-popkorns": "ATB9",
+    "maize-un-konditorejas-izstradajumi/svaigi-cepts/svaigi-ceptas-smalkmaizites": "8ZA0",
+}
+
+
+def canonical_category_path(path):
+    """Use the supplied canonical routes; each response must still verify its tree."""
+    path = path.strip("/")
+    short = RECOVERY_CATEGORY_PATHS.get(path)
+    return f"c/{short}/{path}" if short else path
+
+
+def query_data(html, operation, include_key=False):
     match = re.search(r"window\.__remixContext\s*=\s*", html)
     if not match:
         return None
@@ -24,6 +43,8 @@ def query_data(html, operation):
                 key = query.get("queryKey", [])
                 if key and isinstance(key[0], dict) and key[0].get("_id") == operation:
                     value = query["state"]["data"]
+                    if include_key:
+                        value = (value, {"path": key[0].get("path"), "query": key[0].get("query")})
                     if value not in matches:
                         matches.append(value)
         if len(matches) > 1:
@@ -125,10 +146,11 @@ def normalized_product(product, registry):
                 status="active" if product["status"] == "active" else "inactive")
 
 
-def category_page(html, page=1, expected_short=None):
-    data = query_data(html, "inventoryCategoryInventory")
-    if data is None:
+def category_page(html, page=1, expected_short=None, expected_path=None):
+    record = query_data(html, "inventoryCategoryInventory", include_key=True)
+    if record is None:
         raise SiteDataError("category_listing_unrecognized")
+    data, query_key = record
     if not isinstance(data, dict):
         raise SiteDataError("invalid_category_listing")
     offset, limit, count = (data.get(k) for k in ("offset", "limit", "count"))
@@ -136,22 +158,48 @@ def category_page(html, page=1, expected_short=None):
         raise SiteDataError("invalid_pagination")
     if offset != (page - 1) * limit:
         raise SiteDataError("unexpected_page_offset")
+    key_path, key_query = query_key.get("path") or {}, query_key.get("query") or {}
+    query_short = key_path.get("shortId")
+    if key_query and (key_query.get("Offset") != offset or key_query.get("Limit") != limit):
+        raise SiteDataError("query_pagination_mismatch")
+    registry = categories(html)
+    items = data.get("inventories")
     path = (data.get("categoryMetadata") or {}).get("url", "")
+    evidence = "category_metadata"
+    if not path and count == 0 and offset == 0 and items == [] and query_short:
+        node = registry.get(query_short, {})
+        tree_path = node.get("fullUrl")
+        if (isinstance(tree_path, str) and tree_path.startswith(f"c/{query_short}/")
+                and key_query.get("Offset") == 0 and key_query.get("Limit") == limit):
+            path = tree_path
+            evidence = "inventory_query_and_current_tree"
     if not isinstance(path, str):
         raise SiteDataError("missing_category_identity")
     parts = path.strip("/").split("/")
     if len(parts) < 3 or parts[0] != "c" or (expected_short and parts[1] != expected_short):
         raise SiteDataError("category_identity_mismatch")
-    items = data.get("inventories")
+    if query_short is not None and query_short != parts[1]:
+        raise SiteDataError("query_category_mismatch")
+    tree_path = registry.get(parts[1], {}).get("fullUrl")
+    if tree_path is not None and tree_path.strip("/") != path.strip("/"):
+        raise SiteDataError("tree_category_mismatch")
+    relative = "/".join(parts[2:])
+    hint = RECOVERY_CATEGORY_PATHS.get(relative)
+    if hint and (parts[1] != hint or not tree_path):
+        raise SiteDataError("recovery_category_identity_mismatch")
+    if expected_path is not None:
+        verify_category_path({"path": path}, expected_path)
     if not isinstance(items, list) or len(items) != max(0, min(limit, count - offset)):
-        raise SiteDataError("incomplete_category_page")
-    registry = categories(html)
+        raise SiteDataError("incomplete_category_page", dict(
+            advertised_count=count, returned_count=len(items) if isinstance(items, list) else None,
+            offset=offset, limit=limit))
     normalized = [normalized_product(p, registry) for p in items]
     if len({p["id"] for p in normalized}) != len(normalized):
         raise SiteDataError("duplicate_page_sku")
     return dict(products=normalized, count=count, offset=offset, limit=limit,
                 short_id=parts[1], path=path,
-                category_id=registry.get(parts[1], {}).get("categoryId"))
+                category_id=registry.get(parts[1], {}).get("categoryId"),
+                identity_evidence=evidence)
 
 
 def verify_category_path(data, requested):
