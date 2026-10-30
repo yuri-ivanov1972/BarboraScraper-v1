@@ -51,7 +51,7 @@ def run_lightweight_update():
     updater = BarboraLightweightUpdater(status_callback=log_status)
     summary = updater.run_full_update(progress_callback=progress)
     
-    log_status("Update completed!")
+    log_status(f"Update {summary.get('status', 'failed')}!")
     log_status(f"  Categories: {summary.get('categories_processed', 0)}")
     log_status(f"  Products checked: {summary.get('products_checked', 0)}")
     log_status(f"  Products updated: {summary.get('products_updated', 0)}")
@@ -67,6 +67,11 @@ def run_lightweight_update():
         log_status(f"  Warning: Could not save to history: {e}")
     
     new_products = summary.get('new_products_found', 0)
+    if summary.get('status') not in {'completed', 'incomplete'}:
+        log_status(f"Update {summary.get('status', 'failed')}; worker and photo pass deferred.")
+        return summary
+    if summary.get('status') == 'incomplete':
+        log_status("Incomplete category coverage; successful categories committed. Processing queued work only.")
     if new_products > 0:
         log_status(f"Processing {new_products} new products with worker...")
         try:
@@ -134,6 +139,7 @@ def scheduler_loop(enabled_override=False):
             print(f"{'='*60}\n")
             
             try:
+                last_run_date = today
                 run_lightweight_update()
                 last_run_date = today
             except Exception as e:

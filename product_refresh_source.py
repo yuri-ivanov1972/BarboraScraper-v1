@@ -8,9 +8,14 @@ from urllib.parse import urlsplit
 
 from barbora_parser import BarboraParser
 from nutrition_reload_source import BarboraSource, SourceError, parse_page, trusted_url
+from barbora_site_data import product_data, normalized_product
 
 
 def product_json(html):
+    modern = product_data(html)
+    if modern is not None:
+        from barbora_site_data import categories
+        return normalized_product(modern, categories(html))
     match = re.search(r"\bwindow\.product\s*=\s*", html)
     if not match:
         return {}

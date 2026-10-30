@@ -112,17 +112,20 @@ class BarboraLightweightUpdater:
             SELECT 
                 p.product_id,
                 p.name,
+                p.is_hidden,
                 pph.price,
                 pph.is_available,
                 pph.price_per_unit,
                 pph.price_per_unit_type,
-                pph.discount_price
+                pph.discount_price,
+                pph.discount_price_per_unit
             FROM products p
             LEFT JOIN LATERAL (
-                SELECT price, is_available, price_per_unit, price_per_unit_type, discount_price
+                SELECT price, is_available, price_per_unit, price_per_unit_type, discount_price,
+                       discount_price_per_unit
                 FROM product_price_history
                 WHERE product_id = p.product_id
-                ORDER BY recorded_at DESC
+                ORDER BY recorded_at DESC, price_history_id DESC
                 LIMIT 1
             ) pph ON true
             WHERE p.sku = %s
@@ -143,13 +146,18 @@ class BarboraLightweightUpdater:
                 self._log(f"Photo candidate deferred for {product.sku}: {exc}")
             finally:
                 cur.execute("RELEASE SAVEPOINT photo_candidate")
-        old_price = float(row['price']) if row['price'] else None
+        old_price = float(row['price']) if row['price'] is not None else None
         old_available = row['is_available']
-        old_price_per_unit = float(row['price_per_unit']) if row['price_per_unit'] else None
-        old_discount = float(row['discount_price']) if row['discount_price'] else None
+        old_price_per_unit = float(row['price_per_unit']) if row['price_per_unit'] is not None else None
+        old_discount = float(row['discount_price']) if row['discount_price'] is not None else None
         
-        new_available = product.is_available
+        new_available = product.is_available and not bool(row['is_hidden'])
         new_price_per_unit = product.comparative_unit_price
+        new_discount_per_unit = None
+        if (product.retail_unit_price is not None and new_price_per_unit is not None
+                and product.retail_unit_price > new_price_per_unit):
+            new_discount_per_unit = new_price_per_unit
+            new_price_per_unit = product.retail_unit_price
         new_price_per_unit_type = product.comparative_unit
         
         # Barbora JSON: price = sale price (what customer pays), retail_price = regular base price
@@ -166,18 +174,23 @@ class BarboraLightweightUpdater:
         price_changed = old_price != new_price
         availability_changed = old_available != new_available
         discount_changed = old_discount != new_discount
-        price_per_unit_changed = old_price_per_unit != new_price_per_unit
+        price_per_unit_changed = (old_price_per_unit != new_price_per_unit or
+                                  row['price_per_unit_type'] != new_price_per_unit_type)
         
-        any_change = price_changed or availability_changed or discount_changed or price_per_unit_changed
+        old_discount_per_unit = (float(row['discount_price_per_unit'])
+                                 if row['discount_price_per_unit'] is not None else None)
+        any_change = (price_changed or availability_changed or discount_changed or
+                      price_per_unit_changed or old_discount_per_unit != new_discount_per_unit)
         
         if any_change:
             cur.execute("""
                 INSERT INTO product_price_history (
                     product_id, price, is_available, data_source, recorded_at,
-                    price_per_unit, price_per_unit_type, discount_price
+                    price_per_unit, price_per_unit_type, discount_price, discount_price_per_unit
                 )
-                VALUES (%s, %s, %s, 'lightweight_update', CURRENT_TIMESTAMP, %s, %s, %s)
-            """, (product_id, new_price, new_available, new_price_per_unit, new_price_per_unit_type, new_discount))
+                VALUES (%s, %s, %s, 'lightweight_update', CURRENT_TIMESTAMP, %s, %s, %s, %s)
+            """, (product_id, new_price, new_available, new_price_per_unit, new_price_per_unit_type,
+                  new_discount, new_discount_per_unit))
             
             cur.execute("""
                 UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE product_id = %s
@@ -238,7 +251,7 @@ class BarboraLightweightUpdater:
         
         category_path = self.get_category_path_for_url(category_id)
         if not category_path:
-            return {'error': f'No category path for {category_name}'}
+            raise ValueError(f'No category path for {category_name}')
         
         products = self.parser.extract_products_from_category(category_path)
         valid_products = [p for p in products if p.sku and p.url]
@@ -272,17 +285,16 @@ class BarboraLightweightUpdater:
                     if result.get('availability_changed'):
                         stats['availability_changes'] += 1
                 else:
-                    stats['errors'].append(result.get('error'))
+                    raise ValueError(result.get('error') or 'Price update failed')
             
             if new_products:
                 stats['new_job_id'] = self.queue_new_products(conn, new_products, category_id, category_code)
-                for p in new_products:
-                    existing_skus.add(p.sku)
-            
             conn.commit()
+            for p in new_products:
+                existing_skus.add(p.sku)
         except Exception as e:
             conn.rollback()
-            stats['errors'].append(str(e))
+            raise
         finally:
             conn.close()
         
@@ -335,7 +347,8 @@ class BarboraLightweightUpdater:
         finally:
             conn.close()
 
-    def run_full_update(self, progress_callback: Optional[Callable[[int, int, str], None]] = None) -> Dict:
+    def run_full_update(self, progress_callback: Optional[Callable[[int, int, str], None]] = None,
+                        limit: Optional[int] = None) -> Dict:
         """
         Run lightweight update on all level 3 categories.
         
@@ -355,6 +368,10 @@ class BarboraLightweightUpdater:
             self._log(f"Photo tracking unavailable; price updates continue: {exc}")
         
         categories = self.get_all_level3_categories()
+        if limit is not None:
+            if limit < 1:
+                raise ValueError("Category limit must be positive")
+            categories = categories[:limit]
         existing_skus = self.get_existing_skus()
         
         self._log(f"Processing {len(categories)} categories, {len(existing_skus)} existing products in DB")
@@ -402,11 +419,14 @@ class BarboraLightweightUpdater:
         
         summary['end_time'] = datetime.now().isoformat()
         summary['duration_seconds'] = (datetime.now() - start_time).total_seconds()
-
-        hidden_overrides = self.apply_hidden_overrides()
+        if not summary['products_checked'] or not categories:
+            summary['errors'].append('No products checked; source coverage failed')
+        summary['status'] = ('failed' if not summary['products_checked'] else
+                             'incomplete' if summary['errors'] else 'completed')
+        hidden_overrides = self.apply_hidden_overrides() if summary['status'] == 'completed' else 0
         summary['hidden_overrides'] = hidden_overrides
 
-        self._log(f"Completed: {summary['products_updated']} updated, {summary['new_products_found']} new, {summary['price_changes']} price changes")
+        self._log(f"{summary['status']}: {summary['products_updated']} updated, {summary['new_products_found']} new, {summary['price_changes']} price changes")
         self._log(f"Hidden override: {hidden_overrides} products forced unavailable")
 
         return summary
@@ -437,7 +457,7 @@ class BarboraLightweightUpdater:
                 summary.get('new_products_found', 0),
                 summary.get('new_product_jobs_created', 0),
                 len(summary.get('errors', [])),
-                'completed'
+                summary.get('status', 'failed')
             ))
             run_id = cur.fetchone()['run_id']
             conn.commit()
@@ -468,7 +488,7 @@ if __name__ == "__main__":
         print(f"Would process {len(categories)} categories")
         print(f"Existing products in DB: {len(existing)}")
     else:
-        summary = updater.run_full_update(progress_callback=progress)
+        summary = updater.run_full_update(progress_callback=progress, limit=args.limit)
         print("\n=== Summary ===")
         for key, value in summary.items():
             if key != 'errors':

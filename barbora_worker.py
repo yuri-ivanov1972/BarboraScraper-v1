@@ -261,6 +261,8 @@ class BarboraWorker:
                 product_data = self.parser.extract_product_details(product_url)
                 
                 if product_data:
+                    if product_data.sku != sku:
+                        raise ValueError("Product page SKU differs from queued SKU")
                     product_id = self.save_product(product_data, category_id, product_url)
                     if product_id:
                         saved_product_ids.append(product_id)
@@ -269,7 +271,7 @@ class BarboraWorker:
                     if product_id:
                         self.apply_fiber_estimation(product_id)
                     
-                    if product_id and product_data.ingredients:
+                    if product_id and product_data.ingredients and not self.manual_ingredients(product_id):
                         try:
                             self.ingredient_processor.process_product_ingredients(sku, product_data.ingredients)
                         except Exception as ing_err:
@@ -447,6 +449,18 @@ class BarboraWorker:
         finally:
             conn.close()
 
+    def manual_ingredients(self, product_id):
+        conn = self._get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT p.name_manual_edit, nf.nutrition_manual_edit
+                               FROM products p LEFT JOIN nutritionfacts nf USING (product_id)
+                               WHERE p.product_id=%s""", (product_id,))
+                row = cur.fetchone()
+                return bool(row and (row[0] or row[1]))
+        finally:
+            conn.close()
+
     def save_product(self, product, category_id: int, product_url: str) -> int:
         """Save or update product in the database. Returns product_id."""
         conn = self._get_connection()
@@ -465,8 +479,8 @@ class BarboraWorker:
                                       created_at, updated_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (sku) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    name_norm = EXCLUDED.name_norm,
+                    name = CASE WHEN products.name_manual_edit THEN products.name ELSE EXCLUDED.name END,
+                    name_norm = CASE WHEN products.name_manual_edit THEN products.name_norm ELSE EXCLUDED.name_norm END,
                     barbora_url = EXCLUDED.barbora_url,
                     category_id = EXCLUDED.category_id,
                     country_of_origin = EXCLUDED.country_of_origin,
@@ -478,6 +492,10 @@ class BarboraWorker:
                   product.country_of_origin, qty_value, qty_unit))
             
             product_id = cur.fetchone()[0]
+            cur.execute("""SELECT p.name_manual_edit, nf.nutrition_manual_edit, nf.fiber
+                           FROM products p LEFT JOIN nutritionfacts nf USING (product_id)
+                           WHERE p.product_id=%s""", (product_id,))
+            manual_name, manual_nutrition, stored_fiber = cur.fetchone()
 
             persist_brand_producer_links(
                 cur,
@@ -490,12 +508,16 @@ class BarboraWorker:
                 or getattr(product, 'manufacturer', None),
             )
             
-            if product.ingredients:
+            if product.ingredients and not (manual_name or manual_nutrition):
                 cur.execute("""
                     UPDATE products SET ingredients = %s WHERE product_id = %s
                 """, (product.ingredients, product_id))
             
-            if product.nutrition:
+            n = product.nutrition
+            complete = n is not None and all(getattr(n, field) is not None for field in (
+                'energy_kj', 'energy_kcal', 'fat', 'saturated_fat',
+                'carbohydrates', 'sugars', 'protein', 'salt'))
+            if complete and not manual_nutrition:
                 nutri_score_points = None
                 nutri_score_grade = None
                 
@@ -508,7 +530,7 @@ class BarboraWorker:
                         saturated_fat=n.saturated_fat if n.saturated_fat is not None else 0,
                         salt=n.salt if n.salt is not None else 0,
                         protein=n.protein if n.protein is not None else 0,
-                        fiber=n.fiber if n.fiber is not None else 0,
+                        fiber=n.fiber if n.fiber is not None else float(stored_fiber or 0),
                         total_fat=n.fat if n.fat is not None else None,
                         category_id=category_id
                     )
@@ -525,7 +547,7 @@ class BarboraWorker:
                 carbs_sugars = n.sugars if n.sugars is not None else (0 if energy_kj is not None else None)
                 protein_val = n.protein if n.protein is not None else (0 if energy_kj is not None else None)
                 salt_val = n.salt if n.salt is not None else (0 if energy_kj is not None else None)
-                fiber_val = n.fiber if n.fiber is not None else (0 if energy_kj is not None else None)
+                fiber_val = n.fiber
                 
                 cur.execute("""
                     INSERT INTO nutritionfacts (product_id, energy_kj, energy_kcal, fat_total, fat_saturated, 
@@ -541,14 +563,16 @@ class BarboraWorker:
                         carbs_sugars = EXCLUDED.carbs_sugars,
                         protein = EXCLUDED.protein,
                         salt = EXCLUDED.salt,
-                        fiber = EXCLUDED.fiber,
-                        ingredients_text = EXCLUDED.ingredients_text,
+                        fiber = COALESCE(EXCLUDED.fiber, nutritionfacts.fiber),
+                        ingredients_text = CASE WHEN %s THEN nutritionfacts.ingredients_text ELSE EXCLUDED.ingredients_text END,
                         nutri_score_points = EXCLUDED.nutri_score_points,
                         nutri_score_grade = EXCLUDED.nutri_score_grade
                 """, (product_id, 
                       energy_kj, energy_kcal, fat_total, fat_saturated,
                       carbs_total, carbs_sugars, protein_val, salt_val, fiber_val,
-                      product.ingredients, nutri_score_points, nutri_score_grade))
+                      product.ingredients, nutri_score_points, nutri_score_grade, bool(manual_name)))
+                cur.execute("""UPDATE products SET needs_enrichment=FALSE,
+                               nutrition_source='barbora' WHERE product_id=%s""", (product_id,))
             
             if product.photo_urls:
                 # The legacy writer cannot establish ownership or safely merge galleries.
@@ -583,6 +607,7 @@ class BarboraWorker:
                 FROM products p
                 JOIN nutritionfacts nf ON p.product_id = nf.product_id
                 WHERE p.product_id = %s
+                  AND NOT COALESCE(nf.nutrition_manual_edit, FALSE)
             """, (product_id,))
             
             product = cur.fetchone()

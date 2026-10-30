@@ -175,3 +175,45 @@ mtime_ms = 1792142260839
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/1ff5a1de-af37-4e96-a38a-1416dc571107/9df19f58-6e85-4e6d-bfbf-255c90ae3f37"
 storage_version_token = "1792142297652519"
 content_type = "text/csv"
+
+[[outputs]]
+id = "ddSRLJytP5PQDhSFnRkAf"
+uri = "file://generated-artifacts/barbora-catchup-bounded/changes.csv"
+type = "table"
+title = "Bounded production preview — 15 proposed updates"
+description = "Read-only comparison of 20 products across three fruit categories. Prices and availability only; nothing has been applied."
+logical_id = "5a7e652f-0655-4d26-97d6-530906e36e36"
+content_hash = "sha256:e140b2e09af05fce9026fe337e3a516dee5a50a78aa9532365b938a97af782ec"
+size = 1699
+mtime_ms = 1793389970472
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/5a7e652f-0655-4d26-97d6-530906e36e36/866ee044-7141-4dd6-a259-6137d2bc28b8"
+storage_version_token = "1793390198646319"
+content_type = "text/csv"
+
+[[outputs]]
+id = "5NsRTUOpis0ztdAfwI5Vr"
+uri = "file://generated-artifacts/barbora-catchup-reviewed/changes.csv"
+type = "table"
+title = "Production preview — 2,172 proposed updates"
+description = "Prices and availability only. Covers verified observations for 9,337 existing products. Seven unresolved categories and 48 new products are excluded. No production changes applied."
+logical_id = "00ab8703-272f-4280-9588-6817646f2291"
+content_hash = "sha256:a4d036d1a5e252a39fd134b494aeee595470c041f413c20708595ac37978f5f0"
+size = 251899
+mtime_ms = 1793390566196
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/00ab8703-272f-4280-9588-6817646f2291/a5a45413-0337-4c9e-a9d2-e3a664fbedb9"
+storage_version_token = "1793390581331423"
+content_type = "text/csv"
+
+[[outputs]]
+id = "uqhXJ5uPynou278xIfvKY"
+uri = "file://generated-artifacts/barbora-catchup-reviewed/coverage.csv"
+type = "table"
+title = "Category coverage and exclusions"
+description = "Results for all 293 categories, including the seven excluded categories and their reasons."
+logical_id = "c6a687b3-85b2-419f-8c76-b9d8716850c8"
+content_hash = "sha256:a5c5a3554fe5aa53ba370fe59b8f8162bca4950e3f1237e9aebaca03e302a1f4"
+size = 53745
+mtime_ms = 1793390566201
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/c6a687b3-85b2-419f-8c76-b9d8716850c8/d068c54c-8015-4df8-adac-88a8217c03f1"
+storage_version_token = "1793390581962921"
+content_type = "text/csv"

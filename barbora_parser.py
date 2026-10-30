@@ -16,6 +16,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 import json
+from barbora_site_data import (SiteDataError, category_page, product_data,
+                               detail_values, query_data, verify_category_path)
 
 
 @dataclass
@@ -33,6 +35,7 @@ class BarboraProductInfo:
     comparative_unit: Optional[str] = None
     comparative_unit_price: Optional[float] = None
     retail_price: Optional[float] = None
+    retail_unit_price: Optional[float] = None
     status: str = "active"
     is_available: bool = True
     promotion: Optional[Dict] = None
@@ -125,6 +128,8 @@ class BarboraParser:
             Full URL like "https://barbora.lv/produkti/piens-farm-milk-2-proc-uht-1-l"
         """
         product_url_slug = product_url_slug.strip().strip('/')
+        if product_url_slug.startswith(("p/", "produkti/")):
+            return f"{self.BASE_URL}/{product_url_slug}"
         return f"{self.BASE_URL}/produkti/{product_url_slug}"
     
     def get_category_path_from_db(self, category_id: int) -> Optional[str]:
@@ -171,53 +176,22 @@ class BarboraParser:
         
         Returns list of product dictionaries
         """
+        if "window.__remixContext" in html_content:
+            data = query_data(html_content, "inventoryCategoryInventory")
+            if data is None:
+                raise SiteDataError("category_listing_unrecognized")
+            page = data["offset"] // data["limit"] + 1
+            return category_page(html_content, page)["products"]
+        if not re.search(r"window\.b_productList\s*=", html_content):
+            raise SiteDataError("category_listing_unrecognized")
+        marker = re.search(r"window\.b_productList\s*=\s*", html_content)
         try:
-            start_marker = 'window.b_productList = ['
-            start_idx = html_content.find(start_marker)
-            
-            if start_idx == -1:
-                self.status_callback("No window.b_productList found in page")
-                return []
-            
-            json_start = start_idx + len('window.b_productList = ')
-            
-            bracket_count = 0
-            json_end = json_start
-            in_string = False
-            escape_next = False
-            
-            for i, char in enumerate(html_content[json_start:], json_start):
-                if escape_next:
-                    escape_next = False
-                    continue
-                    
-                if char == '\\' and in_string:
-                    escape_next = True
-                    continue
-                    
-                if char == '"' and not escape_next:
-                    in_string = not in_string
-                    continue
-                
-                if not in_string:
-                    if char == '[':
-                        bracket_count += 1
-                    elif char == ']':
-                        bracket_count -= 1
-                        if bracket_count == 0:
-                            json_end = i + 1
-                            break
-            
-            json_str = html_content[json_start:json_end]
-            products = json.loads(json_str)
+            products, _ = json.JSONDecoder().raw_decode(html_content[marker.end():].lstrip())
+            if not isinstance(products, list):
+                raise SiteDataError("invalid_legacy_listing")
             return products
-            
-        except json.JSONDecodeError as e:
-            self.status_callback(f"Error parsing product JSON: {str(e)}")
-            return []
-        except Exception as e:
-            self.status_callback(f"Error extracting product list: {str(e)}")
-            return []
+        except (ValueError, TypeError):
+            raise SiteDataError("invalid_legacy_listing") from None
     
     def _parse_product_from_json(self, product_json: Dict) -> BarboraProductInfo:
         """Convert a single product JSON object to BarboraProductInfo"""
@@ -253,6 +227,7 @@ class BarboraParser:
             comparative_unit=product_json.get('comparative_unit'),
             comparative_unit_price=comparative_unit_price,
             retail_price=retail_price,
+            retail_unit_price=(product_json.get("promotion") or {}).get("oldComparativeRate"),
             status=product_json.get('status', 'active'),
             is_available=is_available,
             promotion=product_json.get('promotion'),
@@ -271,6 +246,9 @@ class BarboraParser:
             self.status_callback(f"Fetching category page: {category_url}")
             response = self.session.get(category_url, timeout=15)
             response.raise_for_status()
+            if "window.__remixContext" in response.text:
+                data = category_page(response.text)
+                return max(1, (data["count"] + data["limit"] - 1) // data["limit"]), len(data["products"])
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
@@ -299,7 +277,7 @@ class BarboraParser:
             
         except Exception as e:
             self.status_callback(f"Error getting pagination info: {str(e)}")
-            return 1, 0
+            raise
     
     def extract_products_from_category(self, category_path: str, max_pages: int = 100) -> List[BarboraProductInfo]:
         """
@@ -313,6 +291,9 @@ class BarboraParser:
             List of BarboraProductInfo objects
         """
         all_products = []
+        seen = set()
+        expected = None
+        expected_short = None
         page = 1
         
         while page <= max_pages:
@@ -323,7 +304,17 @@ class BarboraParser:
                 response = self.session.get(url, timeout=15)
                 response.raise_for_status()
                 
-                products_json = self._extract_product_list_json(response.text)
+                modern = "window.__remixContext" in response.text
+                if modern:
+                    metadata = category_page(response.text, page, expected_short)
+                    verify_category_path(metadata, category_path)
+                    expected_short = metadata["short_id"]
+                    if expected is not None and expected != metadata["count"]:
+                        raise SiteDataError("category_count_changed")
+                    expected = metadata["count"]
+                    products_json = metadata["products"]
+                else:
+                    products_json = self._extract_product_list_json(response.text)
                 
                 if not products_json:
                     self.status_callback(f"No products found on page {page}, stopping")
@@ -331,11 +322,15 @@ class BarboraParser:
                 
                 for product_data in products_json:
                     product = self._parse_product_from_json(product_data)
+                    if product.sku in seen:
+                        raise SiteDataError("repeated_pagination_sku")
+                    seen.add(product.sku)
                     all_products.append(product)
                 
                 self.status_callback(f"Page {page}: extracted {len(products_json)} products (total: {len(all_products)})")
                 
-                if len(products_json) < self.PRODUCTS_PER_PAGE:
+                if (modern and len(all_products) == expected) or (
+                        not modern and len(products_json) < self.PRODUCTS_PER_PAGE):
                     self.status_callback("Last page reached (fewer products than page size)")
                     break
                 
@@ -344,7 +339,11 @@ class BarboraParser:
                 
             except requests.RequestException as e:
                 self.status_callback(f"Error fetching page {page}: {str(e)}")
-                break
+                raise SiteDataError("category_request_failed") from None
+        if expected is not None and len(all_products) != expected:
+            raise SiteDataError("category_page_limit")
+        if page > max_pages:
+            raise SiteDataError("category_page_limit")
         
         return all_products
     
@@ -366,7 +365,12 @@ class BarboraParser:
             response = self.session.get(url, timeout=15)
             response.raise_for_status()
             
-            products_json = self._extract_product_list_json(response.text)
+            if "window.__remixContext" in response.text:
+                metadata = category_page(response.text, page)
+                verify_category_path(metadata, category_path)
+                products_json = metadata["products"]
+            else:
+                products_json = self._extract_product_list_json(response.text)
             products = [self._parse_product_from_json(p) for p in products_json]
             
             self.status_callback(f"Extracted {len(products)} products")
@@ -374,7 +378,7 @@ class BarboraParser:
             
         except Exception as e:
             self.status_callback(f"Error: {str(e)}")
-            return []
+            raise
     
     def _parse_nutrition_value(self, value_text: str) -> Optional[float]:
         """Parse nutrition value from text like '3,20 g' or '249,00 kJ'"""
@@ -411,6 +415,17 @@ class BarboraParser:
             return None
 
     def parse_product_details(self, html: str) -> Optional[BarboraProductDetails]:
+        modern = product_data(html)
+        if modern is not None:
+            values = detail_values(modern, html)
+            values.pop("nutrition_issue")
+            nutrients = values.pop("nutrition")
+            mapping = dict(fat_total="fat", fat_saturated="saturated_fat",
+                           carbs_total="carbohydrates", carbs_sugars="sugars")
+            values["nutrition"] = BarboraNutritionInfo(**{
+                mapping.get(k, k): v for k, v in nutrients.items()
+            }) if nutrients else None
+            return BarboraProductDetails(**values)
         """Parse already fetched HTML without network or database side effects."""
         try:
             soup = BeautifulSoup(html, 'html.parser')
@@ -609,6 +624,12 @@ class BarboraParser:
         Returns:
             Tuple of (total_products, total_pages)
         """
+        response = self.session.get(self.build_category_url(category_path), timeout=15)
+        response.raise_for_status()
+        if "window.__remixContext" in response.text:
+            data = category_page(response.text)
+            verify_category_path(data, category_path)
+            return data["count"], max(1, (data["count"] + data["limit"] - 1) // data["limit"])
         total_pages, first_page_count = self.get_pagination_info(
             self.build_category_url(category_path)
         )
@@ -629,8 +650,7 @@ class BarboraParser:
                 
             except Exception as e:
                 self.status_callback(f"Error counting products: {str(e)}")
-                estimated_total = total_pages * self.PRODUCTS_PER_PAGE
-                return estimated_total, total_pages
+                raise
         
         return first_page_count, 1
 

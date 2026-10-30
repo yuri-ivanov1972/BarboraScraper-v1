@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from barbora_parser import BarboraParser
+from barbora_site_data import product_data, nutrition, category_page, verify_category_path
 
 
 class SourceError(ValueError):
@@ -26,6 +27,11 @@ def trusted_url(url):
 
 
 def parse_page(html):
+    modern = product_data(html)
+    if modern is not None:
+        values, issue = nutrition(modern, html)
+        return dict(sku=modern["id"], name=modern["title"],
+                    nutrition=values, nutrition_issue=issue)
     soup = BeautifulSoup(html, "html.parser")
     match = re.search(
         r"window\.reportUserActionToGa4\(window\.ga4EventTypes\.viewItem,\s*"
@@ -139,18 +145,34 @@ class BarboraSource:
             if path in self.category_cache:
                 return self.category_cache[path]
             found = {}
+            expected = None
+            short = None
             for page in range(1, self.max_pages + 1):
                 html, _ = self.fetch(self.helper.build_category_url(path, page))
-                products = self.helper._extract_product_list_json(html)
+                modern = "window.__remixContext" in html
+                if modern:
+                    metadata = category_page(html, page, short)
+                    verify_category_path(metadata, path)
+                    short = metadata["short_id"]
+                    if expected is not None and expected != metadata["count"]:
+                        raise SourceError("category_count_changed")
+                    expected = metadata["count"]
+                    products = metadata["products"]
+                else:
+                    products = self.helper._extract_product_list_json(html)
                 if not products and "window.b_productList" not in html:
-                    raise SourceError("category_listing_unresolved")
+                    if not modern or expected != 0:
+                        raise SourceError("category_listing_unresolved")
                 for product in products:
                     sku, slug = str(product.get("id", "")), product.get("Url", "")
                     if sku and slug:
+                        if sku in found:
+                            raise SourceError("repeated_pagination_sku")
                         found.setdefault(sku, set()).add(
                             trusted_url(self.helper.build_product_url(slug))
                         )
-                if len(products) < self.helper.PRODUCTS_PER_PAGE:
+                if (modern and len(found) == expected) or (
+                        not modern and len(products) < self.helper.PRODUCTS_PER_PAGE):
                     self.category_cache[path] = found
                     return found
             raise SourceError("category_page_limit")

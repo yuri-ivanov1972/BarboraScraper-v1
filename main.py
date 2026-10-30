@@ -2303,7 +2303,16 @@ def section_lightweight_update():
             status_text.empty()
             progress_bar.empty()
             
-            st.success(f"Completed! Updated {summary['products_updated']} products, found {summary['new_products_found']} new products")
+            if not summary['products_checked']:
+                summary['errors'].append("No products checked; source coverage failed.")
+            summary['status'] = ('failed' if not summary['products_checked'] else
+                                 'incomplete' if summary['errors'] else 'completed')
+            message = (f"{summary['status'].capitalize()}: updated {summary['products_updated']} products, "
+                       f"found {summary['new_products_found']} new products")
+            if summary['status'] == 'completed':
+                st.success(message)
+            else:
+                st.error(message)
             
             if summary['errors']:
                 with st.expander(f"Errors ({len(summary['errors'])})"):

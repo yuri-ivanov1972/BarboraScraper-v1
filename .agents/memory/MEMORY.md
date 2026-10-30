@@ -9,3 +9,4 @@
 - [Poultry preparation scoring](poultry-preparation-scoring.md) — verified minced-meat categories can mix raw meat and preparations; NOVA needs ingredient evidence.
 - [Tool clock compatibility](tool-clock-compatibility.md) — durable Date.now may be disabled; use explicit ISO log windows instead.
 - [Photo maintenance policy](photo-maintenance-policy.md) — shared database feeds the website; automatic retailer-photo updates, manual protection and weekly available-product checks.
+- [Barbora redesign identity](barbora-redesign-identity.md) — retailer category UUIDs can change; use exact hierarchy evidence and verify client-rendered nutrient basis.
