@@ -245,3 +245,31 @@ mtime_ms = 1793392129711
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/f82503cf-d267-488c-9616-246da0d2a6e1/4fa539ab-a714-4bd0-a02e-ff4cf9597748"
 storage_version_token = "1793392165921987"
 content_type = "text/csv"
+
+[[outputs]]
+id = "uIy8mBKb-Dg6ZDf3LROyQ"
+uri = "file://generated-artifacts/barbora-three-category-refreshed/application-verification.json"
+type = "unspecified"
+title = "Production application — verified receipt"
+description = "Completed 2026-10-30 20:52 UTC: 18 approved popcorn price/availability updates saved. All 52 existing observations verified with zero mismatches; all product fields unchanged; no new products created. This receipt supersedes the earlier read-only preview status."
+logical_id = "236577f7-803c-47fd-90d8-2b2323074581"
+content_hash = "sha256:1744b1314b0a46ff06bb346942b3e574c02ebbd0f7de8b6811bcbb2b8c89312d"
+size = 606
+mtime_ms = 1793393529752
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/236577f7-803c-47fd-90d8-2b2323074581/4b636140-e857-4f52-b2ff-860b8c3d3df4"
+storage_version_token = "1793393687735576"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "L_lzZZCP50B8K_FyK94eB"
+uri = "file://generated-artifacts/barbora-three-category-refreshed/not-seen-corrected.csv"
+type = "table"
+title = "Coverage gaps — corrected report"
+description = "Reporting only: 73 products in the incomplete pastry category, 29 in the verified-empty biscuit category, and 16 not observed in the complete popcorn listing. No unavailable status is inferred and no further production data was changed."
+logical_id = "ef8a4a81-e979-4dab-88e7-f8644efffedf"
+content_hash = "sha256:b775bebbdd0896ccfc22b6094a462919a93fe681075fd0fc0f58e1b5b7d6f328"
+size = 18990
+mtime_ms = 1793393736312
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/ef8a4a81-e979-4dab-88e7-f8644efffedf/b7e05f5b-a1b1-4113-b686-7085e387cbad"
+storage_version_token = "1793393764252639"
+content_type = "text/csv"

@@ -81,6 +81,30 @@ def snapshot(dsn):
         conn.close()
 
 
+def unobserved_products(products, sightings, coverage, selected_ids=None):
+    """Describe coverage gaps without inferring product unavailability."""
+    by_id = {c["category_id"]: c for c in coverage if c.get("category_id") is not None}
+    rows = []
+    for sku, product in products.items():
+        category_id = product.get("category_id")
+        if sku in sightings or (selected_ids is not None and category_id not in selected_ids):
+            continue
+        category = by_id.get(category_id)
+        if category_id is None:
+            reason = "category_coverage_unknown"
+        elif category is None:
+            reason = "category_outside_preview_scope"
+        elif category["status"] != "complete":
+            reason = "category_listing_incomplete"
+        elif category["products"] == 0:
+            reason = "verified_empty_listing_no_absence_inference"
+        else:
+            reason = "not_observed_in_complete_listing_no_absence_inference"
+        rows.append(dict(sku=sku, name=product["name"], category_id=category_id,
+                         category_path=category["path"] if category else None, reason=reason))
+    return rows
+
+
 def preview(dsn, target, limit=None, source=None, only_paths=None, category_paths=None):
     started = timestamp()
     cats, products = snapshot(dsn)
@@ -156,9 +180,8 @@ def preview(dsn, target, limit=None, source=None, only_paths=None, category_path
               f"({report['products']}) {report['warning']}", flush=True)
     entries = list(sightings.values())
     selected_ids = {c["category_id"] for c in selected}
-    missing = [dict(sku=p["sku"], name=p["name"], reason="not_seen_in_complete_category")
-               for sku, p in products.items() if sku not in sightings and (
-                   category_paths is None or p.get("category_id") in selected_ids)]
+    missing = unobserved_products(products, sightings, coverage,
+                                  selected_ids if category_paths is not None else None)
     conflicts = sum(bool(p.get("conflict")) for p in entries)
     complete = (limit is None and only_paths is None and
                 all(c["status"] == "complete" for c in coverage) and bool(entries) and not conflicts)
@@ -206,7 +229,8 @@ def retry_failed(dsn, target, prior, source=None):
     result["products"] = list(products.values())
     new = {p["sku"]: p for p in prior["excluded_new"] + fresh["excluded_new"]}
     result["excluded_new"] = list(new.values())
-    result["not_seen"] = [p for p in fresh["not_seen"] if p["sku"] not in products]
+    result["not_seen"] = unobserved_products(
+        {p["sku"]: p for p in fresh["not_seen"]}, products, result["coverage"])
     result["finished_at"] = timestamp()
     failed = sum(c["status"] != "complete" for c in result["coverage"])
     conflicts = sum(bool(p.get("conflict")) for p in products.values())

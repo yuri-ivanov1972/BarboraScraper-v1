@@ -9,7 +9,7 @@ from barbora_site_data import (RECOVERY_CATEGORY_PATHS, SiteDataError, category_
 from barbora_parser import BarboraParser
 from nutrition_reload_source import BarboraSource
 from barbora_lightweight_updater import BarboraLightweightUpdater
-from barbora_catchup import FIELDS, apply, digest, preview, retry_failed
+from barbora_catchup import FIELDS, apply, digest, preview, retry_failed, unobserved_products
 import test_barbora_redesign as baseline
 
 PRODUCT, SKU, html = baseline.PRODUCT, baseline.SKU, baseline.html
@@ -146,6 +146,35 @@ class CategoryRecoveryTests(unittest.TestCase):
         with patch("barbora_catchup.snapshot", return_value=([], {})):
             with self.assertRaisesRegex(ValueError, "missing or ambiguous"):
                 preview("unused", "target", category_paths=set(RECOVERY_CATEGORY_PATHS))
+
+    def test_unobserved_report_distinguishes_empty_failed_complete_and_outside(self):
+        coverage = [
+            dict(category_id="1", path=BISCUITS, status="complete", products=0),
+            dict(category_id="2", path=POPCORN, status="complete", products=58),
+            dict(category_id="3", path=PASTRIES, status="failed", products=0),
+        ]
+        products = {str(i): dict(name=f"Stored {i}", category_id=str(i)) for i in range(1, 5)}
+        reasons = {p["category_id"]: p["reason"]
+                   for p in unobserved_products(products, {}, coverage)}
+        self.assertEqual(reasons, {
+            "1": "verified_empty_listing_no_absence_inference",
+            "2": "not_observed_in_complete_listing_no_absence_inference",
+            "3": "category_listing_incomplete",
+            "4": "category_outside_preview_scope",
+        })
+        scoped = unobserved_products(products, {}, coverage, {"1", "2", "3"})
+        self.assertEqual(len(scoped), 3)
+        self.assertFalse(any(p["category_id"] == "4" for p in scoped))
+        self.assertEqual(len(unobserved_products(products, {"2": {}}, coverage)), 3)
+
+    def test_unobserved_retry_uses_merged_coverage(self):
+        products = {"old": dict(name="Old", category_id="2")}
+        failed = [dict(category_id="2", path=POPCORN, status="failed", products=0)]
+        initial = unobserved_products(products, {}, failed)
+        complete = [dict(category_id="2", path=POPCORN, status="complete", products=58)]
+        refreshed = unobserved_products({p["sku"]: p for p in initial}, {}, complete)
+        self.assertEqual(refreshed[0]["reason"],
+                         "not_observed_in_complete_listing_no_absence_inference")
 
 
 class ScopedApplyTests(unittest.TestCase):
