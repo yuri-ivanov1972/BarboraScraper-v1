@@ -12,7 +12,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_values
 
 from nutrition_reload_store import database_target, connect, digest
 from nutrition_reload_source import BarboraSource, SourceError
@@ -239,21 +239,26 @@ def apply(dsn, target, approved, accept_exclusions=False):
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-            changed = 0
+            ids = [int(p["product_id"]) for p in manifest["products"]]
+            cur.execute("""SELECT product_id::text,sku,is_hidden FROM products
+                           WHERE product_id=ANY(%s) ORDER BY product_id FOR UPDATE""", (ids,))
+            identities = {p["product_id"]: p for p in cur.fetchall()}
+            cur.execute("""SELECT p.product_id::text,h.price_history_id::text,
+                                  h.price,h.discount_price,h.price_per_unit,
+                                  h.discount_price_per_unit,h.price_per_unit_type,h.is_available
+                           FROM products p LEFT JOIN LATERAL (
+                               SELECT * FROM product_price_history WHERE product_id=p.product_id
+                               ORDER BY recorded_at DESC,price_history_id DESC LIMIT 1
+                           ) h ON TRUE WHERE p.product_id=ANY(%s)""", (ids,))
+            latest = {p["product_id"]: p for p in cur.fetchall()}
+            changes = []
             # Validate every observed baseline, not only the rows with changes.
             for p in sorted(manifest["products"], key=lambda x: x["product_id"]):
-                cur.execute("SELECT sku,is_hidden FROM products WHERE product_id=%s FOR UPDATE",
-                            (p["product_id"],))
-                current = cur.fetchone()
+                current = identities.get(p["product_id"])
                 if not current or current["sku"] != p["sku"] or (
                         current["is_hidden"] and p["observed"]["is_available"]):
                     raise ValueError("Product identity or visibility changed; new preview required")
-                cur.execute("""SELECT price_history_id::text,price,discount_price,price_per_unit,
-                                      discount_price_per_unit,price_per_unit_type,is_available
-                               FROM product_price_history WHERE product_id=%s
-                               ORDER BY recorded_at DESC,price_history_id DESC LIMIT 1""",
-                            (p["product_id"],))
-                row = cur.fetchone()
+                row = latest.get(p["product_id"])
                 baseline = {k: scalar(row[k]) if row else None for k in FIELDS}
                 # Idempotence: an exact observation already saved requires no new row.
                 if baseline == p["observed"]:
@@ -261,14 +266,16 @@ def apply(dsn, target, approved, accept_exclusions=False):
                 if baseline != p["baseline"] or (
                         (row["price_history_id"] if row else None) != p["baseline_history_id"]):
                     raise ValueError("Price baseline changed; new preview required")
+                changes.append([p["product_id"]] + [p["observed"][k] for k in FIELDS])
+            if changes:
                 fields = ",".join(FIELDS)
-                cur.execute(f"""INSERT INTO product_price_history
-                                (product_id,{fields},data_source,recorded_at)
-                                VALUES (%s,%s,%s,%s,%s,%s,%s,'redesign_catchup',CURRENT_TIMESTAMP)""",
-                            [p["product_id"]] + [p["observed"][k] for k in FIELDS])
-                changed += 1
+                execute_values(cur, f"""INSERT INTO product_price_history
+                               (product_id,{fields},data_source,recorded_at) VALUES %s""",
+                               changes,
+                               template="(%s,%s,%s,%s,%s,%s,%s,'redesign_catchup',CURRENT_TIMESTAMP)",
+                               page_size=500)
             conn.commit()
-            return changed
+            return len(changes)
     except Exception:
         conn.rollback()
         raise
