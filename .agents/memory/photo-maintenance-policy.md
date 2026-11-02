@@ -9,6 +9,12 @@ The consuming website reads this project's database directly.
 
 **How to apply:** Do not introduce an export or synchronization service just to publish photo URL changes. Do not assume that separate website caches or image proxies refresh automatically; verify them when their code/runtime is available.
 
+The consuming website is abcde.lv; the user reports that it does not recognize AVIF product photos.
+
+**Why:** The user identified incompatible stored AVIF URLs after Barbora's UI redesign and supplied HTML showing PNG alternatives for the same images.
+
+**How to apply:** Prefer supported image alternatives advertised by Barbora, particularly PNG. Do not assume a guessed extension replacement exists or infer that the consumer supports AVIF merely because an image URL returns HTTP 200.
+
 Regular photo maintenance should automatically update retailer photos while preserving manual photos, prioritize daily URL changes, rotate unchanged links weekly, and cover only latest-scraped-available products.
 
 **Why:** The user selected these scope and replacement policies.
