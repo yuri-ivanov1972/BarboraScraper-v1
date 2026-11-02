@@ -928,7 +928,7 @@ class BarboraWorker:
             if product_ids:
                 cur.execute(
                     """
-                    SELECT p.product_id, p.barbora_url
+                    SELECT p.product_id, p.sku, p.barbora_url
                     FROM products p
                     WHERE p.product_id = ANY(%s)
                       AND p.barbora_url IS NOT NULL
@@ -942,7 +942,7 @@ class BarboraWorker:
             else:
                 cur.execute(
                     """
-                    SELECT p.product_id, p.barbora_url
+                    SELECT p.product_id, p.sku, p.barbora_url
                     FROM products p
                     WHERE p.barbora_url IS NOT NULL
                       AND NOT EXISTS (
@@ -971,7 +971,7 @@ class BarboraWorker:
             pid = row["product_id"]
             burl = row["barbora_url"]
             time.sleep(random.uniform(0.6, 1.3))
-            new_urls = _scrape_photos(burl, session)
+            new_urls = _scrape_photos(burl, session, row["sku"])
             if new_urls:
                 conn = self._get_connection()
                 try:

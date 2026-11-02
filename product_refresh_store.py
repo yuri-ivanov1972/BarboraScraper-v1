@@ -234,6 +234,9 @@ def persist_refresh_plan(conn, snapshot, plan):
                 ON CONFLICT DO NOTHING
             """, (pid,))
         if plan["photos"]:
+            from photo_sources import select_urls
+            if select_urls(plan["photos"]) != plan["photos"]:
+                raise ValueError("Unsupported or ambiguous photo format; generate a fresh preview")
             alt_texts = {r["photo_url"]: r.get("alt_text") for r in snapshot["photos"]}
             cur.execute("DELETE FROM public.productphotos WHERE product_id=%s", (pid,))
             for index, url in enumerate(plan["photos"]):

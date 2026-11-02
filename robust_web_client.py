@@ -8,6 +8,7 @@ import time
 import random
 from typing import Optional, Dict, Any, List
 from bs4 import BeautifulSoup
+from photo_sources import product_photos, image_url, is_avif
 
 class RobustWebClient:
     """Web client with robust retry logic for temporary website unavailability"""
@@ -377,6 +378,10 @@ class RobustWebClient:
         self.status_callback("Starting primary photo extraction...")
         
         try:
+            if "cdn.barbora.lv/products/" in str(soup):
+                from barbora_site_data import product_data
+                photos = product_photos(product_data(str(soup)) or {}, soup)
+                return photos
             # Priority order for finding the main product image
             primary_image_selectors = [
                 # Cloudinary images (highest priority - works 100% for Rimi)
@@ -458,14 +463,14 @@ class RobustWebClient:
         Returns:
             True if URL appears to be a product image
         """
-        if not src:
+        if not src or is_avif(src):
             return False
             
         # Convert to lowercase for case-insensitive matching
         src_lower = src.lower()
         
         # Valid image file extensions
-        valid_extensions = ['.jpg', '.jpeg', '.png', '.webp', '.avif']
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.webp']
         has_valid_extension = any(ext in src_lower for ext in valid_extensions)
         
         # Valid product image indicators
@@ -535,7 +540,7 @@ class RobustWebClient:
             if '?' in src and 'cloudinary' not in src.lower():
                 src = src.split('?')[0]
             
-            return src.strip()
+            return image_url(src.strip(), retailer_only=False) or ""
             
         except Exception as e:
             self.status_callback(f"Error cleaning URL '{src}': {str(e)}")

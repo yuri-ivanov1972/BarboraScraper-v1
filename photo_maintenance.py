@@ -5,6 +5,7 @@ from urllib.parse import urlsplit, urlunsplit
 import psycopg2
 import requests
 from psycopg2.extras import RealDictCursor
+from photo_sources import image_url, is_avif, IMAGE_ACCEPT
 
 
 def normalize_url(value):
@@ -25,10 +26,12 @@ def check_image(url, session=None):
     """GET a small image prefix: HEAD is often denied even for valid images."""
     if not normalize_url(url):
         return "invalid_url", None
+    if is_avif(url):
+        return "unsupported_format", None
     try:
         with (session or requests).get(
             url, timeout=(3, 5), stream=True, allow_redirects=False,
-            headers={"Accept": "image/*", "Range": "bytes=0-511"},
+            headers={"Accept": IMAGE_ACCEPT, "Range": "bytes=0-511"},
         ) as response:
             code = response.status_code
             if code in (401, 403, 429):
@@ -38,11 +41,15 @@ def check_image(url, session=None):
             if code not in (200, 206):
                 return "temporary_failure", code
             data = next(response.iter_content(512), b"")
-            magic = (data.startswith(b"\x89PNG\r\n\x1a\n") or
-                     data.startswith(b"\xff\xd8\xff") or
-                     data.startswith((b"GIF87a", b"GIF89a")) or
-                     (data.startswith(b"RIFF") and data[8:12] == b"WEBP"))
-            if response.headers.get("Content-Type", "").lower().startswith("image/") and magic:
+            mime = response.headers.get("Content-Type", "").split(";")[0].lower().strip()
+            if (mime == "image/avif" or
+                    (data[4:8] == b"ftyp" and any(b in data[8:64] for b in (b"avif", b"avis")))):
+                return "unsupported_format", code
+            detected = ("image/png" if data.startswith(b"\x89PNG\r\n\x1a\n") else
+                        "image/jpeg" if data.startswith(b"\xff\xd8\xff") else
+                        "image/gif" if data.startswith((b"GIF87a", b"GIF89a")) else
+                        "image/webp" if data.startswith(b"RIFF") and data[8:12] == b"WEBP" else None)
+            if detected and mime == detected:
                 return "working", code
             return "invalid_content", code
     except requests.RequestException:
@@ -94,7 +101,7 @@ class PhotoMaintenance:
 
     @staticmethod
     def observe(cur, product_id, url):
-        url = normalize_url(url)
+        url = image_url(url)
         if not url:
             return
         cur.execute("""
@@ -148,7 +155,11 @@ class PhotoMaintenance:
                     ORDER BY v.next_due NULLS FIRST,
                              (target.kind='candidate') DESC,p.product_id,ph.photo_id
                 """)
-                return [dict(r) for r in cur.fetchall()]
+                rows = [dict(r) for r in cur.fetchall()]
+                for row in rows:
+                    if is_avif(row["check_url"]):
+                        row["status"] = "unsupported_format"
+                return rows
         finally:
             conn.close()
 
@@ -266,7 +277,7 @@ class PhotoMaintenance:
                     continue
                 if row["paused_until"] and row["paused_until"] > now:
                     break
-                if row["next_due"] and row["next_due"] > now:
+                if row["next_due"] and row["next_due"] > now and not is_avif(row["check_url"]):
                     continue
                 url = row["check_url"]
                 if not normalize_url(url):
@@ -304,6 +315,8 @@ class PhotoMaintenance:
         return results
 
     def save_result(self, row, url, status, code):
+        if status == "working" and not image_url(url):
+            status = "unsupported_format" if is_avif(url) else "invalid_url"
         conn = self.connect()
         try:
             with conn, conn.cursor() as cur:
@@ -371,11 +384,17 @@ class PhotoMaintenance:
                         # Matching a listing is not proof that the existing row was not manual.
                         outcome = "Current photo verified; ownership unchanged"
                     elif state["ownership"] == "retailer":
-                        cur.execute("UPDATE productphotos SET photo_url=%s WHERE photo_id=%s",
-                                    (url, current["photo_id"]))
-                        cur.execute("UPDATE photo_maintenance SET managed_url=%s WHERE product_id=%s",
-                                    (url, row["product_id"]))
-                        outcome = "Replaced retailer primary"
+                        cur.execute("SELECT photo_id FROM productphotos WHERE product_id=%s "
+                                    "AND photo_url=%s AND photo_id<>%s",
+                                    (row["product_id"], url, current["photo_id"]))
+                        if cur.fetchone():
+                            outcome = "Review existing gallery variant before replacement"
+                        else:
+                            cur.execute("UPDATE productphotos SET photo_url=%s WHERE photo_id=%s",
+                                        (url, current["photo_id"]))
+                            cur.execute("UPDATE photo_maintenance SET managed_url=%s WHERE product_id=%s",
+                                        (url, row["product_id"]))
+                            outcome = "Replaced retailer primary"
                     else:
                         outcome = "Review ownership before replacement"
                 cur.execute("""

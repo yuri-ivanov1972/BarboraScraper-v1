@@ -3,6 +3,8 @@ import json
 import math
 import re
 from urllib.parse import urlsplit
+from bs4 import BeautifulSoup
+from photo_sources import product_photos, unsupported_only
 
 
 class SiteDataError(ValueError):
@@ -119,7 +121,7 @@ def market(product):
                 is_available=availability[status])
 
 
-def normalized_product(product, registry):
+def normalized_product(product, registry, html=None):
     identity(product)
     market(product)
     node = registry.get(product.get("categoryShortId"), {})
@@ -134,11 +136,14 @@ def normalized_product(product, registry):
         promotion.pop("oldPrice", None)
     if promotion.get("oldComparativeRateGross") is not None:
         promotion["oldComparativeRate"] = promotion["oldComparativeRateGross"]
+    photos = product_photos(product, html)
     return dict(product, Url="p/" + product["url"], promotion=promotion,
                 category_id=category_id,
                 category_path_url=product.get("categoryPathUrl"),
                 brand_name=product.get("brand"),
-                big_image=(product.get("imagesOriginal") or [None])[0],
+                big_image=photos[0] if photos else None,
+                image=photos[0] if photos else None, gallery=photos,
+                photo_issue="unsupported_format_only" if not photos and unsupported_only(product) else None,
                 retail_price=(product.get("promotion") or {}).get("oldPrice"),
                 comparative_unit=product["comparativeUnit"]["type"],
                 comparative_unit_price=product["comparativeUnit"]["price"],
@@ -193,7 +198,8 @@ def category_page(html, page=1, expected_short=None, expected_path=None):
         raise SiteDataError("incomplete_category_page", dict(
             advertised_count=count, returned_count=len(items) if isinstance(items, list) else None,
             offset=offset, limit=limit))
-    normalized = [normalized_product(p, registry) for p in items]
+    soup = BeautifulSoup(html, "html.parser")
+    normalized = [normalized_product(p, registry, soup) for p in items]
     if len({p["id"] for p in normalized}) != len(normalized):
         raise SiteDataError("duplicate_page_sku")
     return dict(products=normalized, count=count, offset=offset, limit=limit,
@@ -255,5 +261,5 @@ def detail_values(product, html):
                 brand_name=product.get("brand"), distributor_name=product.get("supplierContacts"),
                 storage_conditions=product.get("storageConditions"),
                 weight=str(product["netAmount"]) if product.get("netAmount") is not None else None,
-                photo_urls=product.get("imagesOriginal") or product.get("images") or [],
+                photo_urls=product_photos(product, html),
                 nutrition=values, nutrition_issue=issue)

@@ -10,6 +10,7 @@ from photo_maintenance import PhotoMaintenance
 def render():
     st.subheader("Photo maintenance")
     st.caption("Daily listing URL detection; bounded checks on a weekly rotation. "
+               "AVIF is unsupported by abcde.lv; advertised PNG alternatives are preferred. "
                "Blocked hosts are not classified as missing. Unknown ownership is preserved.")
     service = PhotoMaintenance(os.environ["DATABASE_URL"])
     if st.button("Initialize photo maintenance tables"):

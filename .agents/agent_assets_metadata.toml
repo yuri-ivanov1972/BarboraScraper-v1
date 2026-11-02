@@ -273,3 +273,17 @@ mtime_ms = 1793393736312
 storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/ef8a4a81-e979-4dab-88e7-f8644efffedf/b7e05f5b-a1b1-4113-b686-7085e387cbad"
 storage_version_token = "1793393764252639"
 content_type = "text/csv"
+
+[[outputs]]
+id = "7P0EFASHorFH-G_ykzTBn"
+uri = "file://generated-artifacts/photo-format-preview/preview.json"
+type = "unspecified"
+title = "Read-only production photo preview"
+description = "No stored AVIF photo or maintenance URLs found. No production changes were made."
+logical_id = "7a123ddc-4147-4342-a73e-bd68e8351ea1"
+content_hash = "sha256:8ea03865de7ab2d21e00e63cece502bf81779d686733c126feede0f4b380ce6d"
+size = 667
+mtime_ms = 1793613769738
+storage_uri = "gcs://replit-rams-assets-spock/rams/assets/repl:b33bb2a2-1d00-43fd-a61e-99b509534c14/7a123ddc-4147-4342-a73e-bd68e8351ea1/e8b39428-90ef-4d8e-b81c-bc56780b2d37"
+storage_version_token = "1793613821047196"
+content_type = "application/octet-stream"

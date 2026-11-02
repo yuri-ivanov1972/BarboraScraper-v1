@@ -355,42 +355,17 @@ class DatabaseUpdater:
             # Ensure database connection
             self._ensure_connection()
             
-            # Clear existing photos for this product
-            try:
-                delete_query = "DELETE FROM productphotos WHERE product_id = %s"
-                self._execute_query(delete_query, (product_id,))
-                self.status_callback(f"Cleared existing photos for product ID {product_id}")
-            except Exception as e:
-                self.status_callback(f"Failed to save in database: Error clearing existing photos - {str(e)}")
+            from photo_sources import select_urls
+            from fix_broken_photos import _insert_missing_photos
+            photo_urls = select_urls(photo_urls, retailer_only=False)
+            if not photo_urls:
+                self.status_callback("Photo deferred: unsupported or invalid format; existing photos retained")
                 return False
-            
-            # Add new photos (primary photo first)
-            photos_saved = 0
-            for i, url in enumerate(photo_urls):
-                if not url or not isinstance(url, str):
-                    self.status_callback(f"Skipping invalid photo URL at index {i}: {repr(url)}")
-                    continue
-                
-                is_primary = (i == 0)  # First photo is primary
-                
-                try:
-                    insert_query = """
-                        INSERT INTO productphotos (product_id, photo_url, is_primary) 
-                        VALUES (%s, %s, %s)
-                    """
-                    self._execute_query(insert_query, (product_id, url.strip(), is_primary))
-                    
-                    photo_status = "primary" if is_primary else "secondary"
-                    self.status_callback(f"Successfully saved {photo_status} photo: {url}")
-                    photos_saved += 1
-                    
-                except Exception as e:
-                    self.status_callback(f"Failed to save in database: Error inserting photo {i+1} ({url}) - {str(e)}")
-                    # Continue trying to save other photos rather than failing completely
-            
-            if photos_saved == 0:
-                self.status_callback(f"Failed to save in database: No valid photos could be saved for product ID {product_id}")
-                return False
+            with self.conn.cursor() as cur:
+                inserted = _insert_missing_photos(cur, product_id, photo_urls, retailer_only=False)
+            photos_saved = len(photo_urls) if inserted else 0
+            if not inserted:
+                self.status_callback("Existing or protected gallery retained; use a reviewed product refresh to replace it")
             
             # Commit the transaction
             try:

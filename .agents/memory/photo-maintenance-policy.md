@@ -11,9 +11,9 @@ The consuming website reads this project's database directly.
 
 The consuming website is abcde.lv; the user reports that it does not recognize AVIF product photos.
 
-**Why:** The user identified incompatible stored AVIF URLs after Barbora's UI redesign and supplied HTML showing PNG alternatives for the same images.
+**Why:** The user reported AVIF incompatibility after Barbora's UI redesign and supplied HTML showing PNG alternatives for the same images. The approved repair keeps direct retailer URLs rather than introducing an image-hosting or transcoding service.
 
-**How to apply:** Prefer supported image alternatives advertised by Barbora, particularly PNG. Do not assume a guessed extension replacement exists or infer that the consumer supports AVIF merely because an image URL returns HTTP 200.
+**How to apply:** Prefer supported image alternatives advertised by Barbora, particularly PNG. Do not assume a guessed extension replacement exists or infer that the consumer supports AVIF merely because an image URL returns HTTP 200. Rehosting, transcoding and consumer-side changes need separately agreed scope.
 
 Regular photo maintenance should automatically update retailer photos while preserving manual photos, prioritize daily URL changes, rotate unchanged links weekly, and cover only latest-scraped-available products.
 

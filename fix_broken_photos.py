@@ -2,17 +2,18 @@
 """
 fix_broken_photos.py — Verify stored photo URLs and re-scrape broken/missing ones.
 
-Phase 1:  HEAD-check every row in productphotos concurrently.
+Phase 1:  Bounded GET/signature-check stored photos (AVIF is unsupported).
 Phase 1b: Find products with no photo rows at all.
 Phase 2:  Re-scrape barbora_url for each broken / photo-less product.
-Phase 3:  Update the DB (delete old broken rows + insert fresh ones).
-          If re-scrape finds nothing, existing rows are left untouched.
+Phase 3:  Fill empty, unprotected galleries with supported advertised images.
+          Existing galleries are retained. Review replacements with
+          photo_format_preview.py; this script never deletes existing photos.
 
 Usage:
     python fix_broken_photos.py --dry-run          # preview only
     python fix_broken_photos.py --limit 200        # test on first 200 photos
     python fix_broken_photos.py                    # full run
-    python fix_broken_photos.py --concurrency 20   # faster HEAD phase
+    python fix_broken_photos.py --concurrency 20   # faster verification phase
 
 Environment:
     DATABASE_URL    Replit-injected Postgres connection string.
@@ -30,6 +31,7 @@ import psycopg2
 import requests
 from bs4 import BeautifulSoup
 from psycopg2.extras import RealDictCursor
+from photo_sources import product_photos, select_urls
 
 
 # ── HTTP helpers ──────────────────────────────────────────────────────────────
@@ -55,35 +57,33 @@ def _check_url(args: tuple) -> tuple:
     status, _ = check_image(url, session)
     # None is deliberately distinct from missing: never repair on a host denial.
     return photo_id, product_id, (True if status == "working" else
-                                  False if status == "missing_evidence" else None)
+                                  False if status in {"missing_evidence", "unsupported_format"} else None)
 
 
-def _scrape_photos(barbora_url: str, session: requests.Session) -> list:
+def _scrape_photos(barbora_url: str, session: requests.Session, expected_sku=None) -> list:
     """Fetch the Barbora product page and extract cdn.barbora.lv image URLs."""
     try:
-        resp = session.get(barbora_url, timeout=15)
-        if resp.status_code != 200:
-            return []
-        soup = BeautifulSoup(resp.content, "html.parser")
-        photos = []
-        for slide in soup.find_all("div", class_="b-block-slider--slide"):
-            img = slide.find("img", src=True)
-            if img:
-                src = img.get("src", "")
-                if src and "cdn.barbora.lv" in src and "no-image-placeholder" not in src:
-                    if src not in photos:
-                        photos.append(src)
-        return photos
+        from nutrition_reload_source import BarboraSource
+        from barbora_site_data import product_data
+        source = BarboraSource(delay=0, retries=0, timeout=15)
+        source.local.session = session
+        html, _ = source.fetch(barbora_url)
+        data = product_data(html)
+        if expected_sku is not None:
+            details = source.helper.parse_product_details(html) if data is None else None
+            actual = data["id"] if data else getattr(details, "sku", None)
+            if actual != expected_sku:
+                return []
+        return product_photos(data or {}, html)
     except Exception:
         return []
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
-def _insert_missing_photos(cur, product_id, urls):
+def _insert_missing_photos(cur, product_id, urls, retailer_only=True):
     """Transaction-neutral fill only; never erase existing or protected photos."""
-    from photo_maintenance import normalize_url
-    urls = list(dict.fromkeys(normalize_url(url) for url in urls if normalize_url(url)))
+    urls = select_urls(urls, retailer_only=retailer_only)
     if not urls:
         return False
     cur.execute("SELECT product_id FROM products WHERE product_id=%s FOR UPDATE", (product_id,))
@@ -204,7 +204,7 @@ def run(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT p.product_id, p.barbora_url
+            SELECT p.product_id, p.sku, p.barbora_url
             FROM products p
             WHERE p.barbora_url IS NOT NULL
               AND NOT EXISTS (
@@ -225,7 +225,7 @@ def run(
     if broken_product_ids:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT product_id, barbora_url FROM products "
+                "SELECT product_id, sku, barbora_url FROM products "
                 "WHERE product_id = ANY(%s) AND barbora_url IS NOT NULL",
                 (list(broken_product_ids),),
             )
@@ -254,9 +254,13 @@ def run(
             progress_callback(i + 1, len(to_scrape), phase=2)
 
         time.sleep(random.uniform(0.6, 1.3))
-        new_urls = _scrape_photos(burl, session)
+        new_urls = _scrape_photos(burl, session, row["sku"])
 
         if new_urls:
+            if pid not in missing_pids:
+                log(f"  product_id={pid}: existing gallery retained; review format replacements in the bounded preview")
+                unresolvable += 1
+                continue
             if dry_run:
                 log(f"  [DRY-RUN] product_id={pid}: would save {len(new_urls)} photo(s)")
             else:

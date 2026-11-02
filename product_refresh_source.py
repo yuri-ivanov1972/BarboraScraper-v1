@@ -9,13 +9,14 @@ from urllib.parse import urlsplit
 from barbora_parser import BarboraParser
 from nutrition_reload_source import BarboraSource, SourceError, parse_page, trusted_url
 from barbora_site_data import product_data, normalized_product
+from photo_sources import image_url, product_photos, select_urls
 
 
 def product_json(html):
     modern = product_data(html)
     if modern is not None:
         from barbora_site_data import categories
-        return normalized_product(modern, categories(html))
+        return normalized_product(modern, categories(html), html)
     match = re.search(r"\bwindow\.product\s*=\s*", html)
     if not match:
         return {}
@@ -29,16 +30,7 @@ def product_json(html):
 
 
 def photo_url(value):
-    if not isinstance(value, str):
-        return False
-    try:
-        url = urlsplit(value)
-        return (url.scheme == "https" and url.hostname == "cdn.barbora.lv"
-                and not url.username and not url.password and url.port in (None, 443)
-                and "/products/" in url.path and not any(
-                    token in value.lower() for token in ("placeholder", "no-image", "noimage")))
-    except ValueError:
-        return False
+    return bool(image_url(value))
 
 
 def number(value):
@@ -70,14 +62,13 @@ def parse_full_page(html, fetched_url, expected_sku):
     for key in ("description", "ingredients", "allergens", "brand_name"):
         if not data.get(key) and isinstance(structured.get(key), str):
             data[key] = structured[key].strip() or None
-    photos = (data.get("photo_urls") or []) + (structured.get("gallery") or [])
-    if not any(photo_url(p) for p in photos):
-        photos += [structured.get("big_image"), structured.get("image")]
+    photos = select_urls([data.get("photo_urls"), product_photos(structured, html)])
     data.update(candidate, fetched_url=fetched_url,
                 photo_urls=list(dict.fromkeys(p for p in photos if photo_url(p))),
                 category_code=structured.get("category_id"),
                 category_path=structured.get("category_path_url"),
-                notes=[])
+                notes=["Photo deferred: unsupported_format_only; existing photos retained."]
+                if not photos and structured.get("photo_issue") else [])
     market = {}
     try:
         current, retail = number(structured.get("price")), number(structured.get("retail_price"))
@@ -109,8 +100,8 @@ def parse_full_page(html, fetched_url, expected_sku):
 
 
 class ProductRefreshSource(BarboraSource):
-    def __init__(self):
-        super().__init__(delay=.2, retries=1, timeout=12, max_pages=6)
+    def __init__(self, delay=.2, retries=1, timeout=12, max_pages=6):
+        super().__init__(delay=delay, retries=retries, timeout=timeout, max_pages=max_pages)
 
     def product(self, snapshot):
         p = snapshot["product"]

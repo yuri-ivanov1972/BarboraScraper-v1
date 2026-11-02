@@ -130,7 +130,8 @@ def build_plan(snapshot, candidate, context, calculator, estimator):
             rows[-1].update(Status="Unchanged", Note="Same normalized entity; existing name and manual website retained.")
         if changed:
             links[kind] = value
-    photos = candidate.get("photo_urls") or []
+    from photo_sources import select_urls
+    photos = select_urls(candidate.get("photo_urls") or [])
     previous_photos = [r["photo_url"] for r in snapshot["photos"]]
     primary_mismatch = any(bool(r.get("is_primary")) != (index == 0)
                            for index, r in enumerate(snapshot["photos"]))

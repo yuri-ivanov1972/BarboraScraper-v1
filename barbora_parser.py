@@ -16,6 +16,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 import json
+from photo_sources import product_photos, select_urls, unsupported_only
 from barbora_site_data import (SiteDataError, category_page, product_data,
                                detail_values, query_data, verify_category_path, canonical_category_path)
 
@@ -214,6 +215,11 @@ class BarboraParser:
         if 'Url' in product_json and product_json['Url']:
             product_url = self.build_product_url(product_json['Url'])
         
+        photos = select_urls([product_json.get("big_image"), product_json.get("image"),
+                              product_json.get("gallery"), product_json.get("imagesOriginal"),
+                              product_json.get("images")])
+        if not photos and (product_json.get("photo_issue") or unsupported_only(product_json)):
+            self.status_callback("Photo deferred: unsupported_format_only; existing photos retained")
         return BarboraProductInfo(
             sku=product_json.get('id', ''),
             name=product_json.get('title', ''),
@@ -222,8 +228,8 @@ class BarboraParser:
             barbora_category_code=product_json.get('category_id'),
             category_path=product_json.get('category_path_url'),
             brand_name=product_json.get('brand_name'),
-            image_url=product_json.get('image'),
-            big_image_url=product_json.get('big_image'),
+            image_url=photos[0] if photos else None,
+            big_image_url=photos[0] if photos else None,
             comparative_unit=product_json.get('comparative_unit'),
             comparative_unit_price=comparative_unit_price,
             retail_price=retail_price,
@@ -418,6 +424,8 @@ class BarboraParser:
         modern = product_data(html)
         if modern is not None:
             values = detail_values(modern, html)
+            if not values["photo_urls"] and unsupported_only(modern):
+                self.status_callback("Photo deferred: unsupported_format_only; existing photos retained")
             values.pop("nutrition_issue")
             nutrients = values.pop("nutrition")
             mapping = dict(fat_total="fat", fat_saturated="saturated_fat",
@@ -463,14 +471,7 @@ class BarboraParser:
                     elif 'alergēni' in title_text:
                         allergens = value
             
-            photo_urls = []
-            slider_slides = soup.find_all('div', class_='b-block-slider--slide')
-            for slide in slider_slides:
-                img = slide.find('img', src=True)
-                if img:
-                    src = img.get('src', '')
-                    if src and 'cdn.barbora.lv' in src and 'no-image-placeholder' not in src:
-                        photo_urls.append(src)
+            photo_urls = product_photos(html=soup)
             
             country_of_origin = None
             brand = None
