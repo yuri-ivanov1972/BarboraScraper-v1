@@ -34,7 +34,7 @@ This repository is a fork of [RimiScraper-v2](https://github.com/yuri-ivanov1972
 | Streamlit UI | `main.py` | Browsing, reports, maintenance tools, job queueing |
 | Barbora worker | `barbora_worker.py` | Processes queued Barbora jobs from the PostgreSQL job queue |
 | Daily updater | `barbora_lightweight_updater.py` | Price and availability refresh |
-| Combined startup | `combined_startup.sh` | Runs the UI and the worker together, restarting them when they crash |
+| Combined startup | `combined_startup.sh` | Starts the daily scheduler (`lightweight_scheduler.py --enable`) and the UI. It doesn't start the worker. |
 
 The project was built on Replit and is configured there by `.replit` and `replit.nix`.
 
@@ -71,7 +71,7 @@ python barbora_worker.py --exit-when-empty
 python barbora_lightweight_updater.py --dry-run --limit 5
 python barbora_lightweight_updater.py
 
-# UI and worker together, with auto-restart
+# UI plus the 02:00 daily scheduler
 ./combined_startup.sh
 ```
 
@@ -87,6 +87,7 @@ Some of them use a real database, so check what a test touches before pointing i
 
 ## Further documentation
 
+- `ARCHITECTURE.md`: components, update paths, data model, NOVA rules
 - `replit.md`: architecture notes and verified schema facts
 - `docs/`: feature write-ups covering nutrition reload, photo formats and maintenance, enrichment availability, product card refresh, Rimi nutrition import, Rimi produce report and poultry recovery
 - `BARBORA_RECOVERY.md`, `BRAND_PRODUCER_BACKFILL.md`: operational notes
