@@ -4,6 +4,11 @@ Complete technical reference for building a standalone Nutri-Score calculator.
 Official source: [Santé Publique France](https://www.santepubliquefrance.fr/determinants-de-sante/nutrition-et-activite-physique/nutri-score)  
 Scientific paper: [Nature Food, Feb 2024](https://doi.org/10.1038/s43016-024-00920-3)
 
+Boundary/fats corrections checked against [Santé publique France's updated-algorithm
+FAQ, 17 March 2025, tables 7–8](https://www.santepubliquefrance.fr/sites/default/files/rdd/document/FAQ-updatedAlgo-V11.pdf).
+This reference describes the project's implementation, including the separately
+retained general-food five-FVL-point protein exemption noted in §8.
+
 ---
 
 ## 1. Overview
@@ -93,6 +98,14 @@ ratio = (saturated_fat_g / total_fat_g) × 100
 thresholds: 10, 16, 22, 28, 34, 40, 46, 52, 58, 64  (%)
 ```
 
+Unlike the inclusive nutrient tables, these ratio thresholds are **strict upper
+bounds**: <10% → 0 points; [10,16) → 1; [16,22) → 2; [22,28) → 3;
+[28,34) → 4; [34,40) → 5; [40,46) → 6; [46,52) → 7; [52,58) → 8;
+[58,64) → 9; >=64% → 10. Exact boundaries enter the higher band.
+The calculators compare decimal cross-products exactly rather than dividing
+binary floats or changing the shared inclusive-threshold helper. The existing
+fallback of zero ratio points for absent/nonpositive total fat is unchanged.
+
 Sugars and salt use the same general tables.
 
 ---
@@ -147,7 +160,16 @@ The FVL % must be estimated per product type. Common conventions:
 | Mixed dishes with vegetables | depends on recipe |
 | All other products | 0% |
 
-Avocado and olives count as FVL. Nuts and seeds count as FVL.
+Avocado and olives count as FVL. In the fats/oils/nuts/seeds scoring category,
+qualifying oils derived from the **entire edible part** of FVL ingredients also
+count, including **olive, avocado and soybean oils**. **Grapeseed oil does not
+qualify.** Nuts and seeds do not count merely because they belong to this scoring
+category.
+
+Use verified composition or an explicitly supplied percentage; do not infer a
+percentage from the product name or automatically replace manual values.
+These guidance corrections do **not** change the application's existing category
+defaults or saved percentages.
 
 ---
 
@@ -170,7 +192,10 @@ If a beverage has `energy_kj = 0` AND `sugars_g = 0` AND no artificial sweetener
 
 ## 8. Protein Blocking Rule
 
-**Applies to:** `general` and `red_meat` only (NOT cheese, NOT beverage).
+### General / Red Meat
+
+The following existing rule applies to `general` and `red_meat` only (NOT cheese,
+beverage or fats/oils/nuts/seeds):
 
 If the total negative score is high AND the product has little or no fruit/vegetable content, protein points are excluded from the final calculation. This prevents ultra-processed products from compensating a bad profile by adding protein.
 
@@ -182,6 +207,22 @@ else:
     final_score = N_total − (protein_pts + fiber_pts + fvl_pts)
 ```
 
+**Separate concern, intentionally not corrected here:** the cited 2025 FAQ's
+general-case calculation (printed page 28) excludes protein at N >= 11 without
+the five-FVL-point exemption. This project retains its existing `fvl_pts < 5`
+condition as explicitly requested. Reviewing/changing it requires separate scope.
+
+### Fats / Oils / Nuts / Seeds
+
+Use this category's own negative total N:
+- N < 7: protein, fiber and FVL points all contribute.
+- N >= 7: protein contributes **zero**, even with five FVL points.
+  Positive total = fiber points + FVL points, and final score = N - positive total.
+
+The returned fats-category protein component and explanation show its effective
+contribution, not excluded raw protein points. Saturated-fat energy still uses
+37 kJ per gram and the existing inclusive 120-kJ intervals.
+
 ---
 
 ## 9. Grade Thresholds
@@ -190,8 +231,8 @@ else:
 
 | Grade | Score range | Color |
 |---|---|---|
-| A | ≤ −1 | Dark green |
-| B | 0 to 2 | Light green |
+| A | < 1 (integer scores ≤ 0) | Dark green |
+| B | 1 to 2 | Light green |
 | C | 3 to 10 | Yellow |
 | D | 11 to 18 | Orange |
 | E | ≥ 19 | Red |
@@ -283,11 +324,15 @@ P = 0. Score = 4 − 0 = 4. Grade = **C** (3–6 range for beverages).
 | Total fat | 100 g |
 
 - Energy from sat fat = 14 × 37 = 518 kJ → threshold[3]=480 < 518 ≤ threshold[4]=600 → **4 pts**
-- Sat/fat ratio = 14/100 × 100 = 14% → threshold[0]=10 < 14 ≤ threshold[1]=16 → **1 pt**
+- Sat/fat ratio = 14/100 × 100 = 14% → 10 ≤ 14 < 16 → **1 pt**
 - Sugars 0, Salt 0 → **0 pts each**
 - **Total N = 5**
 
-P = 0. Score = 5 − 0 = **5**. For fats/oils/nuts: 5 is in range 3–10 → **Grade C**. Olive oil = C.
+With **explicit input FVL=0**, P = 0 and score = 5 − 0 = **5**, giving **C**.
+This illustrates an input, not an assertion that olive oil is ineligible for FVL.
+If a qualifying oil's verified FVL percentage is explicitly 100%, FVL earns five
+points: N=5 <7, P=5, score=0 and fats-category grade **B**. This correction does
+not automatically change the stored/default FVL percentage for oils.
 
 ---
 
@@ -398,6 +443,12 @@ result.components.total_positive     # int  — P (after blocking if applicable)
 result.components.protein_blocked    # bool
 result.components.protein_status     # str  — "included", "blocked (...)", "capped at 2 (...)"
 ```
+
+### Existing saved scores
+
+Changing calculator code does not update previously saved grades or points.
+**Existing saved scores require a separately approved recalculation.** This
+correction does not deploy, modify production data or run a bulk recalculation.
 
 ---
 

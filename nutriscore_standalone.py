@@ -33,6 +33,7 @@ Official source:
 
 from dataclasses import dataclass, field
 from enum import Enum
+from fractions import Fraction
 from typing import Optional
 
 
@@ -194,6 +195,15 @@ def _pts(value: float, thresholds: list) -> int:
     return len(thresholds)
 
 
+def _saturated_fat_ratio_points(saturated_fat, total_fat):
+    """Strict lower bounds, comparing decimal inputs exactly without division."""
+    if not total_fat or total_fat <= 0:
+        return 0  # Preserve the existing missing/zero-total-fat behavior.
+    saturates_times_100 = Fraction(str(saturated_fat)) * 100
+    fat = Fraction(str(total_fat))
+    return sum(saturates_times_100 >= threshold * fat for threshold in _T_SATFAT_RATIO)
+
+
 def detect_sweeteners(product_name: str = "", ingredients_text: str = "") -> bool:
     """
     Return True if the product likely contains artificial sweeteners.
@@ -269,9 +279,7 @@ def calculate(
     elif category == ProductCategory.FATS_OILS_NUTS:
         energy_from_sat    = saturated_fat_g * 37
         c.energy_pts       = _pts(energy_from_sat, _T_SATFAT_FAT_ENERGY)
-        ratio              = (saturated_fat_g / total_fat_g * 100
-                              if total_fat_g and total_fat_g > 0 else 0)
-        c.saturated_fat_pts= _pts(ratio,            _T_SATFAT_RATIO)
+        c.saturated_fat_pts= _saturated_fat_ratio_points(saturated_fat_g, total_fat_g)
         c.sugars_pts       = _pts(sugars_g,         _T_SUGARS_GEN)
         c.salt_pts         = _pts(salt_g,           _T_SALT_GEN)
         c.total_negative   = (c.energy_pts + c.sugars_pts +
@@ -310,6 +318,10 @@ def calculate(
         fvl_raw        = _pts(fvl_percent, _T_FVL_GEN)
         c.fvl_pts      = 5 if fvl_raw == 3 else fvl_raw
 
+    if category == ProductCategory.FATS_OILS_NUTS and c.total_negative >= 7:
+        c.protein_blocked = True
+        c.protein_status = f"blocked (N={c.total_negative} >= 7 for fats/oils/nuts/seeds, FVL={c.fvl_pts})"
+        c.protein_pts = 0
     c.total_positive = c.protein_pts + c.fiber_pts + c.fvl_pts
 
     # -----------------------------------------------------------------------
@@ -319,10 +331,10 @@ def calculate(
 
     # -----------------------------------------------------------------------
     # Protein blocking rule
-    # Applies to: general and red_meat (NOT cheese, NOT beverage)
+    # General and red_meat only; fats use their separate N >= 7 rule above.
     # Rule: if N >= 11 AND fvl_pts < 5, protein does NOT count
     # -----------------------------------------------------------------------
-    if category not in (ProductCategory.CHEESE, ProductCategory.BEVERAGE):
+    if category not in (ProductCategory.CHEESE, ProductCategory.BEVERAGE, ProductCategory.FATS_OILS_NUTS):
         if c.total_negative >= 11 and c.fvl_pts < 5:
             c.protein_blocked = True
             c.protein_status  = f"blocked (N={c.total_negative}, FVL={c.fvl_pts})"
@@ -358,7 +370,7 @@ def calculate(
             grade = "E"
 
     else:   # general / cheese / red_meat  (same thresholds)
-        if score <= -1:
+        if score < 1:
             grade = "A"
         elif score <= 2:
             grade = "B"

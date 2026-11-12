@@ -28,6 +28,7 @@ Usage:
 """
 
 import logging
+from fractions import Fraction
 from typing import Dict, Tuple, Any, Optional, Set
 
 logger = logging.getLogger(__name__)
@@ -199,6 +200,16 @@ def convert_salt_to_sodium(salt: float) -> float:
     return salt * 400
 
 
+def _saturated_fat_ratio_points(saturated_fat, total_fat):
+    """Strict lower bounds, comparing decimal inputs exactly without division."""
+    if not total_fat or total_fat <= 0:
+        return 0  # Preserve the existing missing/zero-total-fat behavior.
+    saturates_times_100 = Fraction(str(saturated_fat)) * 100
+    fat = Fraction(str(total_fat))
+    return sum(saturates_times_100 >= threshold * fat
+               for threshold in (10, 16, 22, 28, 34, 40, 46, 52, 58, 64))
+
+
 def calculate_nutriscore_2024(
     category: str,
     energy_kj: float,
@@ -267,11 +278,7 @@ def calculate_nutriscore_2024(
         energy_from_satfat = sat_fat_g * 37
         p_energy = get_points(energy_from_satfat, [120 * i for i in range(1, 11)])
         
-        if total_fat_g and total_fat_g > 0:
-            ratio = (sat_fat_g / total_fat_g) * 100
-        else:
-            ratio = 0
-        p_satfat = get_points(ratio, [10, 16, 22, 28, 34, 40, 46, 52, 58, 64])
+        p_satfat = _saturated_fat_ratio_points(sat_fat_g, total_fat_g)
         
         p_sugar = get_points(sugars_g, t_sugar_gen)
         p_salt = get_points(salt_g, t_salt_gen)
@@ -281,6 +288,9 @@ def calculate_nutriscore_2024(
         p_fiber = get_points(fiber_g, t_fiber_gen)
         fvl_raw = get_points(fvl_pct, t_fvl_gen)
         p_fvl = 5 if fvl_raw == 3 else fvl_raw
+        if total_n >= 7:
+            p_protein = 0
+            protein_status = f"blocked (N={total_n} >= 7 for fats/oils/nuts/seeds, FVL={p_fvl})"
         total_p = p_protein + p_fiber + p_fvl
         
     else:
@@ -302,7 +312,7 @@ def calculate_nutriscore_2024(
     
     final_score = total_n - total_p
     
-    if category not in ['cheese', 'beverage']:
+    if category not in ['cheese', 'beverage', 'fats_oils_nuts']:
         if total_n >= 11 and p_fvl < 5:
             final_score = total_n - (p_fiber + p_fvl)
             protein_status = f"blocked (N={total_n}, FVL={p_fvl})"
@@ -331,7 +341,7 @@ def calculate_nutriscore_2024(
         else:
             grade = "E"
     else:
-        if final_score <= -1:
+        if final_score < 1:
             grade = "A"
         elif final_score <= 2:
             grade = "B"
